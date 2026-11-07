@@ -1,0 +1,43 @@
+name: Weekly newsletter
+
+on:
+  schedule:
+    - cron: "7 21,22 * * 1"   # Monday 5 PM Eastern (the script checks the exact time, so daylight saving is handled)
+  workflow_dispatch:
+    inputs:
+      test_email:
+        description: "Send a test copy only to this email. Leave blank to send to EVERYONE now."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: newsletter
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install the email sender
+        run: npm install --no-save --no-package-lock nodemailer@6.9.16
+      - name: Build and send the newsletter
+        run: node newsletter.mjs
+        env:
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_ADDRESS: ${{ secrets.MAIL_ADDRESS }}
+          TEST_TO: ${{ github.event.inputs.test_email }}
+          FORCE: ${{ github.event_name == 'workflow_dispatch' }}
+      - name: Remember this week's poll
+        run: |
+          git config user.name "season-bot"
+          git config user.email "season-bot@users.noreply.github.com"
+          git add poll-last.json newsletter-sent.json 2>/dev/null || true
+          git diff --cached --quiet || (git commit -m "Newsletter sent" && git pull --rebase && git push)
