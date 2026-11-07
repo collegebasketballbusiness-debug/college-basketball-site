@@ -932,6 +932,7 @@ function show(v) {
   document.querySelectorAll(".view").forEach(el => el.hidden = el.dataset.view !== v);
   document.querySelectorAll("[data-tab]").forEach(a => a.dataset.tab === v ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
   if (v === "news") drawNews(); // coming back to News always starts on the list of stories
+  if (v === "discord") loadDiscord();
   if (v === "rankings" && !loaded.ao) { loaded.ao = 1; loadApOthers() }
   if (v === "rankings" && !loaded.rk) { loaded.rk = 1; loadRankings() }
   if ((v === "standings" || v === "teams") && !loaded.st) { loaded.st = 1; loadStandings() }
@@ -946,6 +947,49 @@ addEventListener("hashchange", route);
 
 // Switching filters closes whatever game is open.
 function closeGame() { if (!openGame) return; openGame = null; gameDetail = null; drawGame() }
+
+// ---------- Discord tab ----------
+// What each channel is for, shown in the Discord-style preview when someone taps it.
+const DC_CH = {
+  "welcome": ["Start here", "Rules, roles, and how the server works."],
+  "announcements": ["News from @collegebasketball", "New posts from @collegebasketball and site updates."],
+  "feedback-and-suggestions": ["Help shape the server", "Ideas for the server or the site. We read every one."],
+  "team-flairs": ["Rep your team", "Pick your team's flair so everyone knows who you root for."],
+  "general-chat": ["Everything college hoops", "Everything college hoops: games, takes, and the Top 25."],
+  "high-school-hoops": ["The next wave", "Recruits, rankings, and the next wave of college stars."],
+  "transfer-portal": ["Who's moving where", "Commitments and rumors as they happen."],
+  "coaching-carousel": ["Hot seats and new hires", "Hirings, firings, and who's on the hot seat."],
+  "international-hoops": ["Hoops worldwide", "Prospects and players from overseas."],
+  "nil": ["Name, image, likeness", "NIL deals, collectives, and what they mean for rosters."],
+  "illinois": ["Illini fans", "Everything Illinois basketball. Every team has its own room."],
+  "indiana": ["Hoosier fans", "Everything Indiana basketball. Every team has its own room."],
+};
+function pickChannel(ch, scroll) {
+  const d = DC_CH[ch]; if (!d) return;
+  document.querySelectorAll(".dcw-list button").forEach(b => b.classList.toggle("on", b.dataset.dch === ch));
+  $("#dcw-t").textContent = "# " + ch; $("#dcw-s").textContent = d[0];
+  $("#dcw-h").textContent = "#" + ch; $("#dcw-d").textContent = d[1]; $("#dcw-m").textContent = "Message #" + ch;
+  const box = $(".dcw-empty"); box.classList.remove("swap"); void box.offsetWidth; box.classList.add("swap");
+  if (scroll) $(".dcw").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+// Live member and online counts come from the server's public invite (through the relay, refreshed every few minutes).
+let dcLoaded = 0;
+async function loadDiscord() {
+  if (Date.now() - dcLoaded < 5 * 60e3) return;
+  dcLoaded = Date.now();
+  try {
+    const d = await api("discord-invite", 2);
+    if (!d.members) return;
+    $("#dconline").textContent = (+d.online || 0).toLocaleString();
+    $("#dcmembers").textContent = (+d.members).toLocaleString();
+    if (d.name) $("#dcname").textContent = d.name;
+    $("#dclive").hidden = false;
+  } catch { dcLoaded = 0 }
+}
+document.addEventListener("click", e => {
+  const c = e.target.closest && e.target.closest("[data-dch]"); if (!c) return;
+  pickChannel(c.dataset.dch, c.classList.contains("chan"));
+});
 
 // ---------- events ----------
 // "Watch" chips on game cards: open the network's site and don't open the game

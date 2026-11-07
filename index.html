@@ -269,19 +269,72 @@ table.box tr.totals td{font-weight:700;border-top:2px solid var(--ink)}
 .story .body p{margin:0 0 1em}
 @media (max-width:800px){.lead{grid-template-columns:1fr}.lead .art{min-height:150px}.story{padding:20px}}
 .others{color:var(--muted);font-size:14px;max-width:80ch}
-.dc{margin-top:28px;background:var(--surface) var(--seams) right -60px center/420px no-repeat;border:1px solid var(--line);color:var(--ink);border-radius:14px;padding:36px;display:grid;grid-template-columns:1.5fr 1fr;gap:28px;align-items:end}
-.dc h1{font-size:clamp(40px,6vw,72px);font-weight:900;margin-top:8px}
-.dc p{max-width:52ch;opacity:.85;font-size:17px}
-.dc-btn{background:var(--bg);color:var(--ink);font-size:16px;padding:14px 22px}
-.dc-small{font-size:13px!important;margin-bottom:0}
-.dc-stats{display:grid;gap:16px}
-.dc-stats strong{display:block;font-family:var(--display);font-weight:900;font-size:48px;line-height:1}
-.dc-stats span{font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.1em;opacity:.8}
+/* ---------- Discord tab ---------- */
+.dch{--blurple:#5865F2;margin-top:28px;min-width:0;position:relative;overflow:hidden;border:1px solid var(--line);border-radius:18px;padding:40px;display:grid;grid-template-columns:1fr 1.15fr;gap:36px;align-items:center;
+  background:radial-gradient(120% 90% at 0% 0%,rgba(88,101,242,.30),transparent 55%),radial-gradient(90% 80% at 100% 100%,rgba(255,106,19,.22),transparent 60%),var(--surface)}
+.dch::before{content:"";position:absolute;inset:0;background:var(--seams) left -120px bottom -160px/520px no-repeat;opacity:.9;pointer-events:none}
+.dch>*{position:relative}
+.dch-eye{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:#C9CDFB;background:rgba(88,101,242,.16);border:1px solid rgba(88,101,242,.4);padding:6px 12px;border-radius:999px}
+.dch-dot{width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 0 0 rgba(74,222,128,.6);animation:dcpulse 2s infinite}
+@keyframes dcpulse{70%{box-shadow:0 0 0 8px rgba(74,222,128,0)}100%{box-shadow:0 0 0 0 rgba(74,222,128,0)}}
+.dch h1{font-size:clamp(44px,6.4vw,84px);font-weight:900;line-height:.92;margin:18px 0 16px}
+.dch h1 em{font-style:normal;color:var(--ball);display:block}
+.dch p{max-width:46ch;color:#C8C8C4;font-size:17px;margin:0}
+.dch-cta{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:26px}
+.dch-join{display:inline-flex;align-items:center;gap:10px;background:var(--blurple);color:#fff;font-weight:700;font-size:17px;padding:15px 24px;border-radius:12px;text-decoration:none;box-shadow:0 10px 30px -10px rgba(88,101,242,.8);transition:transform .15s,box-shadow .15s}
+.dch-join:hover{transform:translateY(-2px);box-shadow:0 16px 36px -10px rgba(88,101,242,.9)}
+.dch-join span{transition:transform .15s}.dch-join:hover span{transform:translateX(3px)}
+.dch-code{font-family:var(--mono);font-size:13px;color:var(--muted);user-select:all}.dch-code b{color:var(--ink);font-weight:500}
+.dch-live{display:flex;gap:18px;margin-top:18px;font-size:14px;color:#C8C8C4}
+.dch-live span{display:inline-flex;align-items:center;gap:7px}.dch-live b{color:var(--ink)}
+.dch-live i{width:9px;height:9px;border-radius:50%;background:#80848E}.dch-live i.on{background:var(--good)}
+/* mock Discord window */
+.dcw{display:grid;grid-template-columns:52px 190px minmax(0,1fr);grid-template-rows:440px;border-radius:14px;overflow:hidden;background:#313338;border:1px solid rgba(255,255,255,.08);box-shadow:0 30px 60px -20px rgba(0,0,0,.7);transform:rotate(1.2deg);transition:transform .3s}
+.dcw:hover{transform:rotate(0)}
+.dcw-rail{background:#1E1F22;display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px 0}
+.dcw-rail img{width:38px;height:38px;border-radius:12px;background:#fff;object-fit:cover}
+.dcw-rail span{width:24px;height:2px;background:#35363C;border-radius:2px}
+.dcw-rail b{width:38px;height:38px;border-radius:50%;background:#313338;color:var(--good);display:grid;place-items:center;font-size:22px;font-weight:400}
+.dcw-side{background:#2B2D31;display:flex;flex-direction:column;min-width:0;min-height:0}
+.dcw-name{padding:14px 12px;font-weight:700;font-size:14px;border-bottom:1px solid #1F2023;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dcw-list{overflow:auto;padding:8px 6px;scrollbar-width:thin}
+.dcw-cat{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:#949BA4;padding:14px 6px 4px}
+.dcw-list button{display:block;width:100%;text-align:left;font:500 14px/1.2 var(--body);color:#949BA4;background:none;border:0;border-radius:5px;padding:6px 8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dcw-list button:hover{background:#35373C;color:#DBDEE1}
+.dcw-list button.on{background:#404249;color:#fff}
+.dcw-main{display:grid;grid-template-rows:auto 1fr auto;grid-template-columns:minmax(0,1fr);min-width:0;min-height:0}
+.dcw-top{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid #26272B;font-size:14px;white-space:nowrap;overflow:hidden}
+.dcw-top span{color:#949BA4;border-left:1px solid #3F4147;padding-left:10px;overflow:hidden;text-overflow:ellipsis}
+.dcw-empty{min-height:0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:18px}
+.dcw-hash{width:64px;height:64px;border-radius:50%;background:#41434A;display:grid;place-items:center;font-size:40px;color:#fff;margin-bottom:12px}
+.dcw-empty h3{font-family:var(--body);font-size:24px;font-weight:800;margin:0 0 6px;text-transform:none;letter-spacing:0;line-height:1.15}
+.dcw-empty p{color:#B5BAC1;font-size:14px;margin:0}
+.dcw-empty.swap{animation:dcswap .25s ease}
+@keyframes dcswap{from{opacity:0;transform:translateY(6px)}}
+.dcw-box{margin:0 14px 16px;background:#383A40;border-radius:8px;padding:12px 14px;color:#6D6F78;font-size:14px;display:flex;justify-content:space-between;gap:10px;text-decoration:none}
+.dcw-box>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.dcw-box em{font-style:normal;color:#C9CDFB;font-weight:600;white-space:nowrap}
+.dcw-box:hover em{text-decoration:underline}
+/* channel cards */
+.dc-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:44px 0 16px}
+.dc-head h2{font-size:clamp(30px,4vw,40px);margin:0}
+.dc-head span{font-family:var(--mono);font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
 .chans{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
-.chan{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:grid;gap:4px}
-.chan b{font-family:var(--mono);font-size:14px;color:var(--ball)}
-.chan span{color:var(--muted);font-size:15px}
-@media (max-width:800px){.dc{grid-template-columns:1fr;padding:24px}}
+.chan{position:relative;overflow:hidden;text-align:left;font:inherit;color:inherit;cursor:pointer;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 18px 18px 20px;display:grid;gap:6px;transition:transform .15s,border-color .15s,background .15s}
+.chan::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--k)}
+.chan::after{content:"#";position:absolute;right:-6px;bottom:-34px;font-family:var(--display);font-weight:900;font-size:130px;line-height:1;color:var(--k);opacity:.09;transition:opacity .15s,transform .2s}
+.chan:hover,.chan:focus-visible{transform:translateY(-3px);border-color:var(--k);background:var(--raised);outline:none}
+.chan:hover::after{opacity:.2;transform:rotate(-8deg)}
+.chan b{font-family:var(--mono);font-size:15px;color:var(--k)}
+.chan span{color:var(--muted);font-size:15px;max-width:30ch}
+/* how to join */
+.dc-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:28px;counter-reset:s}
+.dc-steps>div{border:1px dashed #3A3A40;border-radius:12px;padding:20px}
+.dc-steps b{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--ball);color:var(--ball-ink);font-family:var(--display);font-weight:900;font-size:18px}
+.dc-steps h4{margin:12px 0 4px;font-size:17px}
+.dc-steps p{margin:0;color:var(--muted);font-size:14px}
+@media (max-width:900px){.dch{grid-template-columns:minmax(0,1fr);padding:26px}.dcw{transform:none;grid-template-rows:380px}}
+@media (max-width:560px){.dcw{grid-template-columns:118px minmax(0,1fr)}.dcw-box em{display:none}.dcw-list button{font-size:13px;padding:5px 6px}.dcw-rail{display:none}.dcw-empty h3{font-size:19px}.dc-steps{grid-template-columns:1fr}.dc-head span{display:none}.dcw-top span{display:none}}
 .closebtn{background:none;border:1.5px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:600}
 @media (max-width:800px){.gh{padding:18px;gap:8px}.gh .mono.lg{width:48px;height:48px;font-size:18px}.gh .side{flex-direction:column;gap:6px;text-align:center}.gh .side.r{flex-direction:column;text-align:center}}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
@@ -635,24 +688,70 @@ img{max-width:100%}
   </div>
 
   <div class="view" data-view="discord" hidden>
-    <div class="dc">
-      <div class="dc-main">
-        <div class="eyebrow" style="color:inherit;opacity:.85">Community</div>
-        <h1>Talk hoops with us on Discord</h1>
+    <section class="dch">
+      <div class="dch-copy">
+        <div class="dch-eye"><span class="dch-dot"></span>The @collegebasketball community</div>
+        <h1>Your seat in the <em>student section.</em></h1>
         <p>Talk games, the transfer portal, the coaching carousel and NIL, and hang out in your team's own room with people who care as much as you do.</p>
-        <a class="btn dc-btn" href="https://discord.gg/EUH6S3nzet" target="_blank" rel="noopener" id="dclink">Join the Discord →</a>
-        <p class="dc-small">Free to join. You'll need a Discord account. Invite: <span style="user-select:all">discord.gg/EUH6S3nzet</span></p>
+        <div class="dch-cta">
+          <a class="dch-join" href="https://discord.gg/EUH6S3nzet" target="_blank" rel="noopener" id="dclink">Join the server <span aria-hidden="true">→</span></a>
+          <span class="dch-code">discord.gg/<b>EUH6S3nzet</b></span>
+        </div>
+        <div class="dch-live" id="dclive" hidden>
+          <span><i class="on"></i><b id="dconline">–</b> online now</span>
+          <span><i></i><b id="dcmembers">–</b> members</span>
+        </div>
       </div>
-      <div class="dc-stats"><div><strong class="num">24/7</strong><span>Hoops talk</span></div><div><strong>Every</strong><span>Team has a room</span></div></div>
-    </div>
-    <h2 style="font-size:clamp(30px,4vw,40px);margin:36px 0 16px">What's inside</h2>
+
+      <!-- a Discord-style preview of the real server layout; tap a channel to see what it's for -->
+      <div class="dcw" aria-label="Preview of the server's channels">
+        <div class="dcw-rail" aria-hidden="true"><img src="logo.png" alt=""><span></span><b>+</b></div>
+        <aside class="dcw-side">
+          <div class="dcw-name" id="dcname">College Basketball</div>
+          <div class="dcw-list">
+            <button data-dch="welcome"># welcome</button>
+            <button data-dch="announcements"># announcements</button>
+            <div class="dcw-cat">Text channels</div>
+            <button data-dch="feedback-and-suggestions"># feedback-and-suggestions</button>
+            <button data-dch="team-flairs"># team-flairs</button>
+            <div class="dcw-cat">College basketball chat</div>
+            <button data-dch="general-chat" class="on"># general-chat</button>
+            <button data-dch="high-school-hoops"># high-school-hoops</button>
+            <button data-dch="transfer-portal"># transfer-portal</button>
+            <button data-dch="coaching-carousel"># coaching-carousel</button>
+            <button data-dch="international-hoops"># international-hoops</button>
+            <button data-dch="nil"># nil</button>
+            <div class="dcw-cat">Big 10</div>
+            <button data-dch="illinois"># illinois</button>
+            <button data-dch="indiana"># indiana</button>
+          </div>
+        </aside>
+        <div class="dcw-main">
+          <div class="dcw-top"><b id="dcw-t"># general-chat</b><span id="dcw-s">Everything college hoops</span></div>
+          <div class="dcw-empty">
+            <div class="dcw-hash">#</div>
+            <h3>Welcome to <span id="dcw-h">#general-chat</span>!</h3>
+            <p id="dcw-d">Everything college hoops: games, takes, and the Top 25.</p>
+          </div>
+          <a class="dcw-box" href="https://discord.gg/EUH6S3nzet" target="_blank" rel="noopener"><span id="dcw-m">Message #general-chat</span><em>Join to chat</em></a>
+        </div>
+      </div>
+    </section>
+
+    <div class="dc-head"><h2>What's inside</h2><span>Tap one to preview it</span></div>
     <div class="chans">
-      <div class="chan"><b># general-chat</b><span>Everything college hoops: games, takes, and the Top 25.</span></div>
-      <div class="chan"><b># transfer-portal</b><span>Commitments and rumors as they happen.</span></div>
-      <div class="chan"><b># coaching-carousel</b><span>Hirings, firings, and who's on the hot seat.</span></div>
-      <div class="chan"><b># nil</b><span>NIL deals, collectives, and what they mean for rosters.</span></div>
-      <div class="chan"><b># high-school-hoops</b><span>Recruits, rankings, and the next wave of college stars.</span></div>
-      <div class="chan"><b># international-hoops</b><span>Prospects and players from overseas.</span></div>
+      <button class="chan" data-dch="general-chat" style="--k:#FF6A13"><b># general-chat</b><span>Everything college hoops: games, takes, and the Top 25.</span></button>
+      <button class="chan" data-dch="transfer-portal" style="--k:#5865F2"><b># transfer-portal</b><span>Commitments and rumors as they happen.</span></button>
+      <button class="chan" data-dch="coaching-carousel" style="--k:#FFD23F"><b># coaching-carousel</b><span>Hirings, firings, and who's on the hot seat.</span></button>
+      <button class="chan" data-dch="nil" style="--k:#4ADE80"><b># nil</b><span>NIL deals, collectives, and what they mean for rosters.</span></button>
+      <button class="chan" data-dch="high-school-hoops" style="--k:#FF7A6B"><b># high-school-hoops</b><span>Recruits, rankings, and the next wave of college stars.</span></button>
+      <button class="chan" data-dch="international-hoops" style="--k:#38BDF8"><b># international-hoops</b><span>Prospects and players from overseas.</span></button>
+    </div>
+
+    <div class="dc-steps">
+      <div><b>1</b><h4>Tap join</h4><p>The invite opens Discord in your browser or the app.</p></div>
+      <div><b>2</b><h4>Make an account</h4><p>It's free. Already on Discord? You're in with one tap.</p></div>
+      <div><b>3</b><h4>Rep your team</h4><p>Pick your flair in #team-flairs and find your team's room.</p></div>
     </div>
   </div>
 
