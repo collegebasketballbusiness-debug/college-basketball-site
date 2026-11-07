@@ -843,6 +843,7 @@ function show(v) {
   if (!VIEWS.includes(v)) v = "scores";
   document.querySelectorAll(".view").forEach(el => el.hidden = el.dataset.view !== v);
   document.querySelectorAll("[data-tab]").forEach(a => a.dataset.tab === v ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
+  if (v === "news") drawNews(); // coming back to News always starts on the list of stories
   if (v === "rankings" && !loaded.ao) { loaded.ao = 1; loadApOthers() }
   if (v === "rankings" && !loaded.rk) { loaded.rk = 1; loadRankings() }
   if ((v === "standings" || v === "teams") && !loaded.st) { loaded.st = 1; loadStandings() }
