@@ -58,40 +58,23 @@ const mono = (name, seo, color, cls = "") => {
 };
 
 // ---------- team colors ----------
-// Each school's main color is read from its NCAA logo file (the most-used color that isn't white, black or gray).
-const TCOL = {}; const colorQueue = []; let colorBusy = 0, colorsReady = false;
-setTimeout(() => { colorsReady = true; pumpColors() }, 4000); // let scores, ranks and records load first
-try { Object.assign(TCOL, JSON.parse(localStorage.getItem("cbb-colors") || "{}")) } catch { }
-function saveColors() { try { localStorage.setItem("cbb-colors", JSON.stringify(TCOL)) } catch { } }
-function pickColor(svg) {
-  const counts = {};
-  for (const m of svg.matchAll(/(?:fill|stop-color)\s*[:=]\s*["']?\s*#([0-9a-f]{6}|[0-9a-f]{3})\b/gi)) {
-    let h = m[1].toLowerCase(); if (h.length === 3) h = h.split("").map(c => c + c).join("");
-    const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
-    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-    if (mx - mn < 40 || mx < 35 || mn > 225) continue; // skip grays, black, white
-    counts[h] = (counts[h] || 0) + 1;
-  }
-  const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-  return best ? "#" + best[0] : "";
+// Each school's official color comes from NCAA game pages (fetched quietly in the background, then remembered).
+const TCOL = {};
+try { Object.assign(TCOL, JSON.parse(localStorage.getItem("cbb-colors2") || "{}")) } catch { }
+function saveColors() { try { localStorage.setItem("cbb-colors2", JSON.stringify(TCOL)) } catch { } }
+// very dark colors (navy, black) would vanish on the black page, so lift them a little
+function visible(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || ""); if (!m) return "";
+  let [r, g, b] = [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16));
+  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  if (lum < 0.22) { const k = (0.22 - lum) / 0.22 * 0.55; [r, g, b] = [r, g, b].map(v => Math.round(v + (255 - v) * k)) }
+  return "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("");
 }
-function teamColorFor(slug) {
-  if (!slug) return "";
-  if (TCOL[slug] !== undefined) return TCOL[slug];
-  if (!colorQueue.includes(slug)) { colorQueue.push(slug); pumpColors() }
-  return "";
-}
-function pumpColors() {
-  if (!colorsReady) return;
-  while (colorBusy < 2 && colorQueue.length) {
-    const slug = colorQueue.shift(); colorBusy++;
-    fetch(logoURL(slug, false)).then(r => r.ok ? r.text() : "").catch(() => "").then(svg => {
-      if (svg) TCOL[slug] = pickColor(svg); colorBusy--;
-      document.querySelectorAll(`[data-slug="${slug}"]`).forEach(el => TCOL[slug] && el.style.setProperty("--tc", TCOL[slug]));
-      if (!colorQueue.length) { saveColors(); drawHero() }
-      setTimeout(pumpColors, 150);
-    });
-  }
+function teamColorFor(slug) { return slug && TCOL[slug] ? TCOL[slug] : "" }
+function setColor(slug, hex) {
+  const c = visible(hex); if (!slug || !c || TCOL[slug] === c) return;
+  TCOL[slug] = c;
+  document.querySelectorAll(`[data-slug="${slug}"]`).forEach(el => el.style.setProperty("--tc", c));
 }
 
 // ---------- dates (NCAA dates are Eastern time) ----------
@@ -323,6 +306,7 @@ async function loadGame(id) {
   if (openGame !== id) return;
   gameDetail = { id, game: game?.contests?.[0] || null, box, pbp };
   const ct = gameDetail.game?.teams || [];
+  for (const t of ct) if (t.seoname && t.color) setColor(t.seoname, t.color);
   const lastPlay = (pbp?.periods || []).flatMap(p => p.playbyplayStats || []).at(-1);
   noteBest(id, ct.find(t => t.isHome)?.score, ct.find(t => !t.isHome)?.score);
   if (lastPlay) noteBest(id, lastPlay.homeScore, lastPlay.visitorScore);
@@ -455,21 +439,26 @@ async function fillMissingRecords() {
   const todo = [];
   for (const g of Object.values(cache).flat()) {
     if (gameRecAsked.has(g.gameID)) continue;
-    if (["home", "away"].some(sd => !REC[normName(g[sd].names.short)] && !GREC[normName(g[sd].names.short)])) todo.push(g.gameID);
+    const needRec = ["home", "away"].some(sd => !REC[normName(g[sd].names.short)] && !GREC[normName(g[sd].names.short)]);
+    const needCol = ["home", "away"].some(sd => !TCOL[g[sd].names.seo]);
+    if (needRec || needCol) todo.push(g.gameID);
   }
-  for (const id of todo.slice(0, 25)) {
+  let n = 0;
+  for (const id of todo.slice(0, 80)) {
     gameRecAsked.add(id);
     try {
-      const c = (await api(`game/${id}`))?.contests?.[0];
+      const c = (await api(`game/${id}?info=1`))?.contests?.[0];
       for (const t of c?.teams || []) {
         const m = /(\d+)-(\d+)/.exec(t.record || "");
         const key = normName(t.nameShort || "");
         if (m && key && !REC[key]) GREC[key] = { w: +m[1], l: +m[2], gid: String(id) };
+        if (t.seoname && t.color) setColor(t.seoname, t.color);
       }
     } catch { }
-    await new Promise(r => setTimeout(r, 250)); // stay well under the free API's rate limit
+    if (++n % 10 === 0) { saveColors(); drawHero() }
+    await new Promise(r => setTimeout(r, 300)); // stay well under the free API's rate limit
   }
-  if (todo.length) { drawGames(); drawGame(); }
+  if (todo.length) { saveColors(); drawGames(); drawGame(); drawHero() }
 }
 function recordOf(name, g, side) {
   const key = normName(name), r = REC[key] || GREC[key];
