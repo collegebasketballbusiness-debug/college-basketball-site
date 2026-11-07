@@ -37,7 +37,22 @@ function teamColor(seo, override) {
   return PALETTE[h % PALETTE.length];
 }
 const initials = name => fix(name).replace(/[^A-Za-z& ]/g, " ").split(/\s+/).filter(Boolean).map(w => w[0]).join("").slice(0, 3).toUpperCase() || "?";
-const mono = (name, seo, color, cls = "") => `<span class="mono ${cls}" style="background:${teamColor(seo, color)}" aria-hidden="true">${esc(initials(name))}</span>`;
+// Team logos come from NCAA.com through the relay (cached for a week). If a logo is missing, the colored initials show instead.
+const NAME2SEO = {}; // school name -> NCAA slug, learned from the scoreboards
+function learnSlugs(list) { for (const g of list) for (const sd of ["home", "away"]) { const t = g[sd]; if (t?.names?.seo) NAME2SEO[normName(t.names.short)] = t.names.seo } }
+function guessSlug(name) {
+  return fix(name).toLowerCase().replace(/&/g, "").replace(/['’.]/g, "").replace(/\bstate\b/g, "st").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+function logoSlug(name, seo) {
+  if (seo && /^[a-z0-9-]+$/.test(seo)) return seo;
+  return NAME2SEO[normName(name)] || guessSlug(name);
+}
+const logoURL = (slug, dark) => { const path = `logo/${slug}.svg${dark ? "?dark=true" : ""}`; return API === "" ? "/" + path : API + encodeURIComponent(path) };
+const mono = (name, seo, color, cls = "") => {
+  const slug = logoSlug(name, seo);
+  const logo = slug ? `<picture><source media="(prefers-color-scheme: dark)" srcset="${logoURL(slug, true)}"><img src="${logoURL(slug, false)}" alt="" loading="lazy" decoding="async" onerror="var m=this.closest('.mono');m.classList.remove('has-logo');this.parentNode.remove()"></picture>` : "";
+  return `<span class="mono ${cls} ${logo ? "has-logo" : ""}" style="--mc:${teamColor(seo, color)}" aria-hidden="true"><b>${esc(initials(name))}</b>${logo}</span>`;
+};
 
 // ---------- dates (NCAA dates are Eastern time) ----------
 function etDate(offsetDays) {
@@ -73,6 +88,8 @@ async function loadDay(k) {
   const data = await api(`scoreboard/basketball-men/d1/${etDate(day.off).path}/all-conf`);
   cache[k] = (data.games || []).map(x => x.game);
   cache[k].forEach(applyBest);
+  learnSlugs(cache[k]);
+  if (recThrough) setTimeout(fillMissingRecords, 0);
   return cache[k];
 }
 function status(g) {
@@ -294,12 +311,40 @@ async function loadRecords() {
     const m = /through games \w+,?\s+(\w+ \d+, \d{4})/i.exec(first.updated || "");
     recThrough = m ? ymd(new Date(m[1])) : 0;
     drawGames(); drawGame(); drawStand(); if (apRows) drawRankings();
+    fillMissingRecords();
   } catch { /* records are optional; try again on the next hourly refresh */ }
 }
+// Teams missing from that table (no games yet, or not Division I) get their record from the game's own page,
+// which lists each team's record going into the game.
+const GREC = {}; const gameRecAsked = new Set();
+async function fillMissingRecords() {
+  const todo = [];
+  for (const g of Object.values(cache).flat()) {
+    if (gameRecAsked.has(g.gameID)) continue;
+    if (["home", "away"].some(sd => !REC[normName(g[sd].names.short)] && !GREC[normName(g[sd].names.short)])) todo.push(g.gameID);
+  }
+  for (const id of todo.slice(0, 25)) {
+    gameRecAsked.add(id);
+    try {
+      const c = (await api(`game/${id}`))?.contests?.[0];
+      for (const t of c?.teams || []) {
+        const m = /(\d+)-(\d+)/.exec(t.record || "");
+        const key = normName(t.nameShort || "");
+        if (m && key && !REC[key]) GREC[key] = { w: +m[1], l: +m[2], gid: String(id) };
+      }
+    } catch { }
+    await new Promise(r => setTimeout(r, 250)); // stay well under the free API's rate limit
+  }
+  if (todo.length) { drawGames(); drawGame(); }
+}
 function recordOf(name, g, side) {
-  const r = REC[normName(name)];
+  const key = normName(name), r = REC[key] || GREC[key];
   if (!r) return "";
   let { w, l } = r;
+  if (r.gid) { // record from a game page is the record going into that game
+    if (g && g.gameID === r.gid && g.gameState === "final") { const me = +g[side].score, them = +g[side === "home" ? "away" : "home"].score; if (me > them) w++; else if (me < them) l++; }
+    return `${w}-${l}`;
+  }
   if (g && g.gameState === "final" && recThrough) {
     const [mm, dd, yy] = String(g.startDate || "").split("/").map(Number);
     if (yy && yy * 10000 + mm * 100 + dd > recThrough) {
