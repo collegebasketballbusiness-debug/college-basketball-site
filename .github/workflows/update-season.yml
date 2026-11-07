@@ -18,9 +18,13 @@ jobs:
           node-version: 20
       - name: Build season.json
         run: node build-season.mjs
-      - name: Save it to the repo
+      - name: Build stats.json
+        run: node build-stats.mjs
+        continue-on-error: true
+      - name: Save them to the repo
         run: |
           git config user.name "season-bot"
           git config user.email "season-bot@users.noreply.github.com"
           git add season.json
+          git add stats.json || true
           git diff --cached --quiet || (git commit -m "Update season schedule" && git push)
