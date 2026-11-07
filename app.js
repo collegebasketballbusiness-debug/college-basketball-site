@@ -46,9 +46,15 @@ function learnSlugs(list) { for (const g of list) for (const sd of ["home", "awa
 function guessSlug(name) {
   return fix(name).toLowerCase().replace(/&/g, "").replace(/['’.]/g, "").replace(/\bstate\b/g, "st").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
+// Every D-I team's logo name lives in teams.js; anything else falls back to names learned from scoreboards.
+const SLUG_BY_NORM = {};
 function logoSlug(name, seo) {
   if (seo && /^[a-z0-9-]+$/.test(seo)) return seo;
-  return NAME2SEO[normName(name)] || guessSlug(name);
+  const T = window.TEAM_SLUGS || {}, clean = fix(name).trim();
+  if (T[clean]) return T[clean];
+  if (!SLUG_BY_NORM.ready) { for (const k in T) SLUG_BY_NORM[normName(k)] = T[k]; SLUG_BY_NORM.ready = true }
+  const key = normName(clean);
+  return SLUG_BY_NORM[key] || NAME2SEO[key] || guessSlug(name);
 }
 const logoURL = (slug, dark) => { const path = `logo/${slug}.svg${dark ? "?dark=true" : ""}`; return API === "" ? "/" + path : API + encodeURIComponent(path) };
 const mono = (name, seo, color, cls = "") => {
