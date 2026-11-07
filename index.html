@@ -705,6 +705,11 @@ html.mg-open,html.mg-open body{overflow:hidden}
 .adm-note{color:var(--muted);font-size:14px;max-width:70ch}
 .adm-msg{color:var(--good);font-size:14px;min-height:1.2em}
 @media (max-width:700px){.adm-stats{grid-template-columns:1fr 1fr}}
+.unsub{max-width:520px;margin:70px auto;text-align:center;display:grid;justify-items:center;gap:10px}
+.unsub img{filter:invert(1);border-radius:50%}
+.unsub h1{font-size:clamp(40px,7vw,64px);font-weight:900;margin:8px 0 0}
+.unsub p{color:var(--muted);font-size:17px;margin:0 0 12px}
+.unsub .chat-btn{text-decoration:none;padding:12px 22px;font-size:15px}
 /* ---- Teams ---- */
 .ttools{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:18px}
 .ttools .search{flex:1 1 320px;max-width:480px}
@@ -1202,6 +1207,10 @@ img{max-width:100%}
         <div class="ct-status" id="ctstatus" role="status" aria-live="polite"></div>
       </form>
     </div>
+  </div>
+
+  <div class="view" data-view="unsubscribe" hidden>
+    <div class="unsub"><img src="logo.png" alt="" width="64" height="64"><h1 id="unsubh">Unsubscribing…</h1><p id="unsubp">One moment.</p><a class="chat-btn" href="#scores">Back to scores</a></div>
   </div>
 
   <div class="view" data-view="admin" hidden>

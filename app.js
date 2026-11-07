@@ -1715,6 +1715,22 @@ $("#stq").addEventListener("input", e => { stQuery = e.target.value; drawStats()
   });
 })();
 
+// ---------- one-click unsubscribe (the link at the bottom of every newsletter) ----------
+async function unsubscribe(tok) {
+  const c = window.CHAT_CONFIG || {}, h = $("#unsubh"), p = $("#unsubp");
+  h.textContent = "Unsubscribing…"; p.textContent = "One moment.";
+  try {
+    const r = await fetch(`${c.url}/rest/v1/rpc/unsubscribe_updates`, { method: "POST", headers: { apikey: c.anonKey, "content-type": "application/json" }, body: JSON.stringify({ tok }) });
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error((j && j.message) || "HTTP " + r.status);
+    h.textContent = "You're unsubscribed";
+    p.textContent = `${typeof j === "string" ? j : "Your email"} won't get College Basketball updates anymore. Changed your mind? Sign up again at the bottom of any page.`;
+  } catch (e) {
+    h.textContent = "Something went wrong";
+    p.textContent = /not valid/i.test(e.message) ? "That unsubscribe link isn't valid. Email collegebasketballbusiness@gmail.com and we'll remove you." : "Try the link again in a minute, or email collegebasketballbusiness@gmail.com and we'll remove you.";
+  }
+}
+
 // ---------- admin: the email list ----------
 // Only admin accounts can read it (the database enforces this). Copy or download the list for your email tool.
 let ADMIN = { rows: null, names: {}, q: "", err: "" };
@@ -2065,7 +2081,7 @@ document.addEventListener("click", async e => {
 });
 
 // ---------- tabs ----------
-const VIEWS = ["scores", "news", "rankings", "standings", "stats", "teams", "discord", "contact", "rules", "admin"];
+const VIEWS = ["scores", "news", "rankings", "standings", "stats", "teams", "discord", "contact", "rules", "admin", "unsubscribe"];
 const loaded = {};
 function show(v) {
   if (!VIEWS.includes(v)) v = "scores";
@@ -2083,6 +2099,8 @@ function show(v) {
 }
 const route = () => {
   if (typeof MG !== "undefined" && !MG.hidden) closePhoneGame(true);
+  const un = /^unsubscribe-([0-9a-f-]{36})$/i.exec((location.hash || "").slice(1));
+  if (un) { show("unsubscribe"); unsubscribe(un[1]); return }
   const h = (location.hash || "#scores").slice(1), m = /^team-([a-z0-9-]{1,60})$/.exec(h);
   if (m) { show("teams"); openTeam(m[1]); document.querySelector('[data-tab="teams"]')?.setAttribute("aria-current", "page") }
   else { show(h); if (h === "teams") closeTeam() }
