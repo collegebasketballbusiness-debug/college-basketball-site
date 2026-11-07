@@ -11,11 +11,14 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "
 const fix = s => { s = String(s ?? ""); try { return /Ã|Â/.test(s) ? decodeURIComponent(escape(s)) : s } catch { return s } };
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-async function api(path) {
+async function api(path, tries = 3) {
   const url = API === "" ? "/" + path : API + encodeURIComponent(path);
-  const r = await fetch(url, { cache: "no-store" });
-  if (!r.ok) throw new Error("HTTP " + r.status);
-  return r.json();
+  for (let i = 0; ; i++) {
+    const r = await fetch(url, { cache: "no-store" }).catch(() => null);
+    if (r && r.ok) return r.json();
+    if (i >= tries - 1 || (r && r.status < 500 && r.status !== 428 && r.status !== 429)) throw new Error("HTTP " + (r ? r.status : "network"));
+    await new Promise(res => setTimeout(res, 1200 * (i + 1)));
+  }
 }
 
 const CONF = {
@@ -50,13 +53,14 @@ function logoSlug(name, seo) {
 const logoURL = (slug, dark) => { const path = `logo/${slug}.svg${dark ? "?dark=true" : ""}`; return API === "" ? "/" + path : API + encodeURIComponent(path) };
 const mono = (name, seo, color, cls = "") => {
   const slug = logoSlug(name, seo);
-  const logo = slug ? `<img src="${logoURL(slug, true)}" alt="" loading="lazy" decoding="async" onerror="var m=this.closest('.mono');m.classList.remove('has-logo');this.remove()">` : "";
+  const logo = slug ? `<img src="${logoURL(slug, true)}" alt="" loading="lazy" decoding="async" onerror="if(!this.dataset.r){this.dataset.r=1;var i=this;setTimeout(function(){i.src=i.src+'&r=1'},2500+Math.random()*3000)}else{var m=this.closest('.mono');m.classList.remove('has-logo');this.remove()}">` : "";
   return `<span class="mono ${cls} ${logo ? "has-logo" : ""}" style="--mc:${teamColor(seo, color)}" aria-hidden="true"><b>${esc(initials(name))}</b>${logo}</span>`;
 };
 
 // ---------- team colors ----------
 // Each school's main color is read from its NCAA logo file (the most-used color that isn't white, black or gray).
-const TCOL = {}; const colorQueue = []; let colorBusy = 0;
+const TCOL = {}; const colorQueue = []; let colorBusy = 0, colorsReady = false;
+setTimeout(() => { colorsReady = true; pumpColors() }, 4000); // let scores, ranks and records load first
 try { Object.assign(TCOL, JSON.parse(localStorage.getItem("cbb-colors") || "{}")) } catch { }
 function saveColors() { try { localStorage.setItem("cbb-colors", JSON.stringify(TCOL)) } catch { } }
 function pickColor(svg) {
@@ -78,13 +82,14 @@ function teamColorFor(slug) {
   return "";
 }
 function pumpColors() {
-  while (colorBusy < 4 && colorQueue.length) {
+  if (!colorsReady) return;
+  while (colorBusy < 2 && colorQueue.length) {
     const slug = colorQueue.shift(); colorBusy++;
     fetch(logoURL(slug, false)).then(r => r.ok ? r.text() : "").catch(() => "").then(svg => {
-      TCOL[slug] = pickColor(svg || ""); colorBusy--;
+      if (svg) TCOL[slug] = pickColor(svg); colorBusy--;
       document.querySelectorAll(`[data-slug="${slug}"]`).forEach(el => TCOL[slug] && el.style.setProperty("--tc", TCOL[slug]));
       if (!colorQueue.length) { saveColors(); drawHero() }
-      pumpColors();
+      setTimeout(pumpColors, 150);
     });
   }
 }
@@ -441,7 +446,7 @@ async function loadRecords() {
     recThrough = m ? ymd(new Date(m[1])) : 0;
     drawGames(); drawGame(); drawStand(); if (apRows) drawRankings(); drawHero();
     fillMissingRecords();
-  } catch { /* records are optional; try again on the next hourly refresh */ }
+  } catch { setTimeout(loadRecords, 20000) /* try again shortly */ }
 }
 // Teams missing from that table (no games yet, or not Division I) get their record from the game's own page,
 // which lists each team's record going into the game.
