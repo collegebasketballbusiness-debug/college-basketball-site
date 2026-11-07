@@ -744,6 +744,90 @@ function teamConf(slug) {
   for (const c of standings || []) for (const x of c.standings || []) if (logoSlug(x.School) === slug) return { conf: c.conference, row: x };
   return { conf: "", row: null };
 }
+// ---------- Stats tab: Division I leaders ----------
+let STATCATS = null, stKind = "individual", stCat = { individual: null, team: null }, stQuery = "";
+const STATDATA = {};   // "kind/id" -> {rows, pages, page, title, updated}
+// Most-wanted categories go first; anything else the NCAA has follows in its own order.
+const ST_ORDER = [/^points per game/i, /^scoring offense/i, /^rebound/i, /^assists per game/i, /^steals per game/i, /^blocks? (shots )?per game|^blocked shots per game/i,
+  /^field.goal percentage$/i, /^three.point field.goal percentage$/i, /three.point field goals per game/i, /^free.throw percentage$/i, /^scoring defense/i, /^scoring margin/i, /^winning percentage/i];
+const stRank = t => { const i = ST_ORDER.findIndex(re => re.test(t)); return i < 0 ? 99 : i };
+const shortStat = t => t.replace(/\bPer Game\b/i, "/ game").replace(/\bPercentage\b/i, "%").replace(/Field.Goal/i, "FG").replace(/Three.Point/i, "3PT").replace(/Free.Throw/i, "FT").trim();
+async function loadStatCats() {
+  if (STATCATS) return drawStats();
+  $("#strows2").innerHTML = `<tr><td>Loading stat leaders…</td></tr>`;
+  try {
+    const r = await api("stat-cats", 2);
+    STATCATS = (r.cats || []).filter(c => c.kind === "individual" || c.kind === "team");
+    for (const k of ["individual", "team"]) {
+      const list = STATCATS.filter(c => c.kind === k).sort((a, b) => stRank(a.title) - stRank(b.title) || a.id - b.id);
+      stCat[k] = stCat[k] || (list[0] && list[0].id);
+    }
+    drawStats();
+  } catch { $("#strows2").innerHTML = `<tr><td>Stats couldn't load. Try again in a minute.</td></tr>` }
+}
+async function loadStatPage(kind, id, page) {
+  const key = kind + "/" + id, D = STATDATA[key] || (STATDATA[key] = { rows: [], page: 0, pages: 1 });
+  if (D.loading || page <= D.page) return;
+  D.loading = true;
+  try {
+    const r = await api(`stats/basketball-men/d1/current/${kind}/${id}${page > 1 ? "?page=" + page : ""}`, 2);
+    D.rows.push(...(r.data || [])); D.page = page; D.pages = +r.pages || 1; D.title = r.title || ""; D.updated = r.updated || "";
+  } catch { D.err = true }
+  D.loading = false;
+  if (stKind === kind && stCat[kind] === id) drawStats();
+}
+// Which column holds the stat itself (the last numeric-looking column, usually)
+function statCol(cols) {
+  const skip = /^(rank|name|team|cl|class|height|ht|position|pos|g|games)$/i;
+  const nums = cols.filter(c => !skip.test(c));
+  return nums[nums.length - 1] || cols[cols.length - 1];
+}
+function drawStats() {
+  document.querySelectorAll("[data-stkind]").forEach(b => b.setAttribute("aria-pressed", b.dataset.stkind === stKind));
+  if (!STATCATS) return;
+  const cats = STATCATS.filter(c => c.kind === stKind).sort((a, b) => stRank(a.title) - stRank(b.title) || a.id - b.id);
+  $("#stcats").innerHTML = cats.map(c => `<button data-stcat="${c.id}" aria-pressed="${c.id === stCat[stKind]}" title="${esc(c.title)}">${esc(shortStat(c.title))}</button>`).join("");
+  const id = stCat[stKind]; if (!id) { $("#strows2").innerHTML = `<tr><td>No stats yet.</td></tr>`; return }
+  const D = STATDATA[stKind + "/" + id];
+  if (!D || (!D.page && !D.err)) { $("#stpod").innerHTML = ""; $("#sthead").innerHTML = ""; $("#strows2").innerHTML = `<tr><td>Loading…</td></tr>`; $("#stmore").hidden = true; loadStatPage(stKind, id, 1); return }
+  if (!D.rows.length) { $("#stpod").innerHTML = ""; $("#sthead").innerHTML = ""; $("#strows2").innerHTML = `<tr><td>${D.err ? "This stat couldn't load. Try again in a minute." : "No leaders yet for this stat."}</td></tr>`; $("#stmore").hidden = true; return }
+  const cols = Object.keys(D.rows[0]), sc = statCol(cols), isP = stKind === "individual";
+  const teamOf = row => fix(row.Team || row.School || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
+  const nameOf = row => isP ? fix(row.Name || row.Player || "") : teamOf(row);
+  $("#stupd").textContent = D.updated ? `Division I · ${D.updated}` : "Division I leaders";
+  // podium: top 3
+  const q = stQuery.trim().toLowerCase();
+  const pod = q ? [] : D.rows.slice(0, 3);
+  const podCard = (row, i) => {
+    const t = teamOf(row), slug = logoSlug(t), tc = teamColorFor(slug) || "#3A3A40";
+    const sub = isP ? [t, row.Cl || row.Class, row.Position || row.Pos].filter(Boolean).join(" · ") : (recordOf(t) || "");
+    return `<a class="pod p${i + 1}" href="#team-${esc(slug)}" style="--tc:${tc}">${slug ? `<img class="twm" src="${logoURL(slug)}" alt="" loading="lazy" onerror="this.remove()">` : ""}<span class="place">${["1st", "2nd", "3rd"][i]}</span><span class="who">${mono(t, slug)}<span><b>${esc(nameOf(row))}</b><small>${esc(sub)}</small></span></span><span class="val">${esc(row[sc])}</span><span class="lab">${esc(sc)}</span></a>`;
+  };
+  // 2nd, 1st, 3rd on wide screens so 1st sits in the middle
+  $("#stpod").innerHTML = pod.length === 3 ? [podCard(pod[1], 1), podCard(pod[0], 0), podCard(pod[2], 2)].join("") : "";
+  const opt = /^(cl|class|height|ht|position|pos)$/i;
+  $("#sthead").innerHTML = `<tr>${cols.map(c => `<th class="${c === sc ? "hl" : ""} ${opt.test(c) ? "opt" : ""} ${/^(rank|name|team)$/i.test(c) ? "" : "num"}">${esc(c)}</th>`).join("")}</tr>`;
+  const rows = D.rows.filter(r => !q || Object.values(r).some(v => String(v).toLowerCase().includes(q)));
+  $("#strows2").innerHTML = rows.length ? rows.map(row => {
+    const t = teamOf(row), slug = logoSlug(t);
+    return `<tr class="${isFav(slug) ? "mine" : ""}">${cols.map(c => {
+      let v = esc(fix(row[c] ?? ""));
+      if (/^team$|^school$/i.test(c)) v = `<a class="tm" href="#team-${esc(slug)}">${mono(t, slug)}<span>${esc(fix(row[c]))}</span></a>`;
+      return `<td class="${c === sc ? "hl" : ""} ${opt.test(c) ? "opt" : ""} ${/^(rank|name|team|school)$/i.test(c) ? "" : "num"}">${v}</td>`;
+    }).join("")}</tr>`;
+  }).join("") : `<tr><td colspan="${cols.length}">No one in the loaded list matches “${esc(stQuery)}”.${D.page < D.pages ? " Try Show more." : ""}</td></tr>`;
+  $("#stmore").hidden = D.page >= D.pages;
+  $("#stmore").textContent = D.loading ? "Loading…" : `Show more (${D.rows.length} of about ${D.pages * 50})`;
+}
+document.addEventListener("click", e => {
+  const k = e.target.closest && e.target.closest("[data-stkind]");
+  if (k) { stKind = k.dataset.stkind; drawStats(); return }
+  const c = e.target.closest && e.target.closest("[data-stcat]");
+  if (c) { stCat[stKind] = +c.dataset.stcat; drawStats(); return }
+  if (e.target.id === "stmore") { const id = stCat[stKind], D = STATDATA[stKind + "/" + id]; if (D) { loadStatPage(stKind, id, D.page + 1); drawStats() } }
+});
+$("#stq").addEventListener("input", e => { stQuery = e.target.value; drawStats() });
+
 // ---------- favorites (saved on this device) ----------
 let FAVS = [];
 try { FAVS = JSON.parse(localStorage.getItem("cbb_favs") || "[]").filter(x => typeof x === "string") } catch { FAVS = [] }
@@ -1024,7 +1108,7 @@ document.addEventListener("click", async e => {
 });
 
 // ---------- tabs ----------
-const VIEWS = ["scores", "news", "rankings", "standings", "teams", "discord", "rules"];
+const VIEWS = ["scores", "news", "rankings", "standings", "stats", "teams", "discord", "rules"];
 const loaded = {};
 function show(v) {
   if (!VIEWS.includes(v)) v = "scores";
@@ -1032,6 +1116,7 @@ function show(v) {
   document.querySelectorAll("[data-tab]").forEach(a => a.dataset.tab === v ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
   if (v === "news") drawNews(); // coming back to News always starts on the list of stories
   if (v === "discord") loadDiscord();
+  if (v === "stats") loadStatCats();
   if (v === "teams" || v.startsWith("team-")) loadSeason().catch(() => { }); // get schedules ready before a team is tapped
   if (v === "rankings" && !loaded.ao) { loaded.ao = 1; loadApOthers() }
   if (v === "rankings" && !loaded.rk) { loaded.rk = 1; loadRankings() }

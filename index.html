@@ -360,6 +360,37 @@ table.box tr.totals td{font-weight:700;border-top:2px solid var(--ink)}
 .gh a.tlink{text-decoration:none;color:inherit;border-radius:10px}
 .gh a.tlink:hover strong{color:var(--ball)}
 .gh a.tlink strong{transition:color .15s}
+/* ---- Stats ---- */
+.sttools{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:18px}
+.sttools .search{flex:1 1 260px;max-width:380px}
+.stcats{display:flex;gap:6px;overflow-x:auto;scrollbar-width:thin;padding:14px 0 6px;margin-top:4px}
+.stcats button{flex:none;font:600 14px var(--body);color:var(--ink);background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:8px 14px;cursor:pointer;white-space:nowrap}
+.stcats button:hover{border-color:var(--ball)}
+.stcats button[aria-pressed="true"]{background:var(--ball);border-color:var(--ball);color:var(--ball-ink)}
+.stpod{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:12px;align-items:end;margin:22px 0 18px}
+.stpod:empty{display:none}
+.pod{--tc:#3A3A40;position:relative;overflow:hidden;isolation:isolate;border:1px solid var(--line);border-radius:14px;padding:18px;text-decoration:none;color:var(--ink);display:grid;gap:6px;justify-items:start;min-width:0;
+  background:linear-gradient(160deg,color-mix(in srgb,var(--tc) 34%,var(--surface)),var(--surface) 70%)}
+.pod::before{content:"";position:absolute;inset:0 0 auto;height:4px;background:var(--tc)}
+.pod .twm{position:absolute;right:-26px;bottom:-30px;width:130px;height:130px;object-fit:contain;opacity:.12;z-index:-1;transform:rotate(-10deg)}
+.pod .place{font-family:var(--display);font-weight:900;font-size:15px;color:var(--muted);letter-spacing:.06em}
+.pod.p1{padding:24px 20px;border-color:color-mix(in srgb,var(--tc) 60%,var(--line))}
+.pod.p1 .place{color:var(--upset)}
+.pod .who{display:flex;align-items:center;gap:10px;min-width:0;max-width:100%}
+.pod .who .mono{width:40px;height:40px}
+.pod .who b{display:block;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pod .who small{display:block;color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pod .val{font-family:var(--display);font-weight:900;font-size:52px;line-height:.9;margin-top:6px}
+.pod.p1 .val{font-size:68px}
+.pod .lab{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+.sttable td,.sttable th{white-space:nowrap}
+.sttable th.hl,.sttable td.hl{color:var(--ball);font-weight:700}
+.sttable .tm{display:flex;align-items:center;gap:8px}
+.sttable .tm .mono{width:22px;height:22px;font-size:9px}
+.sttable a{color:inherit;text-decoration:none}.sttable a:hover{color:var(--ball)}
+.sttable tr.mine td{background:rgba(255,210,63,.07)}
+.stmore{display:flex;justify-content:center;margin:16px 0 8px}
+@media (max-width:700px){.stpod{grid-template-columns:1fr;gap:8px;align-items:stretch}.pod.p1{order:-1}.pod,.pod.p1{grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 14px}.pod .place{grid-row:1}.pod .who{grid-column:2}.pod .val,.pod.p1 .val{grid-column:3;grid-row:1;font-size:34px;margin:0}.pod .lab{display:none}.pod .twm{width:90px;height:90px;right:40px}.sttable .opt{display:none}}
 /* ---- Teams ---- */
 .ttools{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:18px}
 .ttools .search{flex:1 1 320px;max-width:480px}
@@ -597,13 +628,13 @@ header.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background
 .bname{font-family:var(--display);font-weight:900;font-size:22px;text-transform:uppercase;letter-spacing:.01em;line-height:1;white-space:nowrap}
 .tabs{grid-area:tabs;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;min-width:0}
 .tabs::-webkit-scrollbar{display:none}
-.tabs a{flex:none;display:flex;align-items:center;text-decoration:none;font-weight:700;font-size:15px;padding:0 14px;color:var(--muted);border-bottom:3px solid transparent;border-top:3px solid transparent}
+.tabs a{flex:none;display:flex;align-items:center;text-decoration:none;font-weight:700;font-size:15px;padding:0 12px;color:var(--muted);border-bottom:3px solid transparent;border-top:3px solid transparent}
 .tabs a:hover{color:var(--ink)}
 .tabs a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--ball)}
 .follow{grid-area:follow;align-self:center;display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:700;font-size:14px;color:var(--ink);border:1.5px solid var(--ink);border-radius:999px;padding:8px 14px;white-space:nowrap}
 .follow:hover{background:var(--ink);color:var(--bg)}
 .follow svg{width:18px;height:18px;flex:none}
-@media (max-width:1000px){.follow .long{display:none}}
+.follow .long{display:none} /* "Follow" with the Instagram icon keeps room for all the tabs */
 @media (max-width:760px){
   .navbar{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"brand follow" "tabs tabs";column-gap:12px;min-height:0;padding-top:10px}
   .brand{min-width:0}
@@ -635,6 +666,7 @@ img{max-width:100%}
       <a href="#news" data-tab="news">News</a>
       <a href="#rankings" data-tab="rankings">Rankings</a>
       <a href="#standings" data-tab="standings">Standings</a>
+      <a href="#stats" data-tab="stats">Stats</a>
       <a href="#teams" data-tab="teams">Teams</a>
       <a href="#discord" data-tab="discord">Discord</a>
     </nav>
@@ -699,6 +731,18 @@ img{max-width:100%}
     <div class="sb-top"><div><div class="eyebrow" id="stupdated"></div><h1>Standings</h1></div></div>
     <div class="fbar" id="sconfs" role="group" aria-label="Pick a conference"></div>
     <div class="tblwrap" style="margin-top:12px"><table class="rk-table"><thead><tr><th class="num">#</th><th>Team</th><th class="num">Conf</th><th class="num">Overall</th><th class="num">Pct</th><th class="num">Streak</th></tr></thead><tbody id="strows"><tr><td colspan="6">Loading…</td></tr></tbody></table></div>
+  </div>
+
+  <div class="view" data-view="stats" hidden>
+    <div class="sb-top"><div><div class="eyebrow" id="stupd">Division I leaders</div><h1>Stat leaders</h1></div></div>
+    <div class="sttools">
+      <div class="tsort" role="group" aria-label="Players or teams"><button data-stkind="individual" aria-pressed="true">Players</button><button data-stkind="team" aria-pressed="false">Teams</button></div>
+      <div class="search"><input id="stq" type="search" placeholder="Find a player or team" autocomplete="off" aria-label="Find a player or team in this list"></div>
+    </div>
+    <div class="stcats" id="stcats" role="group" aria-label="Stat"></div>
+    <div id="stpod" class="stpod"></div>
+    <div class="tblwrap"><table class="box sttable"><thead id="sthead"></thead><tbody id="strows2"><tr><td>Loading stat leaders…</td></tr></tbody></table></div>
+    <div class="stmore"><button class="closebtn" id="stmore" hidden>Show more</button></div>
   </div>
 
   <div class="view" data-view="teams" hidden>
