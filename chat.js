@@ -42,8 +42,9 @@ async function loadMe(user) {
 }
 
 // ---------- public: called by the game panel ----------
-function show(el, id, label) {
+function show(el, id, label, opts) {
   if (!ON) { el.innerHTML = ""; return }
+  if (opts && opts.open && !open) { open = true; if (mount === el && gameId === id) render(true) } // the phone chat sheet always shows the full chat
   if (mount === el && gameId === id) return;   // same game: keep everything as is
   leave();
   mount = el; gameId = id; gameLabel = label; msgs = []; reportsByMsg = {};

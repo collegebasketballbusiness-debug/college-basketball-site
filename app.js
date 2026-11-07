@@ -453,7 +453,7 @@ async function makePick(id, side) {
   } catch {
     ct[side]--; if (prev) { ct[prev]++; MYPICK[id] = prev } else delete MYPICK[id];
     drawGame(); drawGames();
-    const m = GHEAD.querySelector(".pk-msg"); if (m) m.textContent = "That pick didn't save. Try again.";
+    document.querySelectorAll(".pk-msg").forEach(m => { m.textContent = "That pick didn't save. Try again." });
   }
 }
 // The small line at the bottom of a game card: people chatting and the fans' pick
@@ -757,6 +757,7 @@ const pct = (m, a) => a ? Math.round(m / a * 100) : 0;
 function drawGame() {
   const boxEl = DETAIL;
   const sg = (cache[gday] || []).concat(cache.t || []).find(g => g.gameID === openGame);
+  if (typeof MG !== "undefined" && !MG.hidden) { boxEl.hidden = true; if (openGame && sg) drawPhoneGame(sg); return } // phones: full-screen game view
   if (!openGame || !sg) { boxEl.hidden = true; window.CBBChat?.close(); return }
   boxEl.hidden = false;
   window.CBBChat?.show(CHATMOUNT, sg.gameID, `${fix(sg.away.names.short)} at ${fix(sg.home.names.short)}`);
@@ -815,6 +816,151 @@ function drawGame() {
   GMAIN.innerHTML = html;
   GMAIN.scrollTop = keep; const np = GMAIN.querySelector(".plays"); if (np) np.scrollTop = keepPlays;
 }
+
+// ---------- phone game view (like the Real app) ----------
+// On phones, tapping a game opens a full-screen view: other games across the top, the score, then tabs for
+// Feed (play-by-play), Game (stats, picks, share) and each team's box score, with Chat in a bar at the bottom.
+// Desktop keeps the panel that opens under the card.
+const MQ = matchMedia("(max-width: 760px)");
+const isPhone = () => MQ.matches;
+let mgTab = "feed", mgFeed = "all", mgPushed = false, mgBodyKey = "";
+const MG = document.createElement("div");
+MG.className = "mg"; MG.id = "mg"; MG.hidden = true;
+MG.innerHTML = `<div class="mg-top"><button class="mg-back" data-mgback aria-label="Back to scores"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="mg-strip" id="mgstrip"></div></div>
+  <div class="mg-score" id="mgscore"></div><div class="mg-tabs" id="mgtabs" role="tablist"></div>
+  <div class="mg-body" id="mgbody"></div><div class="mg-dock" id="mgdock"></div>
+  <div class="mg-sheet" id="mgsheet" hidden><div class="mg-sheet-grab"></div><div class="mg-sheet-head"><b>Game chat</b><button class="mg-x" data-mgchatclose aria-label="Close chat">×</button></div><div class="mg-chat" id="mgchat"></div></div>`;
+document.body.appendChild(MG);
+// the chat's own "Hide chat" button closes the sheet on phones
+MG.querySelector("#mgsheet").addEventListener("click", e => { if (e.target.closest('[data-chat="hide"]')) { e.stopPropagation(); closeChatSheet() } }, true);
+function openPhoneGame(id) {
+  const fresh = MG.hidden;
+  openGame = id; gameDetail = null; boxSide = "away"; mgBodyKey = "";
+  const g = Object.values(cache).flat().find(x => x.gameID === id);
+  mgTab = g && g.gameState === "pre" ? "game" : "feed"; mgFeed = "all";
+  if (fresh) { history.pushState({ mg: id }, ""); mgPushed = true } else history.replaceState({ mg: id }, "");
+  MG.hidden = false; document.documentElement.classList.add("mg-open");
+  closeChatSheet(true);
+  drawGame(); loadGame(id);
+  $("#mgbody").scrollTop = 0;
+}
+function closePhoneGame(fromHistory) {
+  if (MG.hidden) return;
+  if (!fromHistory && mgPushed) { mgPushed = false; history.back(); return } // popstate brings us back here
+  mgPushed = false;
+  MG.hidden = true; document.documentElement.classList.remove("mg-open");
+  closeChatSheet(true);
+  openGame = null; gameDetail = null; drawGames();
+}
+addEventListener("popstate", () => { if (!MG.hidden) closePhoneGame(true) });
+function openChatSheet() {
+  const sg = Object.values(cache).flat().find(x => x.gameID === openGame); if (!sg || !window.CBBChat?.on) return;
+  $("#mgsheet").hidden = false; MG.classList.add("chat-up");
+  window.CBBChat.show($("#mgchat"), sg.gameID, `${fix(sg.away.names.short)} at ${fix(sg.home.names.short)}`, { open: true });
+}
+function closeChatSheet(quiet) {
+  const sh = $("#mgsheet"); if (!sh || sh.hidden) return;
+  sh.hidden = true; MG.classList.remove("chat-up"); window.CBBChat?.close();
+}
+function drawPhoneGame(sg) {
+  const d = gameDetail && gameDetail.id === openGame ? gameDetail : null, c = d?.game, teams = c?.teams || [];
+  const tHome = teams.find(t => t.isHome) || {}, tAway = teams.find(t => !t.isHome) || {};
+  const st = status(sg), pre = sg.gameState === "pre", live = sg.gameState === "live", fin = sg.gameState === "final";
+  const a = +sg.away.score || 0, h = +sg.home.score || 0;
+  const sa = logoSlug(sg.away.names.short, sg.away.names.seo), sh = logoSlug(sg.home.names.short, sg.home.names.seo);
+  MG.style.setProperty("--ca", teamColorFor(sa) || "#333"); MG.style.setProperty("--ch", teamColorFor(sh) || "#333");
+  const short = t => fix(t.names.char6 || t.names.short).trim();
+  // other games today
+  const order = { live: 0, pre: 1, final: 2 };
+  const strip = [...(cache.t || [])].sort((x, y) => order[x.gameState] - order[y.gameState] || (+x.startTimeEpoch - +y.startTimeEpoch)).slice(0, 40);
+  $("#mgstrip").innerHTML = strip.map(g => {
+    const s2 = status(g), lv = g.gameState === "live";
+    return `<button class="mg-mini ${g.gameID === sg.gameID ? "on" : ""}" data-mgswitch="${g.gameID}"><span class="mg-mini-st ${lv ? "lv" : ""}">${lv ? "<i></i>" : ""}${esc(s2.txt)}</span><span class="mg-mini-sc">${mono(g.away.names.short, g.away.names.seo)}<b>${g.gameState === "pre" ? "vs" : `${esc(g.away.score)}–${esc(g.home.score)}`}</b>${mono(g.home.names.short, g.home.names.seo)}</span></button>`;
+  }).join("");
+  const on = $("#mgstrip .mg-mini.on"); if (on && MG.dataset.stripFor !== sg.gameID) { MG.dataset.stripFor = sg.gameID; on.scrollIntoView({ inline: "center", block: "nearest" }) }
+  // score header
+  const tm = (t, side, score, lose) => `<a class="mg-tm ${side}" href="#team-${esc(logoSlug(t.names.short, t.names.seo))}">${mono(t.names.short, t.names.seo)}<span class="mg-sc ${lose ? "lose" : ""}">${pre ? "" : esc(score)}</span><span class="mg-nm">${rk(t) ? `<em>${rk(t)}</em> ` : ""}${esc(fix(t.names.short))}</span></a>`;
+  $("#mgscore").innerHTML = `${tm(sg.away, "a", a, fin && a < h)}<div class="mg-mid"><span class="mg-st ${live ? "lv" : ""}">${live ? "<i></i>" : ""}${esc(st.txt)}</span>${tvHTML(sg.network)}${badgeHTML(badges(sg).slice(0, 1))}</div>${tm(sg.home, "h", h, fin && h < a)}`;
+  // tabs
+  const tabs = [["feed", "Feed"], ["game", "Game"], ["away", short(sg.away)], ["home", short(sg.home)]];
+  $("#mgtabs").innerHTML = tabs.map(([k, l]) => `<button role="tab" aria-selected="${mgTab === k}" data-mgtab="${k}">${esc(l)}</button>`).join("");
+  // body
+  const tb = d?.box?.teamBoxscore || [], idHome = String(tHome.teamId || ""), idAway = String(tAway.teamId || "");
+  const tbFor = id => tb.find(x => String(x.teamId) === id);
+  let body = "";
+  if (!d) body = `<p class="mg-empty">Loading game…</p>`;
+  else if (mgTab === "feed") {
+    // every play, oldest first, so scoring, lead changes and ties can be worked out
+    const all = (d.pbp?.periods || []).flatMap(p => (p.playbyplayStats || []).map(x => ({ ...x, per: p.periodDisplay || "" })));
+    let ph = 0, pv = 0; const items = [];
+    for (const x of all) {
+      const nh = x.homeScore === undefined || x.homeScore === "" ? ph : +x.homeScore, nv = x.visitorScore === undefined || x.visitorScore === "" ? pv : +x.visitorScore;
+      const side = String(x.teamId) === idHome ? "home" : String(x.teamId) === idAway ? "away" : (nh > ph ? "home" : nv > pv ? "away" : "");
+      let pts = (nh - ph) + (nv - pv); const tags = [];
+      if (pts < 1 || pts > 4) pts = 0; // a jump bigger than one basket means plays are missing from the feed, not a score
+      if (pts > 0 && items.length) {
+        if ((ph - pv) * (nh - nv) < 0 || (ph === pv && nh !== nv && items.some(i => i.pts))) tags.push(["lead", (ph === pv) ? "Takes the lead" : "Lead change"]);
+        if (nh === nv) tags.push(["tie", "Ties it"]);
+      }
+      const desc = fix(x.eventDescription || x.homeText || x.visitorText || "").replace(/\s+/g, " ").trim();
+      if (desc) items.push({ desc, per: x.per, clock: x.clock || "", h: nh, v: nv, side, pts, tags });
+      ph = nh; pv = nv;
+    }
+    const shown = (mgFeed === "scoring" ? items.filter(i => i.pts > 0) : items).reverse().slice(0, 250);
+    const perLbl = p => String(p).replace(/1st Half|1st/i, "H1").replace(/2nd Half|2nd/i, "H2").replace(/Overtime/i, "OT");
+    body = `<div class="mg-feedbar"><button data-mgfeed="all" aria-pressed="${mgFeed === "all"}">All plays</button><button data-mgfeed="scoring" aria-pressed="${mgFeed === "scoring"}">Scoring</button></div>` +
+      (shown.length ? shown.map(i => {
+        const t = i.side ? sg[i.side] : null;
+        const tc = t ? teamColorFor(logoSlug(t.names.short, t.names.seo)) || "#444" : "#2A2A2E";
+        const big = i.pts >= 3 ? "three" : i.pts > 0 ? "score" : "";
+        return `<div class="fp ${big} ${i.tags.length ? "key" : ""}" style="--tc:${tc}">
+          <div class="fp-av">${t ? mono(t.names.short, t.names.seo) : `<span class="fp-dot"></span>`}${i.pts > 0 ? `<span class="fp-pts">+${i.pts}</span>` : ""}</div>
+          <div class="fp-main"><div class="fp-meta">${mono(sg.away.names.short, sg.away.names.seo)}<b>${i.v}–${i.h}</b>${mono(sg.home.names.short, sg.home.names.seo)}<span>${esc(perLbl(i.per))} ${esc(i.clock)}</span></div>
+          <div class="fp-desc">${esc(i.desc)}</div>${i.tags.length ? `<div class="fp-tags">${i.tags.map(([k, l]) => `<span class="fpt-${k}">${esc(l)}</span>`).join("")}</div>` : ""}</div></div>`;
+      }).join("") : `<p class="mg-empty">${pre ? "The feed starts at tip-off. Check the Game tab to make your pick." : "No play-by-play for this game."}</p>`);
+  } else if (mgTab === "game") {
+    const ls = c?.linescores || [];
+    const lsT = ls.length ? `<h4>Score by period</h4><div class="tblwrap"><table class="mg-ls"><thead><tr><th></th>${ls.map(l => `<th class="num">${+l.period <= 2 ? (l.period === "1" ? "1st" : "2nd") : "OT" + (+l.period > 3 ? +l.period - 2 : "")}</th>`).join("")}<th class="num">T</th></tr></thead><tbody>
+      <tr><td>${esc(short(sg.away))}</td>${ls.map(l => `<td class="num">${esc(l.visit)}</td>`).join("")}<td class="num"><b>${a}</b></td></tr>
+      <tr><td>${esc(short(sg.home))}</td>${ls.map(l => `<td class="num">${esc(l.home)}</td>`).join("")}<td class="num"><b>${h}</b></td></tr></tbody></table></div>` : "";
+    const S = tbFor(idHome)?.teamStats, A = tbFor(idAway)?.teamStats, n = v => +v || 0;
+    const stats = S && A ? `<h4>Team stats <span class="mg-k">${esc(short(sg.away))} · ${esc(short(sg.home))}</span></h4>
+      ${statRow("FG%", pct(n(A.fieldGoalsMade), n(A.fieldGoalsAttempted)), pct(n(S.fieldGoalsMade), n(S.fieldGoalsAttempted)))}
+      ${statRow("3PT%", pct(n(A.threePointsMade), n(A.threePointsAttempted)), pct(n(S.threePointsMade), n(S.threePointsAttempted)))}
+      ${statRow("FT%", pct(n(A.freeThrowsMade), n(A.freeThrowsAttempted)), pct(n(S.freeThrowsMade), n(S.freeThrowsAttempted)))}
+      ${statRow("Reb", n(A.totalRebounds), n(S.totalRebounds))}${statRow("Ast", n(A.assists), n(S.assists))}${statRow("Stl", n(A.steals), n(S.steals))}${statRow("Blk", n(A.blockedShots), n(S.blockedShots))}${statRow("TO", n(A.turnovers), n(S.turnovers))}` : "";
+    const series = []; let pk = "";
+    for (const p of d.pbp?.periods || []) for (const x of p.playbyplayStats || []) { if (x.homeScore === undefined || x.homeScore === "") continue; const k = x.homeScore + "-" + x.visitorScore; if (k === pk) continue; pk = k; series.push({ lead: (+x.homeScore || 0) - (+x.visitorScore || 0), per: p.periodDisplay || "" }) }
+    const loc = c?.location ? `${fix(c.location.venue)}${c.location.city ? ", " + fix(c.location.city) : ""}${c.location.stateUsps ? ", " + c.location.stateUsps : ""}` : "";
+    body = `${pickHTML(sg)}${series.length >= 4 ? `<div class="mg-card">${momentumSVG(series, sg)}</div>` : ""}<div class="mg-card">${lsT || `<h4>Tip-off</h4><p class="mg-p">${esc(st.txt)}${sg.network ? " on " + esc(sg.network) : ""}</p>`}${stats}${loc ? `<p class="mg-p mg-loc">${esc(loc)}</p>` : ""}</div>`;
+  } else {
+    const side = mgTab, id = side === "home" ? idHome : idAway, ps = tbFor(id)?.playerStats || [], ts = tbFor(id)?.teamStats;
+    if (!ps.length) body = `<p class="mg-empty">${pre ? "The box score goes live at tip-off." : "No box score for this game."}</p>`;
+    else {
+      const row = p => `<tr><td><span class="pn">${esc(p.number)}</span>${esc(fix((p.firstName || "").charAt(0) + ". " + p.lastName))} <span class="pp">${esc(p.position || "")}</span></td><td class="num"><b>${esc(p.points)}</b></td><td class="num">${esc(p.totalRebounds)}</td><td class="num">${esc(p.assists)}</td><td class="num">${esc(p.minutesPlayed ?? "")}</td><td class="num">${esc(p.fieldGoalsMade)}-${esc(p.fieldGoalsAttempted)}</td><td class="num">${esc(p.threePointsMade)}-${esc(p.threePointsAttempted)}</td><td class="num">${esc(p.freeThrowsMade)}-${esc(p.freeThrowsAttempted)}</td><td class="num">${esc(p.steals)}</td><td class="num">${esc(p.blockedShots)}</td><td class="num">${esc(p.turnovers)}</td><td class="num">${esc(p.personalFouls ?? "")}</td></tr>`;
+      body = `<div class="tblwrap mg-box"><table class="box"><thead><tr><th>${esc(fix(sg[side].names.short))}</th><th class="num">Pts</th><th class="num">Reb</th><th class="num">Ast</th><th class="num">Min</th><th class="num">FG</th><th class="num">3PT</th><th class="num">FT</th><th class="num">Stl</th><th class="num">Blk</th><th class="num">TO</th><th class="num">PF</th></tr></thead><tbody>
+        ${[["Starters", ps.filter(p => p.starter)], ["Bench", ps.filter(p => !p.starter)]].filter(x => x[1].length).map(([l, list]) => `<tr class="grp"><td colspan="12">${l}</td></tr>${list.map(row).join("")}`).join("")}
+        ${ts ? `<tr class="totals"><td>Team</td><td class="num">${esc(ts.points)}</td><td class="num">${esc(ts.totalRebounds)}</td><td class="num">${esc(ts.assists)}</td><td class="num"></td><td class="num">${esc(ts.fieldGoalsMade)}-${esc(ts.fieldGoalsAttempted)}</td><td class="num">${esc(ts.threePointsMade)}-${esc(ts.threePointsAttempted)}</td><td class="num">${esc(ts.freeThrowsMade)}-${esc(ts.freeThrowsAttempted)}</td><td class="num">${esc(ts.steals)}</td><td class="num">${esc(ts.blockedShots)}</td><td class="num">${esc(ts.turnovers)}</td><td class="num"></td></tr>` : ""}</tbody></table></div><p class="mg-p mg-hint">Swipe the table sideways for more stats.</p>`;
+    }
+  }
+  // only redraw the body when something changed, so reading the feed isn't interrupted every 20 seconds
+  const bodyEl = $("#mgbody"), key = mgTab + "|" + mgFeed + "|" + body;
+  if (key !== mgBodyKey) { const keep = bodyEl.scrollTop; bodyEl.innerHTML = body; bodyEl.scrollTop = keep; mgBodyKey = key }
+  // bottom bar: chat, plus watch or share
+  const ca = CHATACT[sg.gameID];
+  $("#mgdock").innerHTML = `<button class="mg-dock-chat" data-mgchat ${window.CBBChat?.on ? "" : "hidden"}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" fill="currentColor"/></svg>Chat${ca && ca.people ? `<em>${ca.people} talking</em>` : ""}</button>${fin ? `<button class="mg-dock-btn" data-share="${sg.gameID}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Share</button>` : sg.network && watchURL(sg.network.split(" / ")[0]) ? `<a class="mg-dock-btn" href="${watchURL(sg.network.split(" / ")[0])}" target="_blank" rel="noopener">${PLAY}${esc(sg.network.split(" / ")[0])}</a>` : ""}`;
+}
+MG.addEventListener("click", e => {
+  const t = e.target;
+  if (t.closest("[data-mgback]")) { closePhoneGame(); return }
+  const sw = t.closest("[data-mgswitch]"); if (sw) { if (sw.dataset.mgswitch !== openGame) openPhoneGame(sw.dataset.mgswitch); return }
+  const tab = t.closest("[data-mgtab]"); if (tab) { mgTab = tab.dataset.mgtab; drawGame(); $("#mgbody").scrollTop = 0; return }
+  const f = t.closest("[data-mgfeed]"); if (f) { mgFeed = f.dataset.mgfeed; drawGame(); return }
+  if (t.closest("[data-mgchat]")) { openChatSheet(); return }
+  if (t.closest("[data-mgchatclose]")) { closeChatSheet(); return }
+  if (t.closest('a[href^="#team-"]')) { closePhoneGame(true); return } // following a team link leaves the game
+});
+MQ.addEventListener?.("change", () => { if (!isPhone() && !MG.hidden) { MG.hidden = true; document.documentElement.classList.remove("mg-open"); closeChatSheet(true) } if (openGame) drawGame() });
 
 // ---------- refresh loop ----------
 let errShown = false;
@@ -1469,6 +1615,7 @@ function show(v) {
   scrollTo(0, 0);
 }
 const route = () => {
+  if (typeof MG !== "undefined" && !MG.hidden) closePhoneGame(true);
   const h = (location.hash || "#scores").slice(1), m = /^team-([a-z0-9-]{1,60})$/.exec(h);
   if (m) { show("teams"); openTeam(m[1]); document.querySelector('[data-tab="teams"]')?.setAttribute("aria-current", "page") }
   else { show(h); if (h === "teams") closeTeam() }
@@ -1568,6 +1715,7 @@ document.addEventListener("click", async e => {
   const bx = t.closest("[data-box]"); if (bx) { boxSide = bx.dataset.box; drawGame(); return }
   if (t.closest("[data-closegame]")) { openGame = null; gameDetail = null; drawGames(); drawGame(); return }
   const gm = t.closest("[data-game]"); if (gm) {
+    if (isPhone() && !gm.closest("#mg")) { if (gm.dataset.dayOf === "t" && gday !== "t") { gday = "t"; drawDays(); drawFilters() } openPhoneGame(gm.dataset.game); return }
     const fromCard = gm.classList.contains("game");
     if (fromCard && openGame === gm.dataset.game) { openGame = null; gameDetail = null; drawGames(); drawGame(); return } // tap again to close
     if (location.hash && location.hash !== "#scores") { location.hash = "scores" }
