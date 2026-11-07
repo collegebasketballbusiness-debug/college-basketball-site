@@ -81,6 +81,21 @@ async function tv(res, y, m, d) {
   }
 }
 
+// ---------- Discord ----------
+// Member and online counts for the site's Discord server, from Discord's public invite info.
+const DISCORD_INVITE = process.env.DISCORD_INVITE || "EUH6S3nzet";
+async function discordInvite(res) {
+  try {
+    const r = await fetch(`https://discord.com/api/v10/invites/${DISCORD_INVITE}?with_counts=true`, { headers: { "user-agent": "collegebasketball-site" } });
+    if (!r.ok) return json(res, 502, { error: "Discord " + r.status });
+    const d = await r.json();
+    json(res, 200, { name: d.guild?.name || "", members: d.approximate_member_count || 0, online: d.approximate_presence_count || 0 },
+      "public, s-maxage=300, stale-while-revalidate=1800");
+  } catch {
+    json(res, 502, { error: "Could not reach Discord" });
+  }
+}
+
 // ---------- season schedules ----------
 // Today's date in US Eastern time as yyyy-mm-dd (NCAA dates are Eastern).
 function etToday() {
@@ -138,6 +153,7 @@ async function teamSeason(req, res, slug) {
 export default async function handler(req, res) {
   const path = String(req.query.path || "").replace(/^\/+/, "");
   if (path === "ap-others") return apOthers(res);
+  if (path === "discord-invite") return discordInvite(res);
   let m;
   if ((m = /^day\/(\d{4})\/(\d{2})\/(\d{2})$/.exec(path))) return day(res, m[1], m[2], m[3]);
   if ((m = /^tv\/(\d{4})\/(\d{2})\/(\d{2})$/.exec(path))) return tv(res, m[1], m[2], m[3]);
