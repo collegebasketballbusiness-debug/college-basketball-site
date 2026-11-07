@@ -36,6 +36,8 @@ const confOf = t => (t.conferences?.[0]?.conferenceSeo || "").replace(/-$/, "");
 const PALETTE = ["#1E3A5F", "#9E1B32", "#0B5D3B", "#5B2A86", "#B5531B", "#0A4D8C", "#7A1F33", "#2F4F4F", "#8A6D1D", "#004F71", "#6B2C1A", "#24427A"];
 function teamColor(seo, override) {
   if (override) return override;
+  const official = (window.TEAM_COLORS || {})[seo];
+  if (official) return official;
   let h = 0; for (const c of seo || "x") h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return PALETTE[h % PALETTE.length];
 }
@@ -60,7 +62,7 @@ const logoURL = (slug, dark) => { const path = `logo/${slug}.svg${dark ? "?dark=
 const mono = (name, seo, color, cls = "") => {
   const slug = logoSlug(name, seo);
   const logo = slug ? `<img src="${logoURL(slug, true)}" alt="" loading="lazy" decoding="async" onload="this.dataset.ok=1" onerror="if(!this.dataset.r){this.dataset.r=1;var i=this;setTimeout(function(){i.src=i.src+'&r=1'},2500+Math.random()*3000)}else{var m=this.closest('.mono');m.classList.remove('has-logo');this.remove()}">` : "";
-  return `<span class="mono ${cls} ${logo ? "has-logo" : ""}" style="--mc:${teamColor(seo, color)}" aria-hidden="true"><b>${esc(initials(name))}</b>${logo}</span>`;
+  return `<span class="mono ${cls} ${logo ? "has-logo" : ""}" style="--mc:${teamColor(slug, color)}" aria-hidden="true"><b>${esc(initials(name))}</b>${logo}</span>`;
 };
 
 // ---------- team colors ----------
@@ -76,7 +78,7 @@ function visible(hex) {
   if (lum < 0.22) { const k = (0.22 - lum) / 0.22 * 0.55; [r, g, b] = [r, g, b].map(v => Math.round(v + (255 - v) * k)) }
   return "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("");
 }
-function teamColorFor(slug) { return slug && TCOL[slug] ? TCOL[slug] : "" }
+function teamColorFor(slug) { return slug ? (TCOL[slug] || visible((window.TEAM_COLORS || {})[slug] || "")) : "" }
 function setColor(slug, hex) {
   const c = visible(hex); if (!slug || !c || TCOL[slug] === c) return;
   TCOL[slug] = c;
@@ -623,7 +625,7 @@ function drawStand() {
 // ---------- news (sample stories until real ones are added) ----------
 const NEWS = window.NEWS || [];
 const NCATS = ["All", "Top 25", "Games", "Transfer Portal", "Recruiting", "Conferences"]; let ncat = "All";
-const art = n => `<div class="art" style="background:${teamColorFor(n.team) || teamColor(n.team)}" aria-hidden="true"><img class="artlogo" src="${logoURL(n.team, true)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${esc(initials(n.team.replace(/-/g, " ")))}'}))"></div>`;
+const art = n => `<div class="art" style="background:${teamColor(n.team)}" aria-hidden="true"><img class="artlogo" src="${logoURL(n.team, true)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${esc(initials(n.team.replace(/-/g, " ")))}'}))"></div>`;
 function drawNews() {
   $("#ncats").innerHTML = NCATS.map(c => `<button aria-pressed="${c === ncat}" data-ncat="${c}">${c}</button>`).join("");
   const list = NEWS.filter(n => ncat === "All" || n.cat === ncat); $("#story").hidden = true; $("#newslist").hidden = false;
