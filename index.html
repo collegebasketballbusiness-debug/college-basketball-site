@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>College Basketball HQ</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="description" content="Live college basketball scores, box scores, AP Top 25 and standings from @collegebasketball.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
@@ -33,13 +35,6 @@ h1,h2,h3{font-family:var(--display);text-transform:uppercase;letter-spacing:.01e
 .num{font-variant-numeric:tabular-nums}
 
 /* nav */
-header.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
-.nav .wrap{display:flex;align-items:center;gap:20px;min-height:60px;flex-wrap:wrap;padding-block:8px}
-.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-family:var(--display);font-weight:900;font-size:24px;text-transform:uppercase}
-.brand .ballmark{width:30px;height:30px;flex:none}
-.nav nav{display:flex;gap:4px;flex-wrap:wrap;margin-left:auto}
-.nav nav a{text-decoration:none;font-weight:600;font-size:15px;padding:6px 10px;border-radius:6px;color:var(--muted)}
-.nav nav a:hover,.nav nav a.on{color:var(--ink);background:var(--chip)}
 
 /* ticker */
 .ticker{background:var(--ink);color:var(--bg);overflow:hidden;border-bottom:3px solid var(--ball)}
@@ -227,11 +222,6 @@ table.box .pp{font-family:var(--mono);font-size:11px;color:var(--muted)}
 table.box tr.grp td{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--chip);padding:5px 8px}
 table.box tr.totals td{font-weight:700;border-top:2px solid var(--ink)}
 @media (max-width:800px){.boxwrap{padding:18px}}
-.nav nav.tabs{display:flex;gap:4px;overflow-x:auto;margin:-4px 0 0;flex-wrap:nowrap}
-.nav nav.tabs a{border-radius:0;background:none}
-.tabs a{flex:none;text-decoration:none;font-weight:700;font-size:15px;padding:10px 14px 12px;color:var(--muted);border-bottom:3px solid transparent}
-.tabs a:hover{color:var(--ink)}
-.tabs a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--ball)}
 .view{padding-bottom:24px}
 .rk-table{min-width:520px}
 .rk-table td{padding:10px 8px}
@@ -284,6 +274,33 @@ table.box tr.totals td{font-weight:700;border-top:2px solid var(--ink)}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
 
 /* live-site additions */
+/* header: logo, tabs and follow button in one row on wide screens; tabs drop to a second row on phones */
+header.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.navbar{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"brand tabs follow";align-items:stretch;column-gap:28px;min-height:64px}
+.brand{grid-area:brand;display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
+.brand .logo{width:40px;height:40px;flex:none;display:block}
+.bname{font-family:var(--display);font-weight:900;font-size:22px;text-transform:uppercase;letter-spacing:.01em;line-height:1;white-space:nowrap}
+.tabs{grid-area:tabs;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;min-width:0}
+.tabs::-webkit-scrollbar{display:none}
+.tabs a{flex:none;display:flex;align-items:center;text-decoration:none;font-weight:700;font-size:15px;padding:0 14px;color:var(--muted);border-bottom:3px solid transparent;border-top:3px solid transparent}
+.tabs a:hover{color:var(--ink)}
+.tabs a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--ball)}
+.follow{grid-area:follow;align-self:center;display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:700;font-size:14px;color:var(--ink);border:1.5px solid var(--ink);border-radius:999px;padding:8px 14px;white-space:nowrap}
+.follow:hover{background:var(--ink);color:var(--bg)}
+.follow svg{width:18px;height:18px;flex:none}
+:root[data-theme="dark"] .brand .logo{filter:invert(1)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .brand .logo{filter:invert(1)}}
+@media (max-width:1000px){.follow .long{display:none}}
+@media (max-width:760px){
+  .navbar{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"brand follow" "tabs tabs";column-gap:12px;min-height:0;padding-top:10px}
+  .brand{min-width:0}
+  .bname{overflow:hidden;text-overflow:ellipsis}
+  .follow{padding:7px 12px}
+  .tabs{margin:6px -6px 0}
+  .tabs a{padding:10px 12px 9px}
+  .bname{font-size:20px}
+}
+@media (max-width:420px){.follow>span{display:none}.follow{padding:8px}.bname{font-size:18px}}
 html{-webkit-text-size-adjust:100%}
 body{margin:0}
 img{max-width:100%}
@@ -295,19 +312,23 @@ img{max-width:100%}
 </head>
 <body>
 <header class="nav">
-  <div class="wrap">
-    <a class="brand" href="#scores">
-      <svg class="ballmark" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14.5" fill="var(--ball)"/><path d="M1.5 16h29M16 1.5v29M5.5 6c5 4 5 16 0 20M26.5 6c-5 4-5 16 0 20" stroke="var(--ink)" stroke-width="1.6" fill="none"/></svg>
-      College Basketball
+  <div class="wrap navbar">
+    <a class="brand" href="#scores" aria-label="College Basketball home">
+      <img class="logo" src="logo.png" alt="" width="40" height="40">
+      <span class="bname">College Basketball</span>
+    </a>
+    <nav class="tabs" aria-label="Sections">
+      <a href="#scores" data-tab="scores">Scores</a>
+      <a href="#news" data-tab="news">News</a>
+      <a href="#rankings" data-tab="rankings">Rankings</a>
+      <a href="#standings" data-tab="standings">Standings</a>
+      <a href="#discord" data-tab="discord">Discord</a>
+    </nav>
+    <a class="follow" href="https://www.instagram.com/collegebasketball/" target="_blank" rel="noopener">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.4" cy="6.6" r="1.3" fill="currentColor"/></svg>
+      <span>Follow<span class="long"> @collegebasketball</span></span>
     </a>
   </div>
-  <div class="wrap"><nav class="tabs" aria-label="Sections">
-    <a href="#scores" data-tab="scores">Scores</a>
-    <a href="#news" data-tab="news">News</a>
-    <a href="#rankings" data-tab="rankings">Rankings</a>
-    <a href="#standings" data-tab="standings">Standings</a>
-    <a href="#discord" data-tab="discord">Discord</a>
-  </nav></div>
 </header>
 
 <div class="ticker" aria-label="Top 25 scores">
