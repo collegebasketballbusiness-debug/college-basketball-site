@@ -822,7 +822,19 @@ function drawGame() {
 // ---------- comments + reactions on plays ----------
 // Each play gets a short ID from its period, clock, score and description, so phone and desktop agree.
 // Comments are chat messages tagged with that ID (same accounts and rules as the game chat); see plays-setup.sql.
-const EMOJIS = ["🔥", "😂", "😱", "🧱", "🐐", "👏"];
+// Reactions fit the play: good plays get hype emojis, misses and mistakes get bricks and clowns.
+const EMOJI_SETS = {
+  good: ["🔥", "🐐", "🎯", "💪", "👏", "🤯"],
+  bad: ["🧱", "🤡", "😬", "🗑️", "🤦", "😂"],
+  other: ["👀", "🔥", "😱", "😂", "👏", "🧱"],
+};
+function playMood(desc) {
+  const d = String(desc || "");
+  if (/miss|turnover|foul|violation|travel|lost ball|bad pass|out of bounds|shot clock|offensive charge|charge|technical|kicked ball|lane violation|3 second|three second|double dribble|backcourt|airball|blocked/i.test(d)) return "bad";
+  if (/made|good|dunk|slam|steal|block|assist|and.?one|offensive rebound|alley/i.test(d)) return "good";
+  return "other";
+}
+const emojisFor = (gid, key) => EMOJI_SETS[playMood(PLAYINFO[gid]?.[key]?.desc)];
 const PLAYCT = {}, MYREACT = {}, PLAYINFO = {};   // per game: { playKey: {...} }
 let playsOn = !!(window.CHAT_CONFIG?.url && (window.CHAT_CONFIG?.anonKey || "").length > 20), playCtAt = {}, pickerFor = null;
 function playKey(x, per) {
@@ -879,7 +891,8 @@ function playBar(gid, key, compact) {
   const tops = Object.entries(ct.r).sort((a, b) => b[1] - a[1]), total = tops.reduce((n, x) => n + x[1], 0);
   const sum = total ? `${tops.slice(0, 3).map(x => `<i>${x[0]}</i>`).join("")}<b>${total}</b>` : `<i class="pr-add">☺</i><b>React</b>`;
   if (compact) return `<span class="pact"><button class="pr-sum ${mine.size ? "on" : ""}" data-thread="${key}" title="React or comment">${sum}</button><button class="pr-com" data-thread="${key}" title="Comments">💬${ct.c ? ` <b>${ct.c}</b>` : ""}</button></span>`;
-  const picker = pickerFor === key ? `<div class="pr-pick">${EMOJIS.map(e => `<button class="${mine.has(e) ? "on" : ""}" data-react="${e}" data-rkey="${key}" aria-label="React ${e}">${e}${ct.r[e] ? `<b>${ct.r[e]}</b>` : ""}</button>`).join("")}</div>` : "";
+  const set = [...new Set([...emojisFor(gid, key), ...Object.keys(ct.r)])];
+  const picker = pickerFor === key ? `<div class="pr-pick">${set.map(e => `<button class="${mine.has(e) ? "on" : ""}" data-react="${e}" data-rkey="${key}" aria-label="React ${e}">${e}${ct.r[e] ? `<b>${ct.r[e]}</b>` : ""}</button>`).join("")}</div>` : "";
   return `<div class="pr"><button class="pr-sum ${mine.size ? "on" : ""}" data-picker="${key}">${sum}</button><button class="pr-com" data-thread="${key}">💬${ct.c ? ` <b>${ct.c}</b>` : ""}</button></div>${picker}`;
 }
 // ---- the thread for one play ----
@@ -914,7 +927,7 @@ function drawThread(scrollDown) {
   const { gid, key } = THREAD, info = PLAYINFO[gid]?.[key] || {}, g = Object.values(cache).flat().find(x => x.gameID === gid);
   const me = window.CBBChat?.me(), ct = PLAYCT[gid]?.[key] || { c: 0, r: {} }, mine = MYREACT[gid]?.[key] || new Set();
   PT.querySelector(".pt-play").innerHTML = `${g ? `<div class="fp-meta">${mono(g.away.names.short, g.away.names.seo)}<b>${esc(info.v ?? "")}–${esc(info.h ?? "")}</b>${mono(g.home.names.short, g.home.names.seo)}<span>${esc(info.per || "")} ${esc(info.clock || "")}</span></div>` : ""}<div class="pt-desc">${esc(info.desc || "Play")}</div>
-    <div class="pr-pick open">${EMOJIS.map(e => `<button class="${mine.has(e) ? "on" : ""}" data-react="${e}" data-rkey="${key}" aria-label="React ${e}">${e}${ct.r[e] ? `<b>${ct.r[e]}</b>` : ""}</button>`).join("")}</div>`;
+    <div class="pr-pick open">${[...new Set([...emojisFor(gid, key), ...Object.keys(ct.r)])].map(e => `<button class="${mine.has(e) ? "on" : ""}" data-react="${e}" data-rkey="${key}" aria-label="React ${e}">${e}${ct.r[e] ? `<b>${ct.r[e]}</b>` : ""}</button>`).join("")}</div>`;
   const list = PT.querySelector(".pt-list"), near = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
   list.innerHTML = THREAD.loading ? `<p class="pt-empty">Loading comments…</p>` : THREAD.err ? `<p class="pt-empty">Comments couldn't load. Try again.</p>`
     : THREAD.msgs.length ? THREAD.msgs.map(m => `<div class="chat-msg ${me && m.user_id === me.id ? "mine" : ""}"><div class="chat-meta"><b>${esc(m.username)}</b><time>${new Date(m.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</time><span class="chat-tools">${me && me.is_admin ? `<button class="chat-link danger" data-ptdel="${m.id}">Delete</button>` : me && m.user_id !== me.id ? `<button class="chat-link" data-ptrep="${m.id}">Report</button>` : ""}</span></div><p>${esc(m.body)}</p></div>`).join("")
