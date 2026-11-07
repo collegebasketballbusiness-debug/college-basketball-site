@@ -828,12 +828,23 @@ const EMOJI_SETS = {
   bad: ["🧱", "🤡", "😬", "🗑️", "🤦", "😂"],
   other: ["👀", "🔥", "😱", "😂", "👏", "🧱"],
 };
+// What kind of play this is, from the NCAA's description ("Jumper MISSED by…", "Free Throw by…", "Foul on…").
+const SHOT_RE = /jumper|jump shot|layup|lay-up|dunk|3pt|3-pt|three point|hook|tip.?in|tip shot|free throw|floater|alley.?oop|putback|two point|2pt/i;
+const isShot = d => SHOT_RE.test(d) && !/rebound|^block|block by|steal|turnover|foul on/i.test(d);
 function playMood(desc) {
   const d = String(desc || "");
-  if (/miss|turnover|foul|violation|travel|lost ball|bad pass|out of bounds|shot clock|offensive charge|charge|technical|kicked ball|lane violation|3 second|three second|double dribble|backcourt|airball|blocked/i.test(d)) return "bad";
+  if (/miss|turnover|foul|violation|travel|lost ball|bad pass|out of bounds|shot clock|charge|technical|kicked ball|3 second|three second|double dribble|backcourt|airball|blocked/i.test(d)) return "bad";
+  if (isShot(d)) return "good"; // the NCAA writes made shots as just "Free Throw by …" or "Jumper by …"
   if (/made|good|dunk|slam|steal|block|assist|and.?one|offensive rebound|alley/i.test(d)) return "good";
   return "other";
 }
+const MOOD_ICON = { good: "🔥", bad: "🗑️", other: "👀" };
+// The player a play is about: "… by La Salle's Rob Dockery" → "Rob Dockery"
+function playerOf(desc) {
+  const m = /\b(?:by|on)\s+(?:[^()]*?'s\s+)?([A-Z][^()]*?)\s*(?:\(|$)/.exec(String(desc || ""));
+  return m ? m[1].replace(/\s+(made|missed)$/i, "").trim() : "";
+}
+const shortName = n => { const p = n.split(/\s+/); return p.length > 1 ? `${p[0][0]}. ${p.slice(1).join(" ")}` : n };
 const emojisFor = (gid, key) => EMOJI_SETS[playMood(PLAYINFO[gid]?.[key]?.desc)];
 const PLAYCT = {}, MYREACT = {}, PLAYINFO = {};   // per game: { playKey: {...} }
 let playsOn = !!(window.CHAT_CONFIG?.url && (window.CHAT_CONFIG?.anonKey || "").length > 20), playCtAt = {}, pickerFor = null;
@@ -889,7 +900,7 @@ function playBar(gid, key, compact) {
   if (!playsOn || !window.CBBChat?.on) return "";
   const ct = PLAYCT[gid]?.[key] || { c: 0, r: {} }, mine = MYREACT[gid]?.[key] || new Set();
   const tops = Object.entries(ct.r).sort((a, b) => b[1] - a[1]), total = tops.reduce((n, x) => n + x[1], 0);
-  const sum = total ? `${tops.slice(0, 3).map(x => `<i>${x[0]}</i>`).join("")}<b>${total}</b>` : `<i class="pr-add">☺</i><b>React</b>`;
+  const sum = total ? `${tops.slice(0, 3).map(x => `<i>${x[0]}</i>`).join("")}<b>${total}</b>` : `<i class="pr-add">${MOOD_ICON[playMood(PLAYINFO[gid]?.[key]?.desc)]}</i><b>React</b>`;
   if (compact) return `<span class="pact"><button class="pr-sum ${mine.size ? "on" : ""}" data-thread="${key}" title="React or comment">${sum}</button><button class="pr-com" data-thread="${key}" title="Comments">💬${ct.c ? ` <b>${ct.c}</b>` : ""}</button></span>`;
   const set = [...new Set([...emojisFor(gid, key), ...Object.keys(ct.r)])];
   const picker = pickerFor === key ? `<div class="pr-pick">${set.map(e => `<button class="${mine.has(e) ? "on" : ""}" data-react="${e}" data-rkey="${key}" aria-label="React ${e}">${e}${ct.r[e] ? `<b>${ct.r[e]}</b>` : ""}</button>`).join("")}</div>` : "";
@@ -1058,7 +1069,7 @@ function drawPhoneGame(sg) {
   else if (mgTab === "feed") {
     // every play, oldest first, so scoring, lead changes and ties can be worked out
     const all = (d.pbp?.periods || []).flatMap(p => (p.playbyplayStats || []).map(x => ({ ...x, per: p.periodDisplay || "" })));
-    let ph = 0, pv = 0; const items = [];
+    let ph = 0, pv = 0; const items = [], P = {}; // P: per player {pts, fgm, fga, streak}
     for (const x of all) {
       const nh = x.homeScore === undefined || x.homeScore === "" ? ph : +x.homeScore, nv = x.visitorScore === undefined || x.visitorScore === "" ? pv : +x.visitorScore;
       const side = String(x.teamId) === idHome ? "home" : String(x.teamId) === idAway ? "away" : (nh > ph ? "home" : nv > pv ? "away" : "");
@@ -1069,7 +1080,24 @@ function drawPhoneGame(sg) {
         if (nh === nv) tags.push(["tie", "Ties it"]);
       }
       const desc = fix(x.eventDescription || x.homeText || x.visitorText || "").replace(/\s+/g, " ").trim();
-      if (desc) { const key = playKey(x, x.per); items.push({ key, desc, per: x.per, clock: x.clock || "", h: nh, v: nv, side, pts, tags }) }
+      // player lines and hot/cold streaks (field goals only; free throws count toward points)
+      let line = "";
+      const who = playerOf(desc);
+      if (who && isShot(desc)) {
+        const st = (P[who] ||= { pts: 0, fgm: 0, fga: 0, streak: 0 }), ft = /free throw/i.test(desc), miss = /miss/i.test(desc);
+        if (!miss) st.pts += pts || (ft ? 1 : /3pt|three/i.test(desc) ? 3 : 2);
+        if (!ft) {
+          st.fga++; if (!miss) st.fgm++;
+          st.streak = miss ? (st.streak < 0 ? st.streak - 1 : -1) : (st.streak > 0 ? st.streak + 1 : 1);
+          if (st.streak >= 2) tags.push(["hot", `🔥 ${st.streak} straight makes`]);
+          if (st.streak <= -2) tags.push(["cold", `🧊 ${-st.streak} straight misses`]);
+        }
+        line = `${shortName(who)} · ${st.pts} pt${st.pts === 1 ? "" : "s"}${st.fga ? `, ${st.fgm}/${st.fga} FG` : ""}`;
+      } else if (who && /foul on/i.test(desc)) {
+        const st = (P["foul:" + who] ||= { n: 0 }); st.n++;
+        line = `${shortName(who)} · ${st.n} foul${st.n === 1 ? "" : "s"}`;
+      }
+      if (desc) { const key = playKey(x, x.per); items.push({ key, desc, line, per: x.per, clock: x.clock || "", h: nh, v: nv, side, pts, tags }) }
       ph = nh; pv = nv;
     }
     const shown = (mgFeed === "scoring" ? items.filter(i => i.pts > 0) : items).reverse().slice(0, 250);
@@ -1083,7 +1111,7 @@ function drawPhoneGame(sg) {
         return `<div class="fp ${big} ${i.tags.length ? "key" : ""}" style="--tc:${tc}">
           <div class="fp-av">${t ? mono(t.names.short, t.names.seo) : `<span class="fp-dot"></span>`}${i.pts > 0 ? `<span class="fp-pts">+${i.pts}</span>` : ""}</div>
           <div class="fp-main"><div class="fp-meta">${mono(sg.away.names.short, sg.away.names.seo)}<b>${i.v}–${i.h}</b>${mono(sg.home.names.short, sg.home.names.seo)}<span>${esc(perLbl(i.per))} ${esc(i.clock)}</span></div>
-          <div class="fp-desc">${esc(i.desc)}</div>${i.tags.length ? `<div class="fp-tags">${i.tags.map(([k, l]) => `<span class="fpt-${k}">${esc(l)}</span>`).join("")}</div>` : ""}${playBar(sg.gameID, i.key)}</div></div>`;
+          <div class="fp-desc">${esc(i.desc)}</div>${i.line ? `<div class="fp-line">${esc(i.line)}</div>` : ""}${i.tags.length ? `<div class="fp-tags">${i.tags.map(([k, l]) => `<span class="fpt-${k}">${esc(l)}</span>`).join("")}</div>` : ""}${playBar(sg.gameID, i.key)}</div></div>`;
       }).join("") : `<p class="mg-empty">${pre ? "The feed starts at tip-off. Check the Game tab to make your pick." : "No play-by-play for this game."}</p>`);
   } else if (mgTab === "game") {
     const ls = c?.linescores || [];
