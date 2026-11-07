@@ -840,6 +840,29 @@ function playMood(desc) {
 }
 // Substitutions ("Subbing in for …", "… enters the game") are left out of the play-by-play.
 const isSub = d => /^\s*subbing|substitution|enters the game|leaves the game|\bsubbing (in|out)\b|\bsub (in|out)\b/i.test(String(d || ""));
+// A short, punchy headline for each play (like "💦 Three" or "🧱 Missed layup") plus a style for its card.
+function playType(desc) {
+  const d = String(desc || ""), miss = /miss/i.test(d);
+  if (/time ?out/i.test(d)) return { e: "⏸️", l: "Timeout", k: "pause" };
+  if (/jump ?ball/i.test(d)) return { e: "🏀", l: "Jump ball", k: "pause" };
+  if (/technical/i.test(d)) return { e: "🟥", l: "Technical foul", k: "foul" };
+  if (/flagrant/i.test(d)) return { e: "🟥", l: "Flagrant foul", k: "foul" };
+  if (/offensive foul|charge/i.test(d)) return { e: "🟨", l: "Offensive foul", k: "foul" };
+  if (/foul/i.test(d)) return { e: "🟨", l: "Foul", k: "foul" };
+  if (/travel/i.test(d)) return { e: "🚶", l: "Travel", k: "to" };
+  if (/turnover|lost ball|bad pass|out of bounds|violation|shot clock|double dribble|backcourt/i.test(d)) return { e: "😬", l: "Turnover", k: "to" };
+  if (/^\s*steal|steal by/i.test(d)) return { e: "🥷", l: "Steal", k: "def" };
+  if (/^\s*block|block by/i.test(d)) return { e: "🚫", l: "Rejected", k: "def" };
+  if (/offensive rebound/i.test(d)) return { e: "💪", l: "Offensive board", k: "board" };
+  if (/rebound/i.test(d)) return { e: "🧲", l: "Rebound", k: "board" };
+  if (/free throw/i.test(d)) return miss ? { e: "❌", l: "Missed free throw", k: "miss", n: "free throw" } : { e: "🎯", l: "Free throw", k: "ft", n: "free throw" };
+  if (/3pt|3-pt|three point/i.test(d)) return miss ? { e: "🧱", l: "Missed three", k: "miss", n: "three" } : { e: "💦", l: "Splash! Three", k: "three", n: "three" };
+  if (/dunk|slam|alley/i.test(d)) return miss ? { e: "🧱", l: "Missed dunk", k: "miss", n: "dunk" } : { e: "💥", l: "Slam dunk", k: "dunk", n: "dunk" };
+  if (/layup|lay-up|putback|tip/i.test(d)) return miss ? { e: "🧱", l: "Missed layup", k: "miss", n: "layup" } : { e: "🏀", l: "Layup", k: "two", n: "layup" };
+  if (/hook/i.test(d)) return miss ? { e: "🧱", l: "Missed hook", k: "miss", n: "hook shot" } : { e: "🪝", l: "Hook shot", k: "two", n: "hook shot" };
+  if (isShot(d)) return miss ? { e: "🧱", l: "Missed jumper", k: "miss", n: "jumper" } : { e: "🎯", l: "Jumper", k: "two", n: "jumper" };
+  return { e: "📣", l: "", k: "other" };
+}
 const MOOD_ICON = { good: "🔥", bad: "🗑️", other: "👀" };
 // The player a play is about: "… by La Salle's Rob Dockery" → "Rob Dockery"
 function playerOf(desc) {
@@ -1087,12 +1110,20 @@ function drawPhoneGame(sg) {
   else if (mgTab === "feed") {
     // every play, oldest first, so scoring, lead changes and ties can be worked out
     const all = (d.pbp?.periods || []).flatMap(p => (p.playbyplayStats || []).map(x => ({ ...x, per: p.periodDisplay || "" })));
-    let ph = 0, pv = 0; const items = [], P = {}; // P: per player {pts, fgm, fga, streak}
+    let ph = 0, pv = 0, lastPer = null, runSide = "", runPts = 0; const items = [], P = {}; // P: per player {pts, fgm, fga, streak}
     for (const x of all) {
+      // a divider between halves (and before overtime) with the score at that moment
+      if (lastPer !== null && x.per !== lastPer) items.push({ divider: true, label: /ot|overtime/i.test(x.per) ? (/ot|overtime/i.test(lastPer) ? "End of overtime" : "End of regulation") : "Halftime", h: ph, v: pv });
+      lastPer = x.per;
       const nh = x.homeScore === undefined || x.homeScore === "" ? ph : +x.homeScore, nv = x.visitorScore === undefined || x.visitorScore === "" ? pv : +x.visitorScore;
       const side = String(x.teamId) === idHome ? "home" : String(x.teamId) === idAway ? "away" : (nh > ph ? "home" : nv > pv ? "away" : "");
       let pts = (nh - ph) + (nv - pv); const tags = [];
       if (pts < 1 || pts > 4) pts = 0; // a jump bigger than one basket means plays are missing from the feed, not a score
+      // runs: points one team scores while the other scores none
+      if (pts > 0 && side) { if (side === runSide) runPts += pts; else { runSide = side; runPts = pts } }
+      if (pts > 0 && runPts >= 7 && side === runSide) tags.push(["run", `🏃 ${fix(sg[side].names.short)} on a ${runPts}-0 run`]);
+      // clutch: final two minutes of the 2nd half or overtime, within 5
+      if (/2nd|ot|overtime/i.test(x.per) && clockSecs(x.clock) <= 120 && Math.abs(nh - nv) <= 5) tags.push(["clutch", "⏱️ Clutch"]);
       if (pts > 0 && items.length) {
         if ((ph - pv) * (nh - nv) < 0 || (ph === pv && nh !== nv && items.some(i => i.pts))) tags.push(["lead", (ph === pv) ? "Takes the lead" : "Lead change"]);
         if (nh === nv) tags.push(["tie", "Ties it"]);
@@ -1115,21 +1146,27 @@ function drawPhoneGame(sg) {
         const st = (P["foul:" + who] ||= { n: 0 }); st.n++;
         line = `${shortName(who)} · ${st.n} foul${st.n === 1 ? "" : "s"}`;
       }
-      if (desc && !isSub(desc)) { const key = playKey(x, x.per); items.push({ key, desc, line, per: x.per, clock: x.clock || "", h: nh, v: nv, side, pts, tags }) }
+      if (desc && !isSub(desc)) { const key = playKey(x, x.per); items.push({ key, desc, line, per: x.per, clock: x.clock || "", h: nh, v: nv, side, pts, tags, type: playType(desc) }) }
       ph = nh; pv = nv;
     }
-    const shown = (mgFeed === "scoring" ? items.filter(i => i.pts > 0) : items).reverse().slice(0, 250);
+    const shown = (mgFeed === "scoring" ? items.filter(i => i.pts > 0 || i.divider) : items).reverse().slice(0, 250);
     const perLbl = p => String(p).replace(/1st Half|1st/i, "H1").replace(/2nd Half|2nd/i, "H2").replace(/Overtime/i, "OT");
-    for (const i of shown) notePlay(sg.gameID, i.key, { desc: i.desc, per: perLbl(i.per), clock: i.clock, h: i.h, v: i.v });
+    for (const i of shown) if (!i.divider) notePlay(sg.gameID, i.key, { desc: i.desc, per: perLbl(i.per), clock: i.clock, h: i.h, v: i.v });
     body = `<div class="mg-feedbar"><button data-mgfeed="all" aria-pressed="${mgFeed === "all"}">All plays</button><button data-mgfeed="scoring" aria-pressed="${mgFeed === "scoring"}">Scoring</button></div>` +
-      (shown.length ? shown.map(i => {
-        const t = i.side ? sg[i.side] : null;
+      (shown.some(i => !i.divider) ? shown.map(i => {
+        if (i.divider) return `<div class="fp-div"><span>${esc(i.label)}</span><b>${esc(short(sg.away))} ${i.v} – ${i.h} ${esc(short(sg.home))}</b></div>`;
+        const t = i.side ? sg[i.side] : null, ty = i.type;
         const tc = t ? teamColorFor(logoSlug(t.names.short, t.names.seo)) || "#444" : "#2A2A2E";
         const big = i.pts >= 3 ? "three" : i.pts > 0 ? "score" : "";
-        return `<div class="fp ${big} ${i.tags.length ? "key" : ""}" style="--tc:${tc}">
-          <div class="fp-av">${t ? mono(t.names.short, t.names.seo) : `<span class="fp-dot"></span>`}${i.pts > 0 ? `<span class="fp-pts">+${i.pts}</span>` : ""}</div>
-          <div class="fp-main"><div class="fp-meta">${mono(sg.away.names.short, sg.away.names.seo)}<b>${i.v}–${i.h}</b>${mono(sg.home.names.short, sg.home.names.seo)}<span>${esc(perLbl(i.per))} ${esc(i.clock)}</span></div>
-          <div class="fp-desc">${esc(i.desc)}</div>${i.line ? `<div class="fp-line">${esc(i.line)}</div>` : ""}${i.tags.length ? `<div class="fp-tags">${i.tags.map(([k, l]) => `<span class="fpt-${k}">${esc(l)}</span>`).join("")}</div>` : ""}${playBar(sg.gameID, i.key)}</div></div>`;
+        // context for the headline: "Go-ahead three", "Game-tying layup"
+        let head = ty.l || "";
+        if (ty.n && i.pts > 0) { if (i.tags.some(x => x[0] === "lead")) head = `Go-ahead ${ty.n}`; else if (i.tags.some(x => x[0] === "tie")) head = `Game-tying ${ty.n}` }
+        const sc = (n, sd) => `<b class="${i.pts > 0 && i.side === sd ? "lit" : ""}">${n}</b>`;
+        return `<div class="fp ${big} k-${ty.k} ${i.tags.length ? "key" : ""}" style="--tc:${tc}">
+          <div class="fp-av">${t ? mono(t.names.short, t.names.seo) : `<span class="fp-dot">${ty.e}</span>`}${i.pts > 0 ? `<span class="fp-pts">+${i.pts}</span>` : ""}</div>
+          <div class="fp-main"><div class="fp-meta">${mono(sg.away.names.short, sg.away.names.seo)}${sc(i.v, "away")}<i>–</i>${sc(i.h, "home")}${mono(sg.home.names.short, sg.home.names.seo)}<span>${esc(perLbl(i.per))} ${esc(i.clock)}</span></div>
+          ${head ? `<div class="fp-head"><span class="fp-emo">${ty.e}</span>${esc(head)}</div><div class="fp-sub">${esc(i.desc)}</div>` : `<div class="fp-desc">${esc(i.desc)}</div>`}
+          ${i.line ? `<div class="fp-line">${esc(i.line)}</div>` : ""}${(tg => tg.length ? `<div class="fp-tags">${tg.map(([k, l]) => `<span class="fpt-${k}">${esc(l)}</span>`).join("")}</div>` : "")(i.tags.filter(x => !(/^(Go-ahead|Game-tying)/.test(head) && (x[0] === "lead" || x[0] === "tie"))))}${playBar(sg.gameID, i.key)}</div></div>`;
       }).join("") : `<p class="mg-empty">${pre ? "The feed starts at tip-off. Check the Game tab to make your pick." : "No play-by-play for this game."}</p>`);
   } else if (mgTab === "game") {
     const ls = c?.linescores || [];

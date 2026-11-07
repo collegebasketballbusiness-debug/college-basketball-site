@@ -563,6 +563,31 @@ html.mg-open,html.mg-open body{overflow:hidden}
 .fp-tags .fpt-hot{background:linear-gradient(90deg,#FF3D00,#FF8A00);color:#fff;text-transform:none;letter-spacing:.02em;font-size:13px}
 .fp-tags .fpt-cold{background:linear-gradient(90deg,#3BA7FF,#9BE1FF);color:#05213A;text-transform:none;letter-spacing:.02em;font-size:13px}
 .fp-line{font-size:15px;color:#A8A8A4;margin-top:3px}
+/* play cards by type */
+.fp{position:relative}
+.fp-head{display:flex;align-items:center;gap:8px;margin-top:5px;font-family:var(--display);font-weight:900;font-size:24px;line-height:1.05;text-transform:uppercase;letter-spacing:.01em;color:#F2F2EE}
+.fp-emo{font-size:22px;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
+.fp-sub{font-size:13px;color:#8A8A86;margin-top:4px;line-height:1.35}
+.fp-meta i{font-style:normal;color:#6A6A66}
+.fp-meta b{color:#BDBDB8}.fp-meta b.lit{color:#fff;background:var(--tc);border-radius:4px;padding:0 5px;text-shadow:0 1px 2px rgba(0,0,0,.4)}
+.fp-dot{width:auto;height:auto;background:none;font-size:22px}
+.fp.k-two,.fp.k-ft{background:linear-gradient(90deg,color-mix(in srgb,var(--tc) 18%,transparent),transparent 55%)}
+.fp.k-three{background:linear-gradient(90deg,color-mix(in srgb,var(--tc) 34%,transparent),color-mix(in srgb,#FF6A13 10%,transparent) 60%,transparent)}
+.fp.k-three .fp-head{color:#fff;text-shadow:0 0 18px rgba(255,140,40,.45)}
+.fp.k-dunk{background:linear-gradient(90deg,color-mix(in srgb,var(--tc) 34%,transparent),color-mix(in srgb,#B04CFF 12%,transparent) 60%,transparent)}
+.fp.k-dunk .fp-head{color:#fff;text-shadow:0 0 18px rgba(176,76,255,.5)}
+.fp.k-three::before,.fp.k-dunk::before,.fp.k-two::before,.fp.k-ft::before,.fp.k-foul::before,.fp.k-to::before,.fp.k-def::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--tc)}
+.fp.k-miss{background:none}.fp.k-miss .fp-head{color:#9C9C98}.fp.k-miss .fp-emo{filter:grayscale(.2)}
+.fp.k-foul::before{background:#F5C518}.fp.k-foul .fp-head{color:#F5D24A}
+.fp.k-to::before{background:#FF5A4F}.fp.k-to .fp-head{color:#FF8A80}
+.fp.k-def{background:linear-gradient(90deg,rgba(80,200,255,.10),transparent 55%)}.fp.k-def::before{background:#50C8FF}.fp.k-def .fp-head{color:#9BE1FF}
+.fp.k-board .fp-head{color:#D8D8D4;font-size:20px}
+.fp.k-pause{padding-top:10px;padding-bottom:10px}.fp.k-pause .fp-head{font-size:18px;color:#8A8A86}
+.fp-tags .fpt-run{background:linear-gradient(90deg,#16A34A,#4ADE80);color:#04230F;text-transform:none;letter-spacing:.02em;font-size:13px}
+.fp-tags .fpt-clutch{background:#111;color:#FFD23F;border:1px solid #FFD23F;text-transform:none;font-size:13px;animation:uwpulse 2s infinite}
+.fp-div{display:flex;align-items:center;justify-content:center;gap:12px;padding:14px;margin:6px 0;background:repeating-linear-gradient(-45deg,#111 0 10px,#151517 10px 20px);border-top:1px solid #222;border-bottom:1px solid #222}
+.fp-div span{font-family:var(--display);font-weight:900;font-size:18px;text-transform:uppercase;letter-spacing:.06em;color:var(--ball)}
+.fp-div b{font-family:var(--mono);font-size:14px;color:#D8D8D4}
 .mg-body .pk{border-bottom:1px solid #18181B;padding:16px 14px}
 .mg-card{padding:16px 14px;border-bottom:1px solid #18181B}
 .mg-card h4{margin:6px 0 10px;font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:500;display:flex;justify-content:space-between}
