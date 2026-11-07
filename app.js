@@ -206,6 +206,9 @@ function drawFilters() {
 }
 // The game panel opens inside the grid, directly under the row of the game that was tapped.
 const DETAIL = document.getElementById("gdetail");
+// The panel has three parts: the score header, the live chat (kept between refreshes), and the stats below.
+DETAIL.innerHTML = `<div class="ghead"></div><div class="chatmount"></div><div class="gmain"></div>`;
+const GHEAD = DETAIL.querySelector(".ghead"), GMAIN = DETAIL.querySelector(".gmain"), CHATMOUNT = DETAIL.querySelector(".chatmount");
 function placeDetail() {
   const grid = $("#games");
   if (!openGame) { if (DETAIL.parentNode !== grid.parentNode) grid.after(DETAIL); return }
@@ -346,15 +349,17 @@ const pct = (m, a) => a ? Math.round(m / a * 100) : 0;
 function drawGame() {
   const boxEl = DETAIL;
   const sg = (cache[gday] || []).concat(cache.t || []).find(g => g.gameID === openGame);
-  if (!openGame || !sg) { boxEl.hidden = true; return }
+  if (!openGame || !sg) { boxEl.hidden = true; window.CBBChat?.close(); return }
   boxEl.hidden = false;
+  window.CBBChat?.show(CHATMOUNT, sg.gameID, `${fix(sg.away.names.short)} at ${fix(sg.home.names.short)}`);
   const d = gameDetail && gameDetail.id === openGame ? gameDetail : null;
   const c = d?.game, teams = c?.teams || [];
   const tHome = teams.find(t => t.isHome) || {}, tAway = teams.find(t => !t.isHome) || {};
   const st = status(sg), pre = sg.gameState === "pre";
   const side = (s, t, r) => `<div class="side ${r ? "r" : ""}">${mono(s.names.short, s.names.seo, t.color, "lg")}<div><strong>${(s.rank || apRank(s.names.short)) ? `<span style="color:var(--ball)">#${s.rank || apRank(s.names.short)}</span> ` : ""}${esc(fix(s.names.short))}</strong><small>${esc(recordOf(s.names.short, sg, s === sg.home ? "home" : "away") || fix(t.record || "").replace(/[()]/g, ""))}${CONF[confOf(s)] ? " · " + CONF[confOf(s)] : ""}</small></div></div>`;
   let html = `<div class="gh">${side(sg.away, tAway)}<div class="big">${pre ? "vs" : `${esc(sg.away.score)}–${esc(sg.home.score)}`}<small class="${st.cls}">${esc(st.txt)}${sg.network ? " · " + esc(sg.network) : ""}</small></div>${side(sg.home, tHome, 1)}</div>`;
-  if (!d) { boxEl.innerHTML = html + `<div class="boxwrap"><p style="margin:0;color:var(--muted)">Loading game details…</p></div>`; return }
+  GHEAD.innerHTML = html; html = "";
+  if (!d) { GMAIN.innerHTML = `<div class="boxwrap"><p style="margin:0;color:var(--muted)">Loading game details…</p></div>`; return }
 
   const loc = c?.location ? `${fix(c.location.venue)}${c.location.city ? ", " + fix(c.location.city) : ""}${c.location.stateUsps ? ", " + c.location.stateUsps : ""}` : "";
   // linescore
@@ -397,7 +402,7 @@ function drawGame() {
   } else {
     html += `<div class="boxwrap"><h4 style="margin:0">Box score</h4><p style="margin:8px 0 0;color:var(--muted)">${pre ? "The box score goes live at tip-off." : "No box score for this game."}</p></div>`;
   }
-  boxEl.innerHTML = html;
+  GMAIN.innerHTML = html;
 }
 
 // ---------- refresh loop ----------
@@ -567,7 +572,7 @@ function openStory(id) {
 }
 
 // ---------- tabs ----------
-const VIEWS = ["scores", "news", "rankings", "standings", "discord"];
+const VIEWS = ["scores", "news", "rankings", "standings", "discord", "rules"];
 const loaded = {};
 function show(v) {
   if (!VIEWS.includes(v)) v = "scores";
