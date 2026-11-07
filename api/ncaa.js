@@ -125,8 +125,47 @@ async function day(res, y, m, d) {
     json(res, 502, { error: "Could not reach the NCAA API" });
   }
 }
-// Every game for one team this season. Reads each day through this site's own cache, so it's quick after the first time.
+// Every game this season for every team, in one list. Built from each day through this site's own cache.
+// Vercel keeps the result and refreshes it in the background, so visitors almost always get it instantly.
+async function season(req, res) {
+  const host = `https://${req.headers["x-forwarded-host"] || req.headers.host}`;
+  const today = etToday(), y = +today.slice(0, 4), mo = +today.slice(5, 7);
+  const start = Date.UTC(mo >= 7 ? y : y - 1, 10, 1), end = Date.UTC(mo >= 7 ? y + 1 : y, 3, 8); // Nov 1 – Apr 8
+  const dates = [];
+  for (let t = start; t <= end; t += 864e5) dates.push(new Date(t).toISOString().slice(0, 10));
+  const games = []; let missing = 0, i = 0;
+  async function worker() {
+    while (i < dates.length) {
+      const date = dates[i++], [yy, mm, dd] = date.split("-");
+      try {
+        const r = await fetch(`${host}/api/ncaa?path=${encodeURIComponent(`day/${yy}/${mm}/${dd}`)}`);
+        if (!r.ok) { missing++; continue }
+        const j = await r.json();
+        for (const g of j.games || []) games.push(g);
+      } catch { missing++ }
+    }
+  }
+  await Promise.all(Array.from({ length: 8 }, worker));
+  games.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : a.t - b.t));
+  json(res, 200, { games, missingDays: missing, built: Date.now() },
+    missing ? "public, s-maxage=60" : "public, s-maxage=900, stale-while-revalidate=172800");
+}
+
+// Every game for one team this season. Uses the cached season list above, falling back to a day-by-day scan.
 async function teamSeason(req, res, slug) {
+  try {
+    const host = `https://${req.headers["x-forwarded-host"] || req.headers.host}`;
+    const r = await fetch(`${host}/api/ncaa?path=season`);
+    if (r.ok) {
+      const j = await r.json();
+      const games = (j.games || []).filter(g => g.a[0] === slug || g.h[0] === slug);
+      return json(res, 200, { slug, games, missingDays: j.missingDays || 0 },
+        j.missingDays ? "public, s-maxage=60" : "public, s-maxage=300, stale-while-revalidate=3600");
+    }
+  } catch { /* fall through to the day-by-day scan */ }
+  return teamSeasonScan(req, res, slug);
+}
+async function teamSeasonScan(req, res, slug) {
   const host = `https://${req.headers["x-forwarded-host"] || req.headers.host}`;
   const today = etToday(), y = +today.slice(0, 4), mo = +today.slice(5, 7);
   const start = Date.UTC(mo >= 7 ? y : y - 1, 10, 1), end = Date.UTC(mo >= 7 ? y + 1 : y, 3, 8); // Nov 1 – Apr 8
@@ -157,6 +196,7 @@ export default async function handler(req, res) {
   let m;
   if ((m = /^day\/(\d{4})\/(\d{2})\/(\d{2})$/.exec(path))) return day(res, m[1], m[2], m[3]);
   if ((m = /^tv\/(\d{4})\/(\d{2})\/(\d{2})$/.exec(path))) return tv(res, m[1], m[2], m[3]);
+  if (path === "season") return season(req, res);
   if ((m = /^team-season\/([a-z0-9-]{1,60})$/.exec(path))) return teamSeason(req, res, m[1]);
   const route = ROUTES.find(([re]) => re.test(path));
   if (!route) return json(res, 400, { error: "Unsupported path" });
