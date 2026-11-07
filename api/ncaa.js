@@ -9,6 +9,7 @@ const BASE = (process.env.NCAA_API_BASE || "https://ncaa-api.henrygd.me").replac
 const ROUTES = [
   [/^scoreboard\/basketball-men\/d1(\/\d{4}\/\d{2}\/\d{2})?(\/all-conf)?$/, 20],
   [/^game\/\d{4,10}(\/(boxscore|play-by-play|team-stats))?$/, 15],
+  [/^game\/\d{4,10}\?info=1$/, 3600],
   [/^rankings\/basketball-men\/d1\/associated-press$/, 1800],
   [/^standings\/basketball-men\/d1$/, 1800],
   [/^news\/basketball-men\/d1$/, 600],
