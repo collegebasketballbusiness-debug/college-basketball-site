@@ -421,11 +421,8 @@ function drawHero() {
 // ---------- Instagram ----------
 function drawInstagram() {
   const box = $("#igposts"), posts = (window.IG_POSTS || []).filter(u => /instagram\.com\/(p|reel)\//.test(u)).slice(0, 6);
-  if (!posts.length) {
-    box.innerHTML = `<div class="ig-empty"><div><strong>Highlights, takes and game-day coverage</strong><p>Follow along on Instagram for the moments that matter every night of the season.</p></div><a class="follow" href="https://www.instagram.com/collegebasketball/" target="_blank" rel="noopener">Follow @collegebasketball</a></div>`;
-    return;
-  }
-  box.innerHTML = `<div class="ig-grid">${posts.map(u => `<blockquote class="instagram-media" data-instgrm-permalink="${esc(u.split("?")[0])}" data-instgrm-version="14"><a href="${esc(u)}" target="_blank" rel="noopener">View this post on Instagram</a></blockquote>`).join("")}</div>`;
+  if (!posts.length) { box.innerHTML = ""; return } // the follow block above stands on its own until posts are added in posts.js
+  box.innerHTML = `<p class="ig-latest">Latest posts</p><div class="ig-grid">${posts.map(u => `<blockquote class="instagram-media" data-instgrm-permalink="${esc(u.split("?")[0])}" data-instgrm-version="14"><a href="${esc(u)}" target="_blank" rel="noopener">View this post on Instagram</a></blockquote>`).join("")}</div>`;
   if (window.instgrm) window.instgrm.Embeds.process();
   else { const sc = document.createElement("script"); sc.async = true; sc.src = "https://www.instagram.com/embed.js"; document.body.appendChild(sc) }
 }
