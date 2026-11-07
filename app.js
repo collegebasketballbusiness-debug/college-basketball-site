@@ -293,8 +293,11 @@ function drawHero() {
   el.style.setProperty("--ca", teamColorFor(sa) || "#333"); el.style.setProperty("--ch", teamColorFor(sh) || "#333");
   const fin = g.gameState === "final";
   el.dataset.game = g.gameID; el.dataset.dayOf = "t";
-  el.setAttribute("aria-label", `Game of the Night: ${fix(g.away.names.short)} at ${fix(g.home.names.short)}. Open game.`);
-  el.innerHTML = `<div class="gt"><div class="lbl">Game of the <span>Night</span></div>${badgeHTML(badges(g))}</div>
+  // games that tip before 5 PM (viewer's time) are the "Game of the Day"; evening games are the "Game of the Night"
+  const tipHour = +g.startTimeEpoch ? new Date(+g.startTimeEpoch * 1000).getHours() : 19;
+  const when = tipHour < 17 ? "Day" : "Night";
+  el.setAttribute("aria-label", `Game of the ${when}: ${fix(g.away.names.short)} at ${fix(g.home.names.short)}. Open game.`);
+  el.innerHTML = `<div class="gt"><div class="lbl">Game of the <span>${when}</span></div>${badgeHTML(badges(g))}</div>
     <div class="gm">${side(g.away, "away")}<div class="mid"><div class="big2">${pre ? "VS" : `<span class="${fin && a < h ? "l" : "w"}">${a}</span>–<span class="${fin && h < a ? "l" : "w"}">${h}</span>`}</div><div class="st2 ${st.cls}">${esc(st.txt)}${g.network ? " · " + esc(g.network) : ""}</div></div>${side(g.home, "home", 1)}</div>`;
   el.hidden = false;
 }
