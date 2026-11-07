@@ -242,6 +242,8 @@ table.box tr.totals td{font-weight:700;border-top:2px solid var(--ink)}
 .rk-table .tm .mono{width:30px;height:30px;font-size:11px}
 .rk-table .tm small{color:var(--muted);font-weight:500}
 .rk-table td.rkn{font-family:var(--display);font-weight:900;font-size:22px;color:var(--ball)}
+/* rank / position column: every number centered in the same width so 1, 10 and 11 line up */
+.rk-table tr>.num:first-child{text-align:center;width:56px;padding-left:4px;padding-right:4px;font-variant-numeric:tabular-nums}
 .rk-table tr.click{cursor:pointer}
 .rk-table tr.click:hover td{background:var(--chip)}
 .rk-table .sr{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:4px}
