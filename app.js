@@ -562,6 +562,7 @@ async function refresh() {
     if (gday === "t") { drawFilters(); drawGames(); }
     drawTicker(changed); drawHero();
     if (!teamOpen && !$("#teamdir-wrap").closest(".view").hidden) drawTeamDir(); // live tags on the Teams tab
+    if (teamOpen && !$("#teampage").hidden && teamTab === "schedule" && (cache.t || []).some(g => (isLive(g) || changed.has(g.gameID)) && [g.home, g.away].some(t => t.names.seo === teamOpen))) drawTeam(); // live scores on a team page
     { const hg = (cache.t || []).find(x => x.gameID === heroId); if (hg && hg.gameState === "live") loadHeroExtra(heroId) }
     changed.forEach(id => ["away", "home"].forEach(s => { const el = document.querySelector(`[data-sc="${id}-${s}"]`); if (el) { el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 900) } }));
     if (openGame && gday === "t") { const g = cache.t.find(x => x.gameID === openGame); if (g && (isLive(g) || changed.has(openGame))) loadGame(openGame); else drawGame(); }
@@ -820,14 +821,41 @@ function drawTeamDir() {
     : `<p class="empty">No teams match “${esc(teamQuery)}”.</p>`;
   if (!favs.length && !q) box.insertAdjacentHTML("afterbegin", `<p class="favhint">${STAR(false)} Tap the star on any team to follow it. Your teams stay pinned here and get highlighted on Scores.</p>`);
 }
+// Every game this season for every team, loaded once and shared by all team pages.
+let SEASON = null;
+function loadSeason() {
+  if (!SEASON) SEASON = api("season", 2).then(r => {
+    if (!r || !Array.isArray(r.games)) throw new Error("no season");
+    if (r.missingDays) setTimeout(() => { SEASON = null }, 60e3); // some days were missing: try again in a minute
+    return r;
+  }).catch(e => { SEASON = null; throw e });
+  return SEASON;
+}
+// The season list can be a few minutes old, so today's games take their score and status from the live scoreboard.
+function freshen(games) {
+  const live = {};
+  for (const k of ["y", "t", "m"]) for (const g of cache[k] || []) live[g.gameID] = g;
+  for (const x of games || []) {
+    const g = live[x.id]; if (!g) continue;
+    x.s = g.gameState; x.f = g.finalMessage || ""; x.p = g.currentPeriod || ""; x.c = g.contestClock || "";
+    if (x.a[0] === g.away.names.seo) { x.a[2] = g.away.score || ""; x.h[2] = g.home.score || "" }
+    else if (x.h[0] === g.away.names.seo) { x.h[2] = g.away.score || ""; x.a[2] = g.home.score || "" }
+  }
+  return games;
+}
 async function openTeam(slug) {
   teamOpen = slug; $("#teamdir-wrap").hidden = true; $("#teampage").hidden = false;
   if (!standings && !loaded.st) { loaded.st = 1; loadStandings() }
   const T = TEAMDATA[slug] || (TEAMDATA[slug] = { games: null, boxes: {}, err: false });
   drawTeam();
   if (!T.games) {
-    try { const r = await api(`team-season/${slug}`, 2); T.games = r.games || []; T.partial = !!r.missingDays }
-    catch { T.err = true }
+    try {
+      // the whole season comes in one list (usually already loaded when the Teams tab opened)
+      const all = await loadSeason();
+      T.games = all.games.filter(g => g.a[0] === slug || g.h[0] === slug); T.partial = !!all.missingDays;
+    } catch {
+      try { const r = await api(`team-season/${slug}`, 2); T.games = r.games || []; T.partial = !!r.missingDays } catch { T.err = true }
+    }
     if (teamOpen === slug) drawTeam();
     // grab the team's official color from one of its games for the page accent
     const g0 = (T.games || [])[0];
@@ -888,7 +916,7 @@ const shortDate = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", { w
 function drawTeam() {
   const slug = teamOpen, box = $("#teampage"); if (!slug) return;
   const T = TEAMDATA[slug] || {}, name = teamName(slug), { conf, row } = teamConf(slug), r = rk({ names: { short: name } });
-  const games = T.games || [];
+  const games = freshen(T.games) || [];
   let w = 0, l = 0;
   for (const g of games) if (g.s === "final") { const me = g.h[0] === slug ? g.h : g.a, op = g.h[0] === slug ? g.a : g.h; (+me[2] > +op[2]) ? w++ : l++ }
   const record = games.length ? `${w}-${l}` : (recordOf(name) || "0-0");
@@ -999,6 +1027,7 @@ function show(v) {
   document.querySelectorAll("[data-tab]").forEach(a => a.dataset.tab === v ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
   if (v === "news") drawNews(); // coming back to News always starts on the list of stories
   if (v === "discord") loadDiscord();
+  if (v === "teams" || v.startsWith("team-")) loadSeason().catch(() => { }); // get schedules ready before a team is tapped
   if (v === "rankings" && !loaded.ao) { loaded.ao = 1; loadApOthers() }
   if (v === "rankings" && !loaded.rk) { loaded.rk = 1; loadRankings() }
   if ((v === "standings" || v === "teams") && !loaded.st) { loaded.st = 1; loadStandings() }
