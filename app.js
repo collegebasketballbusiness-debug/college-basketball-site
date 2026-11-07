@@ -903,9 +903,9 @@ function playBar(gid, key, compact) {
   const ct = PLAYCT[gid]?.[key] || { c: 0, r: {} }, mine = MYREACT[gid]?.[key] || new Set();
   const tops = Object.entries(ct.r).sort((a, b) => b[1] - a[1]), total = tops.reduce((n, x) => n + x[1], 0);
   const sum = total ? `${tops.slice(0, 3).map(x => `<i>${x[0]}</i>`).join("")}<b>${total}</b>` : `<i class="pr-add">${MOOD_ICON[playMood(PLAYINFO[gid]?.[key]?.desc)]}</i><b>React</b>`;
-  if (compact) return `<span class="pact"><button class="pr-sum ${mine.size ? "on" : ""}" data-thread="${key}" title="React or comment">${sum}</button><button class="pr-com" data-thread="${key}" title="Comments">💬${ct.c ? ` <b>${ct.c}</b>` : ""}</button></span>`;
   const set = [...new Set([...emojisFor(gid, key), ...Object.keys(ct.r)])];
-  const picker = pickerFor === key ? `<div class="pr-pick">${set.map(e => `<button class="${mine.has(e) ? "on" : ""}" data-react="${e}" data-rkey="${key}" aria-label="React ${e}">${e}${ct.r[e] ? `<b>${ct.r[e]}</b>` : ""}</button>`).join("")}</div>` : "";
+  const picker = pickerFor === key ? `<div class="pr-pick${compact ? " wide" : ""}">${set.map(e => `<button class="${mine.has(e) ? "on" : ""}" data-react="${e}" data-rkey="${key}" aria-label="React ${e}">${e}${ct.r[e] ? `<b>${ct.r[e]}</b>` : ""}</button>`).join("")}</div>` : "";
+  if (compact) return `<span class="pact"><button class="pr-sum ${mine.size ? "on" : ""}" data-picker="${key}" title="React">${sum}</button><button class="pr-com" data-thread="${key}" title="Comments">💬${ct.c ? ` <b>${ct.c}</b>` : ""}</button></span>${picker}`;
   return `<div class="pr"><button class="pr-sum ${mine.size ? "on" : ""}" data-picker="${key}">${sum}</button><button class="pr-com" data-thread="${key}">💬${ct.c ? ` <b>${ct.c}</b>` : ""}</button></div>${picker}`;
 }
 // ---- the thread for one play ----
@@ -916,22 +916,33 @@ PT.innerHTML = `<div class="pt-card" role="dialog" aria-modal="true" aria-label=
 document.body.appendChild(PT);
 async function openThread(gid, key) {
   closeThread();
-  THREAD = { gid, key, msgs: [], loading: true };
+  const t = THREAD = { gid, key, msgs: [], loading: true };
   PT.hidden = false; drawThread();
+  let sb;
   try {
-    const sb = await window.CBBChat.client();
-    const { data } = await sb.from("messages").select("id, user_id, username, body, created_at").eq("game_id", gid).eq("play_key", key).eq("deleted", false).order("created_at", { ascending: true }).limit(200);
-    if (!THREAD || THREAD.key !== key) return;
-    THREAD.msgs = data || []; THREAD.loading = false;
-    THREAD.channel = sb.channel(`play-${gid}-${key}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `game_id=eq.${gid}` }, p => {
-      if (!THREAD || p.new.play_key !== key || THREAD.msgs.some(m => m.id === p.new.id)) return;
-      THREAD.msgs.push(p.new); bumpCount(gid, key, 1); drawThread(true);
-    }).subscribe();
-    drawThread(true);
-  } catch { if (THREAD) { THREAD.loading = false; THREAD.err = true; drawThread() } }
+    sb = await window.CBBChat.client();
+    const { data, error } = await sb.from("messages").select("id, user_id, username, body, created_at").eq("game_id", gid).eq("play_key", key).eq("deleted", false).order("created_at", { ascending: true }).limit(200);
+    if (THREAD !== t) return;
+    if (error) throw error;
+    t.msgs = data || []; t.loading = false; t.err = false;
+  } catch (e) {
+    console.warn("Play comments:", e);
+    if (THREAD === t) { t.loading = false; t.err = true; drawThread() }
+    return;
+  }
+  drawThread(true);
+  // live updates: a fresh channel each time, so reopening the same play never collides with the old one
+  try {
+    t.channel = sb.channel(`play-${gid}-${key}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `game_id=eq.${gid}` }, p => {
+        if (THREAD !== t || p.new.play_key !== key || t.msgs.some(m => m.id === p.new.id)) return;
+        t.msgs.push(p.new); bumpCount(gid, key, 1); drawThread(true);
+      }).subscribe();
+  } catch (e) { console.warn("Play comments live updates:", e) }
 }
 function closeThread() {
-  if (THREAD?.channel) { window.CBBChat.client().then(sb => sb.removeChannel(THREAD.channel)).catch(() => { }) }
+  const ch = THREAD?.channel;
+  if (ch) window.CBBChat.client().then(sb => sb.removeChannel(ch)).catch(() => { });
   THREAD = null; PT.hidden = true;
 }
 function bumpCount(gid, key, d) { const ct = ((PLAYCT[gid] ||= {})[key] ||= { c: 0, r: {} }); ct.c = Math.max(0, ct.c + d); drawGame() }
@@ -942,7 +953,7 @@ function drawThread(scrollDown) {
   PT.querySelector(".pt-play").innerHTML = `${g ? `<div class="fp-meta">${mono(g.away.names.short, g.away.names.seo)}<b>${esc(info.v ?? "")}–${esc(info.h ?? "")}</b>${mono(g.home.names.short, g.home.names.seo)}<span>${esc(info.per || "")} ${esc(info.clock || "")}</span></div>` : ""}<div class="pt-desc">${esc(info.desc || "Play")}</div>
     <div class="pr-pick open">${[...new Set([...emojisFor(gid, key), ...Object.keys(ct.r)])].map(e => `<button class="${mine.has(e) ? "on" : ""}" data-react="${e}" data-rkey="${key}" aria-label="React ${e}">${e}${ct.r[e] ? `<b>${ct.r[e]}</b>` : ""}</button>`).join("")}</div>`;
   const list = PT.querySelector(".pt-list"), near = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
-  list.innerHTML = THREAD.loading ? `<p class="pt-empty">Loading comments…</p>` : THREAD.err ? `<p class="pt-empty">Comments couldn't load. Try again.</p>`
+  list.innerHTML = THREAD.loading ? `<p class="pt-empty">Loading comments…</p>` : THREAD.err ? `<p class="pt-empty">Comments couldn't load. <button class="chat-link" data-ptretry>Try again</button></p>`
     : THREAD.msgs.length ? THREAD.msgs.map(m => `<div class="chat-msg ${me && m.user_id === me.id ? "mine" : ""}"><div class="chat-meta"><b>${esc(m.username)}</b><time>${new Date(m.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</time><span class="chat-tools">${me && me.is_admin ? `<button class="chat-link danger" data-ptdel="${m.id}">Delete</button>` : me && m.user_id !== me.id ? `<button class="chat-link" data-ptrep="${m.id}">Report</button>` : ""}</span></div><p>${esc(m.body)}</p></div>`).join("")
     : `<p class="pt-empty">No comments yet. Be the first to react to this play.</p>`;
   if (scrollDown || near) list.scrollTop = list.scrollHeight;
@@ -958,6 +969,7 @@ function drawThread(scrollDown) {
 PT.addEventListener("click", async e => {
   const t = e.target;
   if (t === PT || t.closest("[data-ptclose]")) { closeThread(); return }
+  if (t.closest("[data-ptretry]") && THREAD) { openThread(THREAD.gid, THREAD.key); return }
   const a = t.closest("[data-ptauth]"); if (a) { window.CBBChat.auth(a.dataset.ptauth, "Comment and react on plays with a free account. It's the same account as the game chat."); return }
   const r = t.closest("[data-react]"); if (r && THREAD) { toggleReact(THREAD.gid, r.dataset.rkey, r.dataset.react); return }
   const del = t.closest("[data-ptdel]"); if (del && THREAD) {
