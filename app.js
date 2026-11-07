@@ -279,7 +279,20 @@ function heroScore(g) {
   if (g.network) s += 3;
   return s;
 }
-let heroId = null;
+let heroId = null, heroLast = "", heroFlash = { a: 0, h: 0 }, heroExtra = { id: null, lines: [], play: "" };
+// While the featured game is live, also pull its scoring by half and the latest play.
+async function loadHeroExtra(id) {
+  const [info, pbp] = await Promise.all([api(`game/${id}`, 1).catch(() => null), api(`game/${id}/play-by-play`, 1).catch(() => null)]);
+  if (heroId !== id) return;
+  const plays = (pbp?.periods || []).flatMap(p => p.playbyplayStats || []);
+  const last = [...plays].reverse().find(p => (p.eventDescription || p.homeText || p.visitorText) && !/^(subbing|timeout)/i.test(p.eventDescription || ""));
+  const ct = info?.contests?.[0];
+  if (ct) noteBest(id, ct.teams?.find(t => t.isHome)?.score, ct.teams?.find(t => !t.isHome)?.score);
+  const lp = [...plays].reverse().find(p => p.homeScore !== undefined); if (lp) noteBest(id, lp.homeScore, lp.visitorScore);
+  for (const list of Object.values(cache)) for (const g of list) if (g.gameID === id) applyBest(g);
+  heroExtra = { id, lines: ct?.linescores || [], play: last ? fix(last.eventDescription || last.homeText || last.visitorText).replace(/\s+/g, " ").trim() : "" };
+  drawHero();
+}
 function drawHero() {
   const el = $("#gotn"); const list = cache.t || [];
   if (!list.length) { el.hidden = true; return }
@@ -297,9 +310,22 @@ function drawHero() {
   const tipHour = +g.startTimeEpoch ? new Date(+g.startTimeEpoch * 1000).getHours() : 19;
   const when = tipHour < 17 ? "Day" : "Night";
   el.setAttribute("aria-label", `Game of the ${when}: ${fix(g.away.names.short)} at ${fix(g.home.names.short)}. Open game.`);
-  el.innerHTML = `<div class="gt"><div class="lbl">Game of the <span>${when}</span></div>${badgeHTML(badges(g))}</div>
-    <div class="gm">${side(g.away, "away")}<div class="mid"><div class="big2">${pre ? "VS" : `<span class="${fin && a < h ? "l" : "w"}">${a}</span>–<span class="${fin && h < a ? "l" : "w"}">${h}</span>`}</div><div class="st2 ${st.cls}">${esc(st.txt)}${g.network ? " · " + esc(g.network) : ""}</div></div>${side(g.home, "home", 1)}</div>`;
+  const isLive = g.gameState === "live";
+  const ex = heroExtra.id === g.gameID ? heroExtra : { lines: [], play: "" };
+  const halves = isLive && ex.lines.length ? `<div class="hlines">${ex.lines.map(l => `<span><b>${+l.period <= 2 ? (l.period === "1" ? "1st" : "2nd") : "OT" + (+l.period > 3 ? +l.period - 2 : "")}</b> ${esc(l.visit)}–${esc(l.home)}</span>`).join("")}</div>` : "";
+  const play = isLive && ex.play ? `<div class="hplay"><span>Last play</span> ${esc(ex.play)}</div>` : "";
+  el.classList.toggle("is-live", isLive);
+  el.innerHTML = `<div class="gt"><div class="lbl">Game of the <span>${when}</span>${isLive ? `<em class="livepill"><span class="dot"></span>Live</em>` : ""}</div>${badgeHTML(badges(g))}</div>
+    <div class="gm">${side(g.away, "away")}<div class="mid"><div class="big2">${pre ? "VS" : `<span class="${fin && a < h ? "l" : "w"}" data-hs="a">${a}</span>–<span class="${fin && h < a ? "l" : "w"}" data-hs="h">${h}</span>`}</div><div class="st2 ${st.cls}">${esc(st.txt)}${g.network ? " · " + esc(g.network) : ""}</div>${halves}</div>${side(g.home, "home", 1)}</div>${play}`;
   el.hidden = false;
+  // flash whichever score just changed (kept for a moment, since the banner can redraw several times)
+  const now = `${g.gameID}:${a}-${h}`, before = heroLast; heroLast = now;
+  if (isLive && before.startsWith(g.gameID + ":") && before !== now) {
+    const [pa, ph] = before.split(":")[1].split("-").map(Number);
+    if (a !== pa) heroFlash.a = Date.now() + 1400;
+    if (h !== ph) heroFlash.h = Date.now() + 1400;
+  }
+  for (const k of ["a", "h"]) if (heroFlash[k] > Date.now()) el.querySelector(`[data-hs="${k}"]`)?.classList.add("flash");
 }
 
 // ---------- Instagram ----------
@@ -445,6 +471,7 @@ async function refresh() {
     const changed = before ? flashChanges(cache.t) : (flashChanges(cache.t), new Set());
     if (gday === "t") { drawFilters(); drawGames(); }
     drawTicker(changed); drawHero();
+    { const hg = (cache.t || []).find(x => x.gameID === heroId); if (hg && hg.gameState === "live") loadHeroExtra(heroId) }
     changed.forEach(id => ["away", "home"].forEach(s => { const el = document.querySelector(`[data-sc="${id}-${s}"]`); if (el) { el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 900) } }));
     if (openGame && gday === "t") { const g = cache.t.find(x => x.gameID === openGame); if (g && (isLive(g) || changed.has(openGame))) loadGame(openGame); else drawGame(); }
   } catch (e) {
