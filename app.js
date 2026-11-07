@@ -79,10 +79,11 @@ window.cbbLogoCheck = img => {
   } catch { LOGO_DARK[key] = false }
 };
 const LOGO_ONLOAD = "this.dataset.ok=1;window.cbbLogoCheck&&cbbLogoCheck(this)";
+// Logos show in full team colors. The all-white "dark" version is only used on top of a team-color background (news cards).
 const logoURL = (slug, dark) => { const path = `logo/${slug}.svg${dark ? "?dark=true" : ""}`; return API === "" ? "/" + path : API + encodeURIComponent(path) };
 const mono = (name, seo, color, cls = "") => {
   const slug = logoSlug(name, seo);
-  const logo = slug ? `<img src="${logoURL(slug, true)}" alt="" loading="lazy" decoding="async" onload="${LOGO_ONLOAD}" onerror="if(!this.dataset.r){this.dataset.r=1;var i=this;setTimeout(function(){i.src=i.src+'&r=1'},2500+Math.random()*3000)}else{var m=this.closest('.mono');m.classList.remove('has-logo');this.remove()}">` : "";
+  const logo = slug ? `<img src="${logoURL(slug)}" alt="" loading="lazy" decoding="async" onload="${LOGO_ONLOAD}" onerror="if(!this.dataset.r){this.dataset.r=1;var i=this;setTimeout(function(){i.src=i.src+'&r=1'},2500+Math.random()*3000)}else{var m=this.closest('.mono');m.classList.remove('has-logo');this.remove()}">` : "";
   return `<span class="mono ${cls} ${logo ? "has-logo" : ""}" style="--mc:${teamColor(slug, color)}" aria-hidden="true"><b>${esc(initials(name))}</b>${logo}</span>`;
 };
 
@@ -433,7 +434,7 @@ function tickerItems() {
   return (cache.t || []).filter(g => rk(g.home) || rk(g.away))
     .sort((a, b) => Math.min(rk(a.home) || 99, rk(a.away) || 99) - Math.min(rk(b.home) || 99, rk(b.away) || 99))
     .map(g => {
-      const st = status(g), side = t => `<span class="tt"><img class="tlogo" src="${logoURL(logoSlug(t.names.short, t.names.seo), true)}" alt="" onload="${LOGO_ONLOAD}" onerror="this.remove()">${rk(t) ? `<b>${rk(t)}</b>` : ""}${esc(fix(t.names.short))}</span>`;
+      const st = status(g), side = t => `<span class="tt"><img class="tlogo" src="${logoURL(logoSlug(t.names.short, t.names.seo))}" alt="" onload="${LOGO_ONLOAD}" onerror="this.remove()">${rk(t) ? `<b>${rk(t)}</b>` : ""}${esc(fix(t.names.short))}</span>`;
       return { key: g.gameID, html: `${side(g.away)} ${g.gameState === "pre" ? "at" : `<span class="tsc">${esc(g.away.score)}–${esc(g.home.score)}</span>`} ${side(g.home)} <span class="tst ${st.cls ? "lv" : ""}">${esc(st.txt)}</span>` };
     });
 }
