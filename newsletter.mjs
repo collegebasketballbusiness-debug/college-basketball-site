@@ -83,36 +83,39 @@ const weekOf = nice(today);
 const subject = `🏀 New AP Top 25 + this week's biggest games (week of ${weekOf})`;
 const C = { ink: "#111111", muted: "#6B6B66", line: "#E6E6E1", ball: "#FF6A13", up: "#15803D", down: "#B91C1C", soft: "#F6F6F3" };
 const h2 = (emoji, t) => `<tr><td style="padding:28px 28px 8px"><div style="font:900 22px/1.1 Impact,'Arial Narrow',Arial,sans-serif;letter-spacing:.5px;text-transform:uppercase;color:${C.ink}">${emoji} ${esc(t)}</div></td></tr>`;
-const pollRows = rows.map(r => `<tr><td style="padding:7px 0;border-bottom:1px solid ${C.line};width:34px;font:900 18px Impact,Arial,sans-serif;color:${C.ball}">${r.rank}</td>
-  <td style="padding:7px 0;border-bottom:1px solid ${C.line};font:600 15px Arial,sans-serif;color:${C.ink}">${esc(r.team)}${r.fpv ? ` <span style="color:${C.muted};font-weight:400">(${r.fpv})</span>` : ""}${r.record ? ` <span style="color:${C.muted};font-weight:400;font-size:13px">${esc(r.record)}</span>` : ""}</td>
-  <td style="padding:7px 0;border-bottom:1px solid ${C.line};text-align:right;font:700 13px Arial,sans-serif;color:${/▲|NEW/.test(r.move) ? C.up : /▼/.test(r.move) ? C.down : C.muted}">${esc(r.move)}</td></tr>`).join("");
+const pollRows = list => list.map(r => `<tr><td style="padding:6px 0;border-bottom:1px solid ${C.line};width:30px;font:900 17px Impact,Arial,sans-serif;color:${C.ball}">${r.rank}</td>
+  <td style="padding:6px 0;border-bottom:1px solid ${C.line};font:600 14px Arial,sans-serif;color:${C.ink}">${esc(r.team)}${r.fpv ? ` <span style="color:${C.muted};font-weight:400">(${r.fpv})</span>` : ""}${r.record ? ` <span style="color:${C.muted};font-weight:400;font-size:13px">${esc(r.record)}</span>` : ""}</td>
+  <td style="padding:6px 0;border-bottom:1px solid ${C.line};text-align:right;font:700 12px Arial,sans-serif;color:${/▲|NEW/.test(r.move) ? C.up : /▼/.test(r.move) ? C.down : C.muted}">${esc(r.move)}</td></tr>`).join("");
+const half = Math.ceil(rows.length / 2);
 const resRows = results.slice(0, 10).map(x => `<tr><td style="padding:9px 0;border-bottom:1px solid ${C.line}"><div style="font:700 11px Arial,sans-serif;letter-spacing:1px;text-transform:uppercase;color:${x.kind === "Upset" ? C.down : C.ball}">${x.kind === "Upset" ? "🚨 " : ""}${esc(x.kind)} · ${nice(x.g.d)}</div>
-  <div style="font:600 16px Arial,sans-serif;color:${C.ink};margin-top:3px">${esc(rn(x.W))} ${+x.W[2]}, ${esc(rn(x.L))} ${+x.L[2]}${x.ot ? " (OT)" : ""}</div></td></tr>`).join("");
-const upRows = upcoming.map(x => `<tr><td style="padding:9px 0;border-bottom:1px solid ${C.line};font:600 16px Arial,sans-serif;color:${C.ink}">No. ${x.ra} ${esc(nm(x.g.a))} <span style="color:${C.muted};font-weight:400">at</span> No. ${x.rh} ${esc(nm(x.g.h))}</td>
-  <td style="padding:9px 0;border-bottom:1px solid ${C.line};text-align:right;font:13px Arial,sans-serif;color:${C.muted};white-space:nowrap">${esc(tipET(x.g.t))}</td></tr>`).join("");
-const storyRows = list => list.map(n => `<tr><td style="padding:10px 0;border-bottom:1px solid ${C.line}"><a href="${SITE}/#news" style="font:700 16px Arial,sans-serif;color:${C.ink};text-decoration:none">${esc(n.t)}</a><div style="font:14px/1.45 Arial,sans-serif;color:${C.muted};margin-top:3px">${esc(n.dek)}</div></td></tr>`).join("");
+  <div style="font:600 15px/1.35 Arial,sans-serif;color:${C.ink};margin-top:3px">${esc(rn(x.W))} ${+x.W[2]}, ${esc(rn(x.L))} ${+x.L[2]}${x.ot ? " (OT)" : ""}</div></td></tr>`).join("");
+const upRows = upcoming.map(x => `<tr><td style="padding:9px 0;border-bottom:1px solid ${C.line}"><div style="font:700 11px Arial,sans-serif;letter-spacing:1px;text-transform:uppercase;color:${C.ball}">${esc(tipET(x.g.t))}</div>
+  <div style="font:600 15px/1.35 Arial,sans-serif;color:${C.ink};margin-top:3px">No. ${x.ra} ${esc(nm(x.g.a))} <span style="color:${C.muted};font-weight:400">at</span> No. ${x.rh} ${esc(nm(x.g.h))}</div></td></tr>`).join("");
+const storyRows = list => list.map(n => `<tr><td style="padding:10px 0;border-bottom:1px solid ${C.line}"><a href="${SITE}/#news" style="font:700 15px/1.35 Arial,sans-serif;color:${C.ink};text-decoration:none">${esc(n.t)}</a><div style="font:13px/1.45 Arial,sans-serif;color:${C.muted};margin-top:3px">${esc(n.dek)}</div></td></tr>`).join("");
 const table = inner => `<tr><td style="padding:0 28px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0">${inner}</table></td></tr>`;
 const p = t => `<tr><td style="padding:4px 28px;font:15px/1.5 Arial,sans-serif;color:${C.muted}">${t}</td></tr>`;
+const hd = (emoji, t) => `<div style="font:900 20px/1.1 Impact,'Arial Narrow',Arial,sans-serif;letter-spacing:.5px;text-transform:uppercase;color:${C.ink};padding:24px 0 6px">${emoji} ${esc(t)}</div>`;
+const tb = inner => `<table role="presentation" width="100%" cellspacing="0" cellpadding="0">${inner}</table>`;
+const note2 = t => `<div style="font:14px/1.5 Arial,sans-serif;color:${C.muted};padding:6px 0">${t}</div>`;
+const col = html => `<div style="display:inline-block;vertical-align:top;width:100%;max-width:312px;font-size:16px;text-align:left"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td style="padding:0 10px">${html}</td></tr></table></div>`;
+const cols = (a, b) => !a && !b ? "" : `<tr><td align="center" style="padding:0 18px;font-size:0">${a && b ? `<!--[if mso]><table role="presentation" width="100%"><tr><td width="50%" valign="top"><![endif]-->${col(a)}<!--[if mso]></td><td width="50%" valign="top"><![endif]-->${col(b)}<!--[if mso]></td></tr></table><![endif]-->` : `<div style="font-size:16px;text-align:left;padding:0 10px">${a || b}</div>`}</td></tr>`;
 
 function emailHTML(unsubURL) {
   return `<!doctype html><html><body style="margin:0;padding:0;background:#EDEDE8">
 <div style="display:none;max-height:0;overflow:hidden">The new AP Top 25, last week's biggest results and this week's must-watch games.</div>
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#EDEDE8"><tr><td align="center" style="padding:20px 10px">
-<table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width:600px;width:100%;background:#FFFFFF;border-radius:14px;overflow:hidden">
+<table role="presentation" width="680" cellspacing="0" cellpadding="0" style="max-width:680px;width:100%;background:#FFFFFF;border-radius:14px;overflow:hidden">
   <tr><td style="background:#0B0B0C;padding:26px 28px">
     <div style="font:900 30px/1 Impact,'Arial Narrow',Arial,sans-serif;letter-spacing:1px;color:#F5F5F2">COLLEGE BASKETBALL</div>
     <div style="font:700 12px Arial,sans-serif;letter-spacing:2px;color:${C.ball};margin-top:8px">WEEKLY · WEEK OF ${esc(weekOf.toUpperCase())}</div>
   </td></tr>
   ${note ? `<tr><td style="padding:24px 28px 0"><div style="background:${C.soft};border-left:4px solid ${C.ball};padding:14px 16px;font:15px/1.55 Arial,sans-serif;color:${C.ink}"><b>✍️ Coach's note</b><br>${esc(note).replace(/\n{2,}/g, "<br><br>").replace(/\n/g, "<br>")}</div></td></tr>` : ""}
   ${h2("🏆", "The new AP Top 25")}
-  ${rows.length ? table(pollRows) : p("The new poll wasn't out yet when this was sent. See it on the Rankings tab.")}
+  ${rows.length ? cols(tb(pollRows(rows.slice(0, half))), tb(pollRows(rows.slice(half)))) : p("The new poll wasn't out yet when this was sent. See it on the Rankings tab.")}
   ${outOfPoll.length ? p(`Dropped out: ${esc(outOfPoll.join(", "))}.`) : ""}
-  ${h2("📊", "Last week's key results")}
-  ${results.length ? table(resRows) : p("No upsets or Top 25 matchups last week.")}
-  ${h2("📅", "Big games this week")}
-  ${upcoming.length ? table(upRows) : p("No Top 25 vs. Top 25 games this week. Every game is live on the site.")}
-  ${injuries.length ? h2("🩹", "Injury watch") + table(storyRows(injuries)) : ""}
-  ${stories.length ? h2("📰", "Stories of the week") + table(storyRows(stories)) : ""}
+  ${cols(hd("📊", "Last week's key results") + (results.length ? tb(resRows) : note2("No upsets or Top 25 matchups last week.")),
+         hd("📅", "Big games this week") + (upcoming.length ? tb(upRows) : note2("No Top 25 vs. Top 25 games this week. Every game is live on the site.")))}
+  ${cols(injuries.length ? hd("🩹", "Injury watch") + tb(storyRows(injuries)) : "", stories.length ? hd("📰", "Stories of the week") + tb(storyRows(stories)) : "")}
   <tr><td style="padding:28px" align="center"><a href="${SITE}" style="display:inline-block;background:${C.ball};color:#111;font:800 16px Arial,sans-serif;text-decoration:none;padding:14px 26px;border-radius:999px">Live scores, chat &amp; picks →</a></td></tr>
   <tr><td style="background:${C.soft};padding:20px 28px;font:12px/1.6 Arial,sans-serif;color:${C.muted}">
     You're getting this because you signed up for College Basketball updates at ${esc(SITE.replace("https://", ""))}.
@@ -166,6 +169,7 @@ for (const s of list.slice(0, 450)) { // Gmail allows about 500 emails a day
 }
 if (list.length > 450) console.warn(`${list.length - 450} people weren't sent to (Gmail's daily limit). Time to move to an email service.`);
 console.log(`Sent ${sent}${failed ? `, ${failed} failed` : ""}.`);
+if (failed && !sent) { console.error("No emails went out. Check the GMAIL_APP_PASSWORD secret (16 letters from Google App passwords)."); process.exit(1) }
 
 // remember this week's poll (for next week's ▲▼) and that this week's email went out
 if (!TEST_TO && sent) {
