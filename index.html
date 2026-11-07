@@ -175,7 +175,17 @@ footer .wrap{display:flex;gap:16px;justify-content:space-between;flex-wrap:wrap}
 .game.sel{border-color:var(--ball);box-shadow:0 0 0 1px var(--ball)}
 .gstat{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .gstat.live{color:var(--live)}
-.gstat .l{display:inline-flex;align-items:center;gap:6px}
+.gstat .l{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+/* where to watch */
+.tvs{display:inline-flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;min-width:0;margin-left:8px}
+.gstat .tvs .tv{max-width:150px;overflow:hidden;text-overflow:ellipsis}
+.tvs.ctr{justify-content:center;margin-top:10px;display:flex}
+.tvs.big{justify-content:center;margin-top:8px;display:flex}
+.tv{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:none;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:2px 8px;white-space:nowrap;text-decoration:none;line-height:1.5}
+.tv svg{width:8px;height:8px;flex:none}
+.tv.on{color:var(--ink);cursor:pointer;border-color:rgba(255,255,255,.25)}
+.tv.on:hover,.tv.on:focus-visible{background:var(--ball);border-color:var(--ball);color:#000;outline:none}
+.tvs.big .tv,.tvs.ctr .tv{font-size:12px;padding:4px 10px}
 .trow{position:relative;display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center}
 .trow::before{content:"";position:absolute;left:-20px;top:-4px;bottom:-4px;width:5px;background:var(--tc,transparent);transition:background .4s}
 .trow .mono{width:30px;height:30px;font-size:11px}

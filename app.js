@@ -120,9 +120,74 @@ async function loadDay(k) {
   cache[k] = (data.games || []).map(x => x.game);
   cache[k].forEach(applyBest);
   learnSlugs(cache[k]);
+  applyTV(cache[k]);
+  loadTV(k, etDate(day.off).path);
   if (recThrough) setTimeout(fillMissingRecords, 0);
   return cache[k];
 }
+
+// ---------- where to watch ----------
+// The NCAA feed leaves the TV network blank, so the relay reads each day's broadcasts from ESPN.
+// Games are matched by team names and tip time.
+const TV = {}, tvAsked = {};   // TV: gameID -> "ESPN+" etc.; tvAsked: date path -> time last loaded
+async function loadTV(k, path) {
+  if (tvAsked[path] && Date.now() - tvAsked[path] < 30 * 60e3) return;
+  tvAsked[path] = Date.now();
+  try {
+    const data = await api(`tv/${path}`, 2);
+    const list = (data.games || []).map(x => ({ t: x.t, tv: x.tv, a: new Set(x.a.map(normName)), h: new Set(x.h.map(normName)) }));
+    const games = cache[k] || [], used = new Set(), key = g => [normName(g.away.names.short), normName(g.home.names.short), +g.startTimeEpoch || 0];
+    const near = (x, t, secs) => !t || !x.t || Math.abs(x.t - t) <= secs;
+    // first pass: both teams match (either can be listed as home); second pass: one team matches and the tip times line up
+    for (const g of games) {
+      const [a, h, t] = key(g);
+      const hit = list.find(x => !used.has(x) && near(x, t, 3 * 3600) && ((x.a.has(a) && x.h.has(h)) || (x.a.has(h) && x.h.has(a))));
+      if (hit) { used.add(hit); TV[g.gameID] = hit.tv.join(" / ") }
+    }
+    for (const g of games) {
+      if (TV[g.gameID]) continue;
+      const [a, h, t] = key(g);
+      const hit = list.find(x => !used.has(x) && near(x, t, 20 * 60) && (x.a.has(a) || x.h.has(h) || x.a.has(h) || x.h.has(a)));
+      if (hit) { used.add(hit); TV[g.gameID] = hit.tv.join(" / ") }
+    }
+    applyTV(cache[k]);
+    if (k === gday) drawGames();
+    if (k === "t") drawHero();
+    if (openGame) drawGame();
+  } catch { tvAsked[path] = Date.now() - 25 * 60e3 /* try again in ~5 minutes */ }
+}
+function applyTV(list) { for (const g of list || []) if (!g.network && TV[g.gameID]) g.network = TV[g.gameID] }
+// Each network's official site, so fans can go watch. Networks not listed show without a link.
+const WATCH = [
+  [/^(ESPN|ESPN2|ESPNU|ESPNews|ESPN\+|ACCN|ACC Network|ACCNX|SECN|SEC Network|SECN\+|LHN|Longhorn Network|ABC)$/i, "https://www.espn.com/watch/"],
+  [/^(FOX|FS1|FS2)$/i, "https://www.foxsports.com/live"],
+  [/^(BTN|Big Ten Network)$/i, "https://www.btn.com/"],
+  [/^B1G\+$/i, "https://www.bigtenplus.com/"],
+  [/^(CBS|Paramount\+)$/i, "https://www.paramountplus.com/"],
+  [/^(CBSSN|CBS Sports Network)$/i, "https://www.cbssports.com/watch/"],
+  [/^(NBC|Peacock|USA Net|USA Network|NBCSN)$/i, "https://www.peacocktv.com/"],
+  [/^(TNT|TBS|truTV|HBO Max|Max)$/i, "https://www.hbomax.com/"],
+  [/^(FloSports|FloHoops)$/i, "https://www.flohoops.com/"],
+  [/^Prime Video$/i, "https://www.amazon.com/primevideo"],
+  [/^YouTube$/i, "https://www.youtube.com/"],
+  [/^NESN$/i, "https://nesn.com/"],
+];
+const watchURL = net => { for (const [re, url] of WATCH) if (re.test(String(net).trim())) return url; return "" };
+// The networks for a game as small chips. Linked ones open the network's site in a new tab.
+function tvHTML(net, big, center) {
+  if (!net) return "";
+  const nets = String(net).split(/\s*\/\s*/).filter(Boolean);
+  // game cards have room for one network (the national one comes first); the open game lists them all
+  return `<span class="tvs${big ? " big" : ""}${center ? " ctr" : ""}">${(big ? nets : nets.slice(0, 1)).map(n => {
+    const url = watchURL(n);
+    const label = big || center ? n : n.replace(/ Network$/i, ""); // keep chips short on game cards
+    if (!url) return `<span class="tv" title="${esc(n)}">${esc(label)}</span>`;
+    // inside a game card (a button) a real link isn't allowed, so the chip opens the site from the click handler
+    return big ? `<a class="tv on" href="${url}" target="_blank" rel="noopener" title="Watch on ${esc(n)}">${PLAY}Watch on ${esc(n)}</a>`
+      : `<span class="tv on" role="link" tabindex="0" data-watch="${url}" title="Watch on ${esc(n)}">${PLAY}${center ? "Watch on " : ""}${esc(label)}</span>`;
+  }).join("")}</span>`;
+}
+const PLAY = `<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1l7 4-7 4z" fill="currentColor"/></svg>`;
 function status(g) {
   if (g.gameState === "final") { const ot = /OT/i.exec(g.finalMessage || ""); const m = /(\d)\s*OT/i.exec(g.finalMessage || ""); return { cls: "", txt: ot ? `Final/${m ? m[1] : ""}OT` : "Final" } }
   if (g.gameState === "live") {
@@ -257,7 +322,7 @@ function drawGames() {
   const list = filtered(all);
   setCards(list.length ? list.map(g => {
     const st = status(g);
-    return `<button class="game ${openGame === g.gameID ? "sel" : ""}" data-game="${g.gameID}"><div class="gstat ${st.cls}"><span class="l">${st.cls ? '<span class="dot"></span>' : ""}${esc(st.txt)}</span><span>${esc(g.network || "")}</span></div>${trow(g, "away")}${trow(g, "home")}${badgeHTML(badges(g))}</button>`;
+    return `<button class="game ${openGame === g.gameID ? "sel" : ""}" data-game="${g.gameID}"><div class="gstat ${st.cls}"><span class="l">${st.cls ? '<span class="dot"></span>' : ""}${esc(st.txt)}</span>${tvHTML(g.network)}</div>${trow(g, "away")}${trow(g, "home")}${badgeHTML(badges(g))}</button>`;
   }) : [`<div class="empty">${all.length ? "No games match this filter." : "No Division I games scheduled for this day."}</div>`]);
 }
 function flashChanges(list) {
@@ -318,7 +383,7 @@ function drawHero() {
   const play = isLive && ex.play ? `<div class="hplay"><span>Last play</span> ${esc(ex.play)}</div>` : "";
   el.classList.toggle("is-live", isLive);
   el.innerHTML = `<div class="gt"><div class="lbl">Game of the <span>${when}</span>${isLive ? `<em class="livepill"><span class="dot"></span>Live</em>` : ""}</div>${badgeHTML(badges(g))}</div>
-    <div class="gm">${side(g.away, "away")}<div class="mid"><div class="big2">${pre ? "VS" : `<span class="${fin && a < h ? "l" : "w"}" data-hs="a">${a}</span>–<span class="${fin && h < a ? "l" : "w"}" data-hs="h">${h}</span>`}</div><div class="st2 ${st.cls}">${esc(st.txt)}${g.network ? " · " + esc(g.network) : ""}</div>${halves}</div>${side(g.home, "home", 1)}</div>${play}`;
+    <div class="gm">${side(g.away, "away")}<div class="mid"><div class="big2">${pre ? "VS" : `<span class="${fin && a < h ? "l" : "w"}" data-hs="a">${a}</span>–<span class="${fin && h < a ? "l" : "w"}" data-hs="h">${h}</span>`}</div><div class="st2 ${st.cls}">${esc(st.txt)}</div>${tvHTML(g.network, 0, 1)}${halves}</div>${side(g.home, "home", 1)}</div>${play}`;
   el.hidden = false;
   // flash whichever score just changed (kept for a moment, since the banner can redraw several times)
   const now = `${g.gameID}:${a}-${h}`, before = heroLast; heroLast = now;
@@ -411,7 +476,7 @@ function drawGame() {
   const tHome = teams.find(t => t.isHome) || {}, tAway = teams.find(t => !t.isHome) || {};
   const st = status(sg), pre = sg.gameState === "pre";
   const side = (s, t, r) => `<a class="side tlink ${r ? "r" : ""}" href="#team-${esc(logoSlug(s.names.short, s.names.seo))}" title="Open ${esc(fix(s.names.short))} team page">${mono(s.names.short, s.names.seo, t.color, "lg")}<div><strong>${(s.rank || apRank(s.names.short)) ? `<span style="color:var(--ball)">#${s.rank || apRank(s.names.short)}</span> ` : ""}${esc(fix(s.names.short))}</strong><small>${esc(recordOf(s.names.short, sg, s === sg.home ? "home" : "away") || fix(t.record || "").replace(/[()]/g, ""))}${CONF[confOf(s)] ? " · " + CONF[confOf(s)] : ""}</small></div></a>`;
-  let html = `<div class="gh">${side(sg.away, tAway)}<div class="big">${pre ? "vs" : `${esc(sg.away.score)}–${esc(sg.home.score)}`}<small class="${st.cls}">${esc(st.txt)}${sg.network ? " · " + esc(sg.network) : ""}</small></div>${side(sg.home, tHome, 1)}</div>`;
+  let html = `<div class="gh">${side(sg.away, tAway)}<div class="big">${pre ? "vs" : `${esc(sg.away.score)}–${esc(sg.home.score)}`}<small class="${st.cls}">${esc(st.txt)}</small>${tvHTML(sg.network, 1)}</div>${side(sg.home, tHome, 1)}</div>`;
   GHEAD.innerHTML = html; html = "";
   if (!d) { GMAIN.innerHTML = `<div class="boxwrap"><p style="margin:0;color:var(--muted)">Loading game details…</p></div>`; return }
 
@@ -860,6 +925,14 @@ addEventListener("hashchange", route);
 function closeGame() { if (!openGame) return; openGame = null; gameDetail = null; drawGame() }
 
 // ---------- events ----------
+// "Watch" chips on game cards: open the network's site and don't open the game
+function openWatch(e) {
+  const w = e.target.closest && e.target.closest("[data-watch]"); if (!w) return;
+  if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+  e.preventDefault(); e.stopPropagation(); window.open(w.dataset.watch, "_blank", "noopener");
+}
+window.addEventListener("click", openWatch, true);
+window.addEventListener("keydown", openWatch, true);
 document.addEventListener("click", async e => {
   const t = e.target;
   const d = t.closest("[data-day]"); if (d) {
