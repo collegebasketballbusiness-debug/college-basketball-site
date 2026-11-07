@@ -823,8 +823,13 @@ function drawTeamDir() {
 }
 // Every game this season for every team, loaded once and shared by all team pages.
 let SEASON = null;
+// First choice: season.json, a file GitHub rebuilds twice a day (instant, even right after the site updates).
+// If it's missing or more than a day and a half old, ask the relay to build the list instead.
 function loadSeason() {
-  if (!SEASON) SEASON = api("season", 2).then(r => {
+  if (!SEASON) SEASON = fetch("/season.json", { cache: "no-cache" }).then(r => r.ok ? r.json() : null).catch(() => null).then(f => {
+    if (f && Array.isArray(f.games) && f.games.length && Date.now() - (+f.built || 0) < 36 * 3600e3) return f;
+    return api("season", 2);
+  }).then(r => {
     if (!r || !Array.isArray(r.games)) throw new Error("no season");
     if (r.missingDays) setTimeout(() => { SEASON = null }, 60e3); // some days were missing: try again in a minute
     return r;
