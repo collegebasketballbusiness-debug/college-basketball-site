@@ -273,6 +273,8 @@ table.box tr.totals td{font-weight:700;border-top:2px solid var(--ink)}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
 
 /* live-site additions */
+.art .artlogo{position:relative;z-index:1;width:46%;max-width:150px;aspect-ratio:1;object-fit:contain;filter:drop-shadow(0 6px 18px rgba(0,0,0,.35))}
+.ncard .art .artlogo{width:38%}
 /* live Game of the Day/Night */
 .gotn .lbl{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .livepill{font-style:normal;display:inline-flex;align-items:center;gap:7px;background:var(--live);color:#fff;font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.08em;text-transform:uppercase;padding:4px 10px 3px;border-radius:999px}
@@ -568,7 +570,6 @@ img{max-width:100%}
     <div class="fbar" id="ncats" role="group" aria-label="News topics"></div>
     <div id="newslist"></div>
     <article class="detail story" id="story" hidden></article>
-    <p class="note" style="margin-top:18px">Sample stories. Replace them in news.js with your own reports.</p>
   </div>
 
 

@@ -623,7 +623,7 @@ function drawStand() {
 // ---------- news (sample stories until real ones are added) ----------
 const NEWS = window.NEWS || [];
 const NCATS = ["All", "Top 25", "Games", "Transfer Portal", "Recruiting", "Conferences"]; let ncat = "All";
-const art = n => `<div class="art" style="background:${teamColor(n.team)}" aria-hidden="true"><span style="position:relative;z-index:1">${esc(initials(n.team.replace(/-/g, " ")))}</span></div>`;
+const art = n => `<div class="art" style="background:${teamColorFor(n.team) || teamColor(n.team)}" aria-hidden="true"><img class="artlogo" src="${logoURL(n.team, true)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${esc(initials(n.team.replace(/-/g, " ")))}'}))"></div>`;
 function drawNews() {
   $("#ncats").innerHTML = NCATS.map(c => `<button aria-pressed="${c === ncat}" data-ncat="${c}">${c}</button>`).join("");
   const list = NEWS.filter(n => ncat === "All" || n.cat === ncat); $("#story").hidden = true; $("#newslist").hidden = false;
