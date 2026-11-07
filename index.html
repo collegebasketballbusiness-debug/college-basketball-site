@@ -361,15 +361,61 @@ table.box tr.totals td{font-weight:700;border-top:2px solid var(--ink)}
 .gh a.tlink:hover strong{color:var(--ball)}
 .gh a.tlink strong{transition:color .15s}
 /* ---- Teams ---- */
-.tconf{padding-block:18px 6px}
-.tconf h2{font-size:24px;font-weight:900;margin-bottom:10px;color:var(--muted)}
-.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
-.tcard{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--ink);min-width:0}
-.tcard:hover{border-color:var(--ball)}
-.tcard .mono{width:34px;height:34px;font-size:12px}
-.tcard span{min-width:0;display:flex;flex-direction:column}
-.tcard b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}
-.tcard small{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.ttools{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:18px}
+.ttools .search{flex:1 1 320px;max-width:480px}
+.tsort{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:var(--surface)}
+.tsort button{font:600 14px var(--body);color:var(--muted);background:none;border:0;border-radius:999px;padding:8px 14px;cursor:pointer;white-space:nowrap}
+.tsort button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.tplaying{font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:12px;min-height:1px}
+.tbar{position:sticky;top:var(--navh,64px);z-index:4;background:linear-gradient(var(--bg) 78%,transparent);padding:12px 0 14px;margin-top:6px}
+.tconfbar{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;-webkit-mask:linear-gradient(90deg,#000 92%,transparent)}
+.tconfbar::-webkit-scrollbar{display:none}
+.tconfbar a{flex:none;display:inline-flex;align-items:center;gap:5px;font:600 13px var(--body);color:var(--ink);text-decoration:none;background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:7px 12px}
+.tconfbar a:hover{border-color:var(--ball)}
+.tconfbar a.star{color:var(--upset);border-color:rgba(255,210,63,.4)}
+.tconfbar svg,.tconf h2 svg,.favhint svg{width:13px;height:13px}
+.favhint{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:14px;margin:4px 0 0}
+.tconf{padding-block:18px 6px;scroll-margin-top:140px}
+.tconf h2{display:flex;align-items:center;gap:8px;font-size:24px;font-weight:900;margin-bottom:10px;color:var(--muted)}
+.tconf h2 small{font-family:var(--mono);font-size:12px;font-weight:500;color:#5E5E5A}
+.tconf.favs h2{color:var(--upset)}.tconf.favs h2 svg{width:18px;height:18px}
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.tcard{--tc:#3A3A40;position:relative;overflow:hidden;isolation:isolate;display:flex;align-items:center;gap:12px;padding:14px 14px 14px 16px;min-height:76px;border:1px solid var(--line);border-radius:12px;text-decoration:none;color:var(--ink);min-width:0;
+  background:linear-gradient(115deg,color-mix(in srgb,var(--tc) 30%,var(--surface)) 0%,color-mix(in srgb,var(--tc) 8%,var(--surface)) 45%,var(--surface) 75%);transition:transform .15s,border-color .15s,box-shadow .15s}
+.tcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--tc);z-index:1}
+.tcard:hover{transform:translateY(-2px);border-color:var(--tc);box-shadow:0 12px 26px -14px var(--tc)}
+.tcard .twm{position:absolute;right:-22px;bottom:-26px;width:112px;height:112px;object-fit:contain;opacity:.1;z-index:-1;transform:rotate(-10deg);transition:opacity .2s,transform .25s;pointer-events:none}
+.tcard:hover .twm{opacity:.2;transform:rotate(-4deg) scale(1.05)}
+.tcard .mono{width:40px;height:40px;font-size:13px}
+.tcard .tinfo{min-width:0;flex:1;display:flex;flex-direction:column;gap:1px}
+.tcard b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700;font-size:16px;padding-right:24px}
+.tcard small{font-family:var(--mono);font-size:12px;color:#B5B5B0}
+.tcard.fav{border-color:rgba(255,210,63,.45)}
+.ttag{display:inline-flex;align-items:center;gap:6px;margin-top:5px;max-width:100%;font-family:var(--mono);font-size:11px;color:var(--ink);background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:3px 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;align-self:flex-start}
+.ttag:hover{background:rgba(255,255,255,.14)}
+.ttag em{font-style:normal;text-transform:uppercase;font-size:9.5px;letter-spacing:.08em;color:var(--muted);flex:none}
+.ttag.live em{color:#FF9B9B}.ttag.won em,.ttag.lost em{color:inherit;opacity:.75}
+.tplaying b{color:var(--ink);font-weight:500;display:inline-flex;align-items:center;gap:6px}.tplaying i{width:7px;height:7px;border-radius:50%;background:var(--live);display:inline-block}
+.ttag.live{color:#fff;background:rgba(255,77,77,.18);border-color:rgba(255,77,77,.5)}
+.ttag.live i{flex:none;width:7px;height:7px;border-radius:50%;background:var(--live);animation:dcpulse 1.6s infinite;box-shadow:0 0 0 0 rgba(255,77,77,.6)}
+.ttag.won{color:var(--good)}.ttag.lost{color:var(--muted)}
+.tcard.islive{border-color:rgba(255,77,77,.55)}
+.favbtn{position:absolute;top:10px;right:10px;width:26px;height:26px;display:grid;place-items:center;border-radius:50%;color:#77776F;cursor:pointer;transition:color .15s,background .15s,transform .15s}
+.favbtn svg{width:17px;height:17px}
+.favbtn:hover{color:var(--upset);background:rgba(255,255,255,.08)}
+.favbtn.on{color:var(--upset)}
+.favbtn.on:active,.favbtn:active{transform:scale(.85)}
+.followbtn{margin-left:auto;align-self:center;display:inline-flex;align-items:center;gap:8px;font:700 15px var(--body);color:var(--ink);background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:10px 18px;cursor:pointer}
+.followbtn svg{width:16px;height:16px}
+.followbtn:hover{border-color:var(--upset)}
+.followbtn.on{color:var(--bg);background:var(--upset);border-color:var(--upset)}
+/* Scores: games with one of your teams */
+.game.fav{border-color:rgba(255,210,63,.55);box-shadow:inset 0 0 0 1px rgba(255,210,63,.25)}
+.game{position:relative}
+.favmark{position:absolute;top:-1px;left:50%;transform:translateX(-50%);color:var(--upset);background:var(--bg);border:1px solid rgba(255,210,63,.55);border-top:0;border-radius:0 0 8px 8px;padding:0 8px;line-height:0}
+.favmark svg{width:11px;height:11px;margin:2px 0}
+@media (max-width:600px){.tsort{width:100%}.tsort button{flex:1;padding:8px 6px}.tgrid{grid-template-columns:1fr 1fr;gap:8px}.tcard{flex-direction:column;align-items:flex-start;padding:12px;gap:8px}.tcard .tinfo{width:100%}.tcard b{font-size:15px}.favbtn{top:6px;right:6px}}
+@media (max-width:360px){.tgrid{grid-template-columns:1fr}}
 .tback{margin-top:22px}
 .thead{display:flex;align-items:center;gap:22px;padding:22px 0 18px;border-bottom:4px solid var(--tc);flex-wrap:wrap}
 .thead h1{font-size:clamp(40px,7vw,80px);font-weight:900}
@@ -658,7 +704,12 @@ img{max-width:100%}
   <div class="view" data-view="teams" hidden>
     <div id="teamdir-wrap">
       <div class="sb-top"><div><div class="eyebrow">Division I · 365 teams</div><h1>Teams</h1></div></div>
-      <div class="toolbar" style="justify-content:flex-start"><div class="search" style="max-width:480px"><input id="tq" type="search" placeholder="Search any team or conference" autocomplete="off" aria-label="Search teams"></div></div>
+      <div class="ttools">
+        <div class="search"><input id="tq" type="search" placeholder="Search any team or conference" autocomplete="off" aria-label="Search teams"></div>
+        <div class="tsort" role="group" aria-label="Sort teams"><button data-tsort="az" aria-pressed="true">A–Z</button><button data-tsort="rec" aria-pressed="false">Best record</button><button data-tsort="rk" aria-pressed="false">Ranked first</button></div>
+      </div>
+      <div class="tplaying" id="tplaying"></div>
+      <div class="tbar" id="tbar"><nav class="tconfbar" id="tconfbar" aria-label="Jump to conference"></nav></div>
       <div id="teamdir"></div>
     </div>
     <div id="teampage" hidden></div>

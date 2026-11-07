@@ -345,7 +345,7 @@ function drawGames() {
   const list = filtered(all);
   setCards(list.length ? list.map(g => {
     const st = status(g);
-    return `<button class="game ${openGame === g.gameID ? "sel" : ""}" data-game="${g.gameID}"><div class="gstat ${st.cls}"><span class="l">${st.cls ? '<span class="dot"></span>' : ""}${esc(st.txt)}</span>${tvHTML(g.network)}</div>${trow(g, "away")}${trow(g, "home")}${badgeHTML(badges(g))}</button>`;
+    return `<button class="game ${openGame === g.gameID ? "sel" : ""} ${favGame(g) ? "fav" : ""}" data-game="${g.gameID}">${favGame(g) ? `<span class="favmark" title="One of your teams">${STAR(true)}</span>` : ""}<div class="gstat ${st.cls}"><span class="l">${st.cls ? '<span class="dot"></span>' : ""}${esc(st.txt)}</span>${tvHTML(g.network)}</div>${trow(g, "away")}${trow(g, "home")}${badgeHTML(badges(g))}</button>`;
   }) : [`<div class="empty">${all.length ? "No games match this filter." : "No Division I games scheduled for this day."}</div>`]);
 }
 function flashChanges(list) {
@@ -561,6 +561,7 @@ async function refresh() {
     const changed = before ? flashChanges(cache.t) : (flashChanges(cache.t), new Set());
     if (gday === "t") { drawFilters(); drawGames(); }
     drawTicker(changed); drawHero();
+    if (!teamOpen && !$("#teamdir-wrap").closest(".view").hidden) drawTeamDir(); // live tags on the Teams tab
     { const hg = (cache.t || []).find(x => x.gameID === heroId); if (hg && hg.gameState === "live") loadHeroExtra(heroId) }
     changed.forEach(id => ["away", "home"].forEach(s => { const el = document.querySelector(`[data-sc="${id}-${s}"]`); if (el) { el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 900) } }));
     if (openGame && gday === "t") { const g = cache.t.find(x => x.gameID === openGame); if (g && (isLive(g) || changed.has(openGame))) loadGame(openGame); else drawGame(); }
@@ -742,17 +743,82 @@ function teamConf(slug) {
   for (const c of standings || []) for (const x of c.standings || []) if (logoSlug(x.School) === slug) return { conf: c.conference, row: x };
   return { conf: "", row: null };
 }
+// ---------- favorites (saved on this device) ----------
+let FAVS = [];
+try { FAVS = JSON.parse(localStorage.getItem("cbb_favs") || "[]").filter(x => typeof x === "string") } catch { FAVS = [] }
+const isFav = slug => FAVS.includes(slug);
+function toggleFav(slug) {
+  FAVS = isFav(slug) ? FAVS.filter(x => x !== slug) : [...FAVS, slug];
+  try { localStorage.setItem("cbb_favs", JSON.stringify(FAVS)) } catch { }
+  drawTeamDir(); if (teamOpen) drawTeam(); drawGames();
+}
+const STAR = on => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 6.1 6.6.6-5 4.4 1.5 6.5L12 17l-5.9 3.4 1.5-6.5-5-4.4 6.6-.6z" ${on ? 'fill="currentColor"' : 'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"'}/></svg>`;
+const favBtn = (slug, name, cls = "") => `<span class="favbtn ${cls} ${isFav(slug) ? "on" : ""}" role="button" tabindex="0" data-fav="${esc(slug)}" aria-pressed="${isFav(slug)}" title="${isFav(slug) ? "Unfollow" : "Follow"} ${esc(name)}">${STAR(isFav(slug))}</span>`;
+// does this game involve one of the viewer's teams?
+const favGame = g => FAVS.length && ["home", "away"].some(sd => isFav(logoSlug(g[sd].names.short, g[sd].names.seo)));
+
+// ---------- today's game for each team (for the Teams directory) ----------
+function todayGames() {
+  const by = {};
+  for (const g of cache.t || []) for (const sd of ["home", "away"]) {
+    const t = g[sd], o = g[sd === "home" ? "away" : "home"], slug = logoSlug(t.names.short, t.names.seo);
+    if (slug) by[slug] = { g, me: t, op: o, home: sd === "home" };
+  }
+  return by;
+}
+function todayTag(x) {
+  if (!x) return "";
+  const { g, me, op, home } = x, opn = esc(fix(op.names.short)), vs = home ? "vs" : "at";
+  let txt, cls = "";
+  if (g.gameState === "live") { cls = "live"; txt = `<i></i>${esc(me.score || 0)}–${esc(op.score || 0)} ${vs} ${opn}` }
+  else if (g.gameState === "final") { const w = +me.score > +op.score; cls = w ? "won" : "lost"; txt = `${w ? "W" : "L"} ${esc(me.score)}–${esc(op.score)} ${vs} ${opn}` }
+  else txt = `${esc(status(g).txt)} ${vs} ${opn}`;
+  return `<span class="ttag ${cls}" role="link" tabindex="0" data-tgame="${esc(g.gameID)}" title="Open this game"><em>${g.gameState === "live" ? "Live" : g.gameState === "final" ? "Final" : "Today"}</em>${txt}</span>`;
+}
+// Open a game from today on the Scores tab
+function goGame(id) {
+  gday = "t"; gfilt = "All"; gconf = ""; query = ""; const qi = $("#q"); if (qi) qi.value = "";
+  location.hash = "scores";
+  setTimeout(() => {
+    drawDays(); drawFilters(); drawGames();
+    const card = document.querySelector(`#games .game[data-game="${CSS.escape(id)}"]`);
+    if (card) { card.click(); card.scrollIntoView({ behavior: "smooth", block: "start" }) }
+  }, 60);
+}
+
+// ---------- Teams directory ----------
+let teamSort = "az";
+const winPct = n => { const r = /^(\d+)-(\d+)/.exec(recordOf(n) || ""); if (!r) return -1; const w = +r[1], l = +r[2]; return w + l ? w / (w + l) + w / 1000 : 0 };
+function teamCard(n, slug, today) {
+  const r = rk({ names: { short: n } }), tc = teamColorFor(slug) || "#3A3A40";
+  const wm = slug ? `<img class="twm" src="${logoURL(slug)}" alt="" loading="lazy" onerror="this.remove()">` : "";
+  return `<a class="tcard${isFav(slug) ? " fav" : ""}${today && today.g.gameState === "live" ? " islive" : ""}" href="#team-${esc(slug)}" style="--tc:${tc}">${wm}${mono(n, slug)}<span class="tinfo"><b>${r ? `<span class="rkb">${r}</span>` : ""}${esc(n)}</b><small>${esc(recordOf(n) || "0-0")}</small>${todayTag(today)}</span>${favBtn(slug, n)}</a>`;
+}
 function drawTeamDir() {
   const box = $("#teamdir");
-  if (!standings) { box.innerHTML = `<p class="empty">Loading teams…</p>`; return }
+  if (!standings) { box.innerHTML = `<p class="empty">Loading teams…</p>`; $("#tconfbar").innerHTML = ""; return }
   const q = teamQuery.trim().toLowerCase(), P6N = ["ACC", "Big Ten", "Big 12", "SEC", "Big East", "Pac-12"];
-  const groups = [...standings].sort((a, b) => (P6N.includes(b.conference) - P6N.includes(a.conference)) || a.conference.localeCompare(b.conference))
-    .map(c => ({ conf: c.conference, teams: (c.standings || []).map(x => fix(x.School).trim()).filter(n => !q || n.toLowerCase().includes(q) || c.conference.toLowerCase().includes(q)).sort((a, b) => a.localeCompare(b)) }))
+  const sorter = teamSort === "rec" ? (a, b) => winPct(b) - winPct(a) || a.localeCompare(b)
+    : teamSort === "rk" ? (a, b) => ((rk({ names: { short: a } }) || 99) - (rk({ names: { short: b } }) || 99)) || a.localeCompare(b)
+    : (a, b) => a.localeCompare(b);
+  let groups = [...standings].sort((a, b) => (P6N.includes(b.conference) - P6N.includes(a.conference)) || a.conference.localeCompare(b.conference))
+    .map(c => ({ conf: c.conference, teams: (c.standings || []).map(x => fix(x.School).trim()).filter(n => !q || n.toLowerCase().includes(q) || c.conference.toLowerCase().includes(q)).sort(sorter) }))
     .filter(g => g.teams.length);
-  box.innerHTML = groups.length ? groups.map(g => `<section class="tconf"><h2>${esc(g.conf)}</h2><div class="tgrid">${g.teams.map(n => {
-    const slug = logoSlug(n), r = rk({ names: { short: n } });
-    return `<a class="tcard" href="#team-${esc(slug)}">${mono(n, slug)}<span><b>${r ? `<span class="rkb">${r}</span>` : ""}${esc(n)}</b><small>${esc(recordOf(n) || "0-0")}</small></span></a>`;
-  }).join("")}</div></section>`).join("") : `<p class="empty">No teams match “${esc(teamQuery)}”.</p>`;
+  const all = groups.flatMap(g => g.teams);
+  const today = todayGames();
+  // pinned groups on top: the viewer's teams, and (when sorting by rank) the Top 25
+  const extra = [];
+  const favs = all.filter(n => isFav(logoSlug(n)));
+  if (favs.length) extra.push({ conf: "Your teams", id: "your-teams", star: true, teams: favs });
+  if (teamSort === "rk") { const ranked = all.filter(n => rk({ names: { short: n } })).sort(sorter); if (ranked.length) extra.push({ conf: "AP Top 25", id: "ap-top-25", teams: ranked }) }
+  const tg = all.map(n => today[logoSlug(n)]).filter(Boolean), live = tg.filter(x => x.g.gameState === "live").length;
+  groups = [...extra, ...groups];
+  const gid = g => g.id || "conf-" + g.conf.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  $("#tconfbar").innerHTML = groups.map(g => `<a href="#" data-tjump="${gid(g)}" class="${g.star ? "star" : ""}">${g.star ? STAR(true) : ""}${esc(g.conf)}</a>`).join("");
+  $("#tplaying").innerHTML = tg.length ? `${tg.length} team${tg.length === 1 ? "" : "s"} in action today${live ? ` · <b><i></i>${live} live now</b>` : ""}` : "";
+  box.innerHTML = groups.length ? groups.map(g => `<section class="tconf${g.star ? " favs" : ""}" id="${gid(g)}"><h2>${g.star ? STAR(true) : ""}${esc(g.conf)}<small>${g.teams.length}</small></h2><div class="tgrid">${g.teams.map(n => { const slug = logoSlug(n); return teamCard(n, slug, today[slug]) }).join("")}</div></section>`).join("")
+    : `<p class="empty">No teams match “${esc(teamQuery)}”.</p>`;
+  if (!favs.length && !q) box.insertAdjacentHTML("afterbegin", `<p class="favhint">${STAR(false)} Tap the star on any team to follow it. Your teams stay pinned here and get highlighted on Scores.</p>`);
 }
 async function openTeam(slug) {
   teamOpen = slug; $("#teamdir-wrap").hidden = true; $("#teampage").hidden = false;
@@ -831,7 +897,7 @@ function drawTeam() {
   box.style.setProperty("--tc", tc || "var(--ball)");
   const head = `<button class="closebtn tback" data-teamback>← All teams</button>
     <div class="thead">${mono(name, slug, null, "lg")}<div><div class="eyebrow">${esc(conf || "Division I")}</div><h1>${r ? `<span class="rkb">#${r}</span> ` : ""}${esc(name)}</h1>
-    <div class="tmeta"><span><b>${esc(record)}</b> overall</span>${confRec ? `<span>${esc(confRec)}</span>` : ""}${r ? `<span>AP No. ${r}</span>` : ""}</div></div></div>
+    <div class="tmeta"><span><b>${esc(record)}</b> overall</span>${confRec ? `<span>${esc(confRec)}</span>` : ""}${r ? `<span>AP No. ${r}</span>` : ""}</div></div><button class="followbtn ${isFav(slug) ? "on" : ""}" data-fav="${esc(slug)}" aria-pressed="${isFav(slug)}">${STAR(isFav(slug))}${isFav(slug) ? "Following" : "Follow"}</button></div>
     <div class="days ttabs" role="tablist">${[["schedule", "Schedule"], ["stats", "Team stats"], ["players", "Players"]].map(([k, t]) => `<button role="tab" data-teamtab="${k}" aria-pressed="${teamTab === k}">${t}</button>`).join("")}</div>`;
   let body = "";
   if (T.err) body = `<p class="empty">The schedule couldn't load. Try again in a minute.</p>`;
@@ -999,6 +1065,25 @@ function openWatch(e) {
   e.preventDefault(); e.stopPropagation(); window.open(w.dataset.watch, "_blank", "noopener");
 }
 window.addEventListener("click", openWatch, true);
+// stars, "today" tags and the conference bar on the Teams tab
+function teamDirClick(e) {
+  if (!e.target.closest) return;
+  if (e.type === "keydown" && e.key !== "Enter" && e.key !== " ") return;
+  const f = e.target.closest("[data-fav]");
+  if (f) { e.preventDefault(); e.stopPropagation(); toggleFav(f.dataset.fav); return }
+  const tg = e.target.closest("[data-tgame]");
+  if (tg) { e.preventDefault(); e.stopPropagation(); goGame(tg.dataset.tgame); return }
+  if (e.type !== "click") return;
+  const j = e.target.closest("[data-tjump]");
+  if (j) { e.preventDefault(); const sec = document.getElementById(j.dataset.tjump); if (sec) window.scrollTo({ top: sec.getBoundingClientRect().top + scrollY - ($("header.nav").offsetHeight + $("#tbar").offsetHeight + 8), behavior: "smooth" }); return }
+  const so = e.target.closest("[data-tsort]");
+  if (so) { teamSort = so.dataset.tsort; document.querySelectorAll("[data-tsort]").forEach(b => b.setAttribute("aria-pressed", b === so)); drawTeamDir() }
+}
+window.addEventListener("click", teamDirClick, true);
+window.addEventListener("keydown", teamDirClick, true);
+// keep the sticky conference bar just under the header (the header is taller on phones)
+function setNavH() { const h = document.querySelector("header.nav"); if (h) document.documentElement.style.setProperty("--navh", h.offsetHeight + "px") }
+window.addEventListener("resize", setNavH); setNavH();
 window.addEventListener("keydown", openWatch, true);
 document.addEventListener("click", async e => {
   const t = e.target;
