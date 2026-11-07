@@ -26,7 +26,13 @@ export default async function handler(req, res) {
   const headers = { "user-agent": "collegebasketball-site" };
   if (process.env.NCAA_API_KEY) headers["x-ncaa-key"] = process.env.NCAA_API_KEY;
   try {
-    const upstream = await fetch(`${BASE}/${path}`, { headers });
+    // The free API turns away bursts of requests (status 428/429). Wait a moment and try again, up to 3 times.
+    let upstream;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      upstream = await fetch(`${BASE}/${path}`, { headers });
+      if (![428, 429, 502, 503, 504].includes(upstream.status)) break;
+      await new Promise(r => setTimeout(r, 700 * (attempt + 1)));
+    }
     const body = await upstream.text();
     res.setHeader("content-type", path.startsWith("logo/") ? "image/svg+xml" : "application/json; charset=utf-8");
     if (upstream.ok) {
