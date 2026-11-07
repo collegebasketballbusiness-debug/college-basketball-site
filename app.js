@@ -605,6 +605,9 @@ function show(v) {
 const route = () => show((location.hash || "#scores").slice(1));
 addEventListener("hashchange", route);
 
+// Switching filters closes whatever game is open.
+function closeGame() { if (!openGame) return; openGame = null; gameDetail = null; drawGame() }
+
 // ---------- events ----------
 document.addEventListener("click", async e => {
   const t = e.target;
@@ -613,8 +616,8 @@ document.addEventListener("click", async e => {
     if (!cache[gday] || gday !== "t") { $("#games").innerHTML = `<div class="empty">Loading games…</div>`; try { await loadDay(gday) } catch { $("#games").innerHTML = `<div class="empty">Games couldn't load. Try again.</div>`; return } }
     drawFilters(); drawGames(); return;
   }
-  const f = t.closest("[data-gf]"); if (f) { gfilt = f.dataset.gf; gconf = ""; drawFilters(); drawGames(); return }
-  const cf = t.closest("[data-conf-f]"); if (cf) { gconf = cf.dataset.confF; gfilt = "All"; drawFilters(); drawGames(); return }
+  const f = t.closest("[data-gf]"); if (f) { gfilt = f.dataset.gf; gconf = ""; closeGame(); drawFilters(); drawGames(); return }
+  const cf = t.closest("[data-conf-f]"); if (cf) { gconf = cf.dataset.confF; gfilt = "All"; closeGame(); drawFilters(); drawGames(); return }
   const bx = t.closest("[data-box]"); if (bx) { boxSide = bx.dataset.box; drawGame(); return }
   if (t.closest("[data-closegame]")) { openGame = null; gameDetail = null; drawGames(); drawGame(); return }
   const gm = t.closest("[data-game]"); if (gm) {
@@ -640,7 +643,12 @@ document.addEventListener("click", async e => {
   const s = t.closest("[data-story]"); if (s) { openStory(s.dataset.story); return }
   if (t.closest("[data-closestory]")) drawNews();
 });
-$("#q").addEventListener("input", e => { query = e.target.value; drawGames() });
+$("#q").addEventListener("input", e => {
+  query = e.target.value;
+  // close the open game if it no longer matches the search
+  if (openGame && cache[gday] && !filtered(cache[gday]).some(g => g.gameID === openGame)) closeGame();
+  drawGames();
+});
 
 // ---------- start ----------
 drawDays(); drawGames(); drawNews(); drawInstagram(); route();
