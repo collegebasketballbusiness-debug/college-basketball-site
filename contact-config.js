@@ -3,6 +3,6 @@
 // and they'll email you an "Access Key". Paste it between the quotes below and commit.
 // Until a key is added, the form opens the visitor's email app with their message filled in instead.
 window.CONTACT_CONFIG = {
-  web3formsKey: "",
+  web3formsKey: "e5b38d85-bc96-4551-ac97-719befb10c3d",
   email: "collegebasketballbusiness@gmail.com"
 };
