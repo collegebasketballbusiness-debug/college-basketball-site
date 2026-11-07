@@ -12,7 +12,8 @@ const ROUTES = [
   [/^rankings\/basketball-men\/d1\/associated-press$/, 1800],
   [/^standings\/basketball-men\/d1$/, 1800],
   [/^news\/basketball-men\/d1$/, 600],
-       [/^stats\/basketball-men\/d1\/current\/team\/168(\?page=\d{1,2})?$/, 1800],
+  [/^stats\/basketball-men\/d1\/current\/team\/168(\?page=\d{1,2})?$/, 1800],
+  [/^logo\/[a-z0-9-]{1,60}\.svg(\?dark=true)?$/, 604800],
 ];
 
 export default async function handler(req, res) {
@@ -27,7 +28,7 @@ export default async function handler(req, res) {
   try {
     const upstream = await fetch(`${BASE}/${path}`, { headers });
     const body = await upstream.text();
-    res.setHeader("content-type", "application/json; charset=utf-8");
+    res.setHeader("content-type", path.startsWith("logo/") ? "image/svg+xml" : "application/json; charset=utf-8");
     if (upstream.ok) {
       res.setHeader("cache-control", `public, s-maxage=${route[1]}, stale-while-revalidate=${route[1] * 3}`);
     } else {
