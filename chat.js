@@ -50,7 +50,7 @@ function show(el, id, label) {
   render();
   client().then(() => { if (gameId === id) { loadMessages(id); subscribe(id) } }).catch(e => setStatus(e.message));
 }
-function close() { leave(); if (mount) mount.innerHTML = ""; mount = null; gameId = null }
+function close() { leave(); if (mount) { mount.innerHTML = ""; mount.closest(".gdetail")?.classList.remove("with-chat") } mount = null; gameId = null }
 function leave() { if (channel && sb) { sb.removeChannel(channel); channel = null } }
 
 // ---------- data ----------
@@ -83,6 +83,8 @@ function subscribe(id) {
 function setStatus(t) { const s = mount?.querySelector(".chat-status"); if (s) { s.textContent = t; s.hidden = !t } }
 function render(scrollDown) {
   if (!mount || !ON) return;
+  // on wide screens an open chat sits beside the stats instead of above them
+  mount.closest(".gdetail")?.classList.toggle("with-chat", open);
   const count = msgs.length;
   if (!open) {
     mount.innerHTML = `<div class="chatbar"><div><b>Game chat</b><span>${count ? `${count}${count >= KEEP ? "+" : ""} message${count === 1 ? "" : "s"}` : "Be the first to talk about this game"}</span></div><button class="chat-btn" data-chat="open">Open chat</button></div>`;
