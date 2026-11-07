@@ -236,7 +236,12 @@ document.addEventListener("click", e => {
   }
   if (!a) return;
   const act = a.dataset.chat;
-  if (act === "open") { open = true; try { sessionStorage.setItem("cbb-chat-open", "1") } catch { } render(true); mount?.querySelector("#chat-input")?.focus() }
+  if (act === "open") {
+    open = true; try { sessionStorage.setItem("cbb-chat-open", "1") } catch { } render(true);
+    // on wide screens the chat view fills the screen, so line it up under the menu bar
+    if (matchMedia("(min-width: 1000px)").matches) mount?.closest(".gdetail")?.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    mount?.querySelector("#chat-input")?.focus({ preventScroll: true });
+  }
   else if (act === "hide") { open = false; try { sessionStorage.setItem("cbb-chat-open", "0") } catch { } render() }
   else if (act === "login" || act === "signup") openModal(act);
   else if (act === "logout") sb?.auth.signOut();

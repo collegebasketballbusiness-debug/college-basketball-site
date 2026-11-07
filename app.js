@@ -223,17 +223,34 @@ function placeDetail() {
   }
   if (last.nextElementSibling !== DETAIL) last.after(DETAIL);
 }
+// Redraw the game cards without ever moving the open game panel: moving it would reset its scrolling,
+// the chat, and whatever someone is typing.
+function setCards(htmlList) {
+  const grid = $("#games");
+  for (const el of [...grid.children]) if (el !== DETAIL) el.remove();
+  const tpl = document.createElement("template"); tpl.innerHTML = htmlList.join("");
+  const cards = [...tpl.content.children];
+  const k = openGame ? cards.findIndex(c => c.dataset && c.dataset.game === openGame) : -1;
+  if (DETAIL.parentNode === grid && k >= 0) {
+    const cols = Math.max(1, getComputedStyle(grid).gridTemplateColumns.split(" ").filter(Boolean).length);
+    const before = Math.min(cards.length, Math.ceil((k + 1) / cols) * cols);
+    cards.slice(0, before).forEach(c => grid.insertBefore(c, DETAIL));
+    cards.slice(before).forEach(c => grid.appendChild(c));
+  } else {
+    cards.forEach(c => grid.appendChild(c));
+    placeDetail();
+  }
+}
 function drawGames() {
   const all = cache[gday];
-  if (!all) { $("#games").innerHTML = `<div class="empty">Loading games…</div>`; placeDetail(); return }
+  if (!all) { setCards([`<div class="empty">Loading games…</div>`]); return }
   const live = (cache.t || []).filter(isLive).length;
   $("#livecount").innerHTML = live ? `<span class="dot"></span>${live} game${live === 1 ? "" : "s"} live now` : `No games live right now`;
   const list = filtered(all);
-  $("#games").innerHTML = list.length ? list.map(g => {
+  setCards(list.length ? list.map(g => {
     const st = status(g);
     return `<button class="game ${openGame === g.gameID ? "sel" : ""}" data-game="${g.gameID}"><div class="gstat ${st.cls}"><span class="l">${st.cls ? '<span class="dot"></span>' : ""}${esc(st.txt)}</span><span>${esc(g.network || "")}</span></div>${trow(g, "away")}${trow(g, "home")}${badgeHTML(badges(g))}</button>`;
-  }).join("") : `<div class="empty">${all.length ? "No games match this filter." : "No Division I games scheduled for this day."}</div>`;
-  placeDetail();
+  }) : [`<div class="empty">${all.length ? "No games match this filter." : "No Division I games scheduled for this day."}</div>`]);
 }
 function flashChanges(list) {
   const changed = new Set();
@@ -402,7 +419,10 @@ function drawGame() {
   } else {
     html += `<div class="boxwrap"><h4 style="margin:0">Box score</h4><p style="margin:8px 0 0;color:var(--muted)">${pre ? "The box score goes live at tip-off." : "No box score for this game."}</p></div>`;
   }
+  // keep the reader's place: refreshing the stats every 20 seconds shouldn't jump them back to the top
+  const keep = GMAIN.scrollTop, oldPlays = GMAIN.querySelector(".plays"), keepPlays = oldPlays ? oldPlays.scrollTop : 0;
   GMAIN.innerHTML = html;
+  GMAIN.scrollTop = keep; const np = GMAIN.querySelector(".plays"); if (np) np.scrollTop = keepPlays;
 }
 
 // ---------- refresh loop ----------

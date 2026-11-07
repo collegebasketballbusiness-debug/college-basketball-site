@@ -318,17 +318,23 @@ table.box tr.totals td{font-weight:700;border-top:2px solid var(--ink)}
 .chat-count.low{color:var(--bad)}
 .chat-join{display:flex;gap:8px;flex-wrap:wrap;align-items:center;color:var(--muted)}
 @media (max-width:700px){.chatbar,.chat-head,.chat-list,.chat-status,.chat-foot{padding-left:16px;padding-right:16px}.chat-list{height:300px}}
-/* side-by-side: open chat on the right, live stats and play-by-play on the left */
+/* side-by-side: with the chat open, the panel fills the screen. Stats and play-by-play scroll on the left
+   while the chat stays locked in place on the right. */
 @media (min-width:1000px){
-  .gdetail.with-chat{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,380px);grid-template-areas:"head head" "main chat";overflow:visible}
+  .gdetail.with-chat{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,380px);grid-template-rows:auto minmax(0,1fr);grid-template-areas:"head head" "main chat";height:max(560px,calc(100vh - 92px));scroll-margin-top:80px}
   .gdetail.with-chat>.ghead{grid-area:head}
-  .gdetail.with-chat>.gmain{grid-area:main;min-width:0}
-  .gdetail.with-chat>.chatmount{grid-area:chat;border-left:1px solid var(--line);border-top:1px solid var(--line);background:var(--raised);border-bottom-right-radius:14px}
-  .gdetail.with-chat .chat{position:sticky;top:calc(env(safe-area-inset-top,0px) + 76px);height:min(720px,calc(100vh - 96px));display:flex;flex-direction:column;border-top:0;background:transparent}
+  .gdetail.with-chat>.gmain{grid-area:main;min-width:0;min-height:0;overflow-y:auto;overscroll-behavior:contain;border-top:1px solid var(--line);scrollbar-width:thin}
+  .gdetail.with-chat>.chatmount{grid-area:chat;min-height:0;border-left:1px solid var(--line);border-top:1px solid var(--line);background:var(--raised)}
+  .gdetail.with-chat .chat{height:100%;display:flex;flex-direction:column;border-top:0;background:transparent}
   .gdetail.with-chat .chat-list{flex:1;height:auto;min-height:0}
   .gdetail.with-chat .chat-head,.gdetail.with-chat .chat-list,.gdetail.with-chat .chat-status,.gdetail.with-chat .chat-foot{padding-left:18px;padding-right:18px}
   .gdetail.with-chat .chat-who{flex-wrap:wrap}
-  .gdetail.with-chat .dbody>div{padding:22px 22px}
+  .gdetail.with-chat .gh{padding:16px 24px}
+  .gdetail.with-chat .gh .mono.lg{width:60px;height:60px}
+  .gdetail.with-chat .gh .big{font-size:clamp(40px,4.5vw,60px)}
+  .gdetail.with-chat .dbody{border-top:0}
+  .gdetail.with-chat .dbody>div{padding:22px}
+  .gdetail.with-chat .plays{max-height:none}
   .gdetail.with-chat .boxwrap{padding:22px}
 }
 @media (min-width:1000px) and (max-width:1240px){.gdetail.with-chat .dbody{grid-template-columns:1fr}.gdetail.with-chat .dbody>div+div{border-left:0;border-top:1px solid var(--line)}}
