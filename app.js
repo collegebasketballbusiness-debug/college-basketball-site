@@ -420,16 +420,17 @@ function drawHero() {
 
 // ---------- Instagram ----------
 function drawInstagram() {
-  const box = $("#igposts"), posts = (window.IG_POSTS || []).filter(u => /instagram\.com\/(p|reel)\//.test(u)).slice(0, 6);
-  // The phone's grid: tile 1 is the first post in posts.js, and so on. If the repo has a picture for it in the
-  // ig folder (ig/1.jpg, ig/2.jpg … or .png), the tile shows that picture; otherwise it keeps its colored label.
+  const box = $("#igposts"), all = (window.IG_POSTS || []).filter(u => /instagram\.com\/(p|reel)\//.test(u));
+  const posts = all.slice(0, 6); // embedded below the phone
+  // The phone's grid (9 tiles): tile 1 is the first post in posts.js, and so on. If the ig folder has a picture
+  // for a tile (ig/1.jpg … ig/9.jpg, or .png), the tile shows it; otherwise it keeps its colored label.
   const PROFILE = "https://www.instagram.com/collegebasketball/";
   document.querySelectorAll("#igxgrid .t").forEach((t, i) => {
-    const url = posts[i] ? posts[i].split("?")[0] : PROFILE;
+    const url = all[i] ? all[i].split("?")[0] : PROFILE;
     const a = document.createElement("a");
     a.className = t.className; a.innerHTML = t.innerHTML; a.href = url; a.target = "_blank"; a.rel = "noopener";
-    a.setAttribute("aria-label", posts[i] ? `Instagram post ${i + 1}` : "Open @collegebasketball on Instagram");
-    if (posts[i]) {
+    a.setAttribute("aria-label", all[i] ? `Instagram post ${i + 1}` : "Open @collegebasketball on Instagram");
+    { // every tile tries its picture; tiles without a post link open the profile
       const img = document.createElement("img"); img.alt = ""; img.loading = "lazy";
       img.onload = () => a.classList.add("has-img");
       img.onerror = () => { if (!img.dataset.png) { img.dataset.png = 1; img.src = `ig/${i + 1}.png` } else img.remove() };
