@@ -401,6 +401,38 @@ table.box tr.totals td{font-weight:700;border-top:2px solid var(--ink)}
 .sttable tr.mine td{background:rgba(255,210,63,.07)}
 .stmore{display:flex;justify-content:center;margin:16px 0 8px}
 @media (max-width:700px){.stpod{grid-template-columns:1fr;gap:8px;align-items:stretch}.pod.p1{order:-1}.pod,.pod.p1{grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 14px}.pod .place{grid-row:1}.pod .who{grid-column:2}.pod .val,.pod.p1 .val{grid-column:3;grid-row:1;font-size:34px;margin:0}.pod .lab{display:none}.pod .twm{width:90px;height:90px;right:40px}.sttable .opt{display:none}}
+/* ---- Contact ---- */
+.ct{display:grid;grid-template-columns:.95fr 1.05fr;gap:40px;margin-top:28px;align-items:start}
+.ct-side h1{font-size:clamp(52px,7.5vw,104px);font-weight:900;line-height:.88;margin:8px 0 18px}
+.ct-side h1 em{font-style:normal;color:var(--ball)}
+.ct-side>p{color:#C8C8C4;font-size:17px;max-width:44ch;margin:0}
+.ct-why{list-style:none;padding:0;margin:26px 0;display:grid;gap:14px}
+.ct-why li{display:flex;gap:14px;align-items:flex-start}
+.ct-why b{flex:none;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:var(--chip);border:1px solid var(--line);font-size:19px}
+.ct-why strong{display:block;font-size:16px}
+.ct-why span{color:var(--muted);font-size:14px}
+.ct-alt{color:var(--muted)!important;font-size:14px!important}.ct-alt a{color:var(--ink)}
+.ct-form{position:relative;display:grid;gap:16px;padding:28px;border:1px solid var(--line);border-radius:18px;
+  background:radial-gradient(90% 60% at 100% 0%,rgba(255,106,19,.14),transparent 60%),var(--surface)}
+.ct-form::before{content:"";position:absolute;left:28px;right:28px;top:0;height:3px;background:var(--ball);border-radius:0 0 3px 3px}
+.ct-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.ct-form label{display:grid;gap:7px;font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);position:relative}
+.ct-form input,.ct-form select,.ct-form textarea{font:500 16px var(--body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:13px 14px;width:100%;text-transform:none;letter-spacing:0;transition:border-color .15s,box-shadow .15s}
+.ct-form textarea{resize:vertical;min-height:150px;line-height:1.5}
+.ct-form input:focus,.ct-form select:focus,.ct-form textarea:focus{outline:none;border-color:var(--ball);box-shadow:0 0 0 3px rgba(255,106,19,.18)}
+.ct-form .bad{border-color:var(--bad)!important}
+.ct-count{position:absolute;right:10px;bottom:10px;font-size:11px;color:#6A6A66;text-transform:none}
+.ct-hp{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+.ct-send{justify-self:start;display:inline-flex;align-items:center;gap:10px;font:800 17px var(--body);color:var(--ball-ink);background:var(--ball);border:0;border-radius:12px;padding:15px 26px;cursor:pointer;box-shadow:0 12px 30px -12px rgba(255,106,19,.8);transition:transform .15s}
+.ct-send:hover{transform:translateY(-2px)}.ct-send svg{width:18px;height:18px;transition:transform .2s}.ct-send:hover svg{transform:translate(3px,-3px)}
+.ct-send:disabled{opacity:.6;cursor:wait;transform:none}
+.ct-note{margin:-6px 0 0;color:#6A6A66;font-size:13px}
+.ct-status:empty{display:none}
+.ct-status{border-radius:12px;padding:14px 16px;font-size:15px;border:1px solid var(--line);background:var(--chip)}
+.ct-status.ok{border-color:rgba(74,222,128,.5);background:rgba(74,222,128,.08)}
+.ct-status.err{border-color:rgba(255,122,107,.5);background:rgba(255,122,107,.08)}
+.ct-status b{display:block;font-size:17px;margin-bottom:2px}
+@media (max-width:860px){.ct{grid-template-columns:1fr;gap:28px}.ct-form{padding:22px}.ct-row{grid-template-columns:1fr}}
 /* ---- Teams ---- */
 .ttools{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:18px}
 .ttools .search{flex:1 1 320px;max-width:480px}
@@ -733,6 +765,7 @@ img{max-width:100%}
       <a href="#stats" data-tab="stats">Stats</a>
       <a href="#teams" data-tab="teams">Teams</a>
       <a href="#discord" data-tab="discord">Discord</a>
+      <a href="#contact" data-tab="contact">Contact</a>
     </nav>
     <a class="follow" href="https://www.instagram.com/collegebasketball/" target="_blank" rel="noopener">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.4" cy="6.6" r="1.3" fill="currentColor"/></svg>
@@ -865,6 +898,38 @@ img{max-width:100%}
     <div id="teampage" hidden></div>
   </div>
 
+  <div class="view" data-view="contact" hidden>
+    <div class="ct">
+      <div class="ct-side">
+        <div class="eyebrow">Contact</div>
+        <h1>Hit us<br><em>up.</em></h1>
+        <p>Story tip, correction, partnership idea, or just want to talk hoops? Send a message and it lands straight in our inbox.</p>
+        <ul class="ct-why">
+          <li><b>📰</b><span><strong>Tips &amp; corrections</strong>See something wrong, or know something we should cover?</span></li>
+          <li><b>🤝</b><span><strong>Partnerships</strong>Brands, sponsors and collabs with @collegebasketball.</span></li>
+          <li><b>💬</b><span><strong>Site feedback</strong>Ideas, bugs, or a feature you want next.</span></li>
+        </ul>
+        <p class="ct-alt">Prefer email? <a href="mailto:collegebasketballbusiness@gmail.com">collegebasketballbusiness@gmail.com</a></p>
+      </div>
+      <form class="ct-form" id="ctform" novalidate>
+        <div class="ct-row">
+          <label>Name<input name="name" type="text" maxlength="80" autocomplete="name" required></label>
+          <label>Email<input name="email" type="email" maxlength="120" autocomplete="email" required></label>
+        </div>
+        <label>Topic
+          <select name="topic">
+            <option>General</option><option>Story tip</option><option>Correction</option><option>Partnership / sponsorship</option><option>Site feedback or bug</option><option>Takedown request</option>
+          </select>
+        </label>
+        <label>Message<textarea name="message" rows="7" maxlength="4000" required placeholder="What's on your mind?"></textarea><small class="ct-count" id="ctcount">0 / 4000</small></label>
+        <input type="checkbox" name="botcheck" class="ct-hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <button class="ct-send" type="submit"><span>Send message</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 21 3l-8.5 18-2-7.5z" fill="currentColor"/></svg></button>
+        <p class="ct-note">We only use your email to reply to you.</p>
+        <div class="ct-status" id="ctstatus" role="status" aria-live="polite"></div>
+      </form>
+    </div>
+  </div>
+
   <div class="view" data-view="rules" hidden>
     <div class="sb-top"><div><div class="eyebrow">Game chat</div><h1>Chat rules &amp; privacy</h1></div></div>
     <div class="rules">
@@ -969,7 +1034,7 @@ img{max-width:100%}
         <a href="https://www.instagram.com/collegebasketball/" target="_blank" rel="noopener">Instagram</a>
         <a href="https://discord.gg/EUH6S3nzet" target="_blank" rel="noopener">Discord</a>
         <a href="#rules">Chat rules &amp; privacy</a>
-        <a href="mailto:collegebasketballbusiness@gmail.com">Contact</a>
+        <a href="#contact">Contact</a>
       </nav>
     </div>
     <div class="ft-legal">
@@ -984,6 +1049,7 @@ img{max-width:100%}
 <script src="teams.js"></script>
 <script src="news.js"></script>
 <script src="posts.js"></script>
+<script src="contact-config.js"></script>
 <script src="chat-config.js"></script>
 <script src="chat.js"></script>
 <script src="app.js"></script>

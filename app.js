@@ -888,6 +888,48 @@ document.addEventListener("click", e => {
 });
 $("#stq").addEventListener("input", e => { stQuery = e.target.value; drawStats() });
 
+// ---------- Contact form ----------
+// Sends through Web3Forms (free) when a key is set in contact-config.js; otherwise opens the visitor's email app.
+(function () {
+  const f = $("#ctform"); if (!f) return;
+  const el = n => f.elements.namedItem(n); // (f.name would be the form's own name, not the Name box)
+  const cfg = window.CONTACT_CONFIG || {}, to = cfg.email || "collegebasketballbusiness@gmail.com";
+  const status = (cls, html) => { const el = $("#ctstatus"); el.className = "ct-status " + cls; el.innerHTML = html };
+  el("message").addEventListener("input", () => { $("#ctcount").textContent = `${el("message").value.length} / 4000` });
+  f.addEventListener("input", e => { e.target.classList.remove("bad"); const st = $("#ctstatus"); if (st.classList.contains("err") && !f.querySelector(".bad")) st.innerHTML = "" });
+  f.addEventListener("submit", async e => {
+    e.preventDefault();
+    if (el("botcheck").checked) return; // bots fill in the hidden box
+    const name = el("name").value.trim(), email = el("email").value.trim(), topic = el("topic").value, message = el("message").value.trim();
+    const bad = [];
+    if (!name) bad.push(el("name"));
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) bad.push(el("email"));
+    if (message.length < 5) bad.push(el("message"));
+    bad.forEach(x => x.classList.add("bad"));
+    if (bad.length) { status("err", "<b>Almost there</b>Please add your name, a valid email and a message."); bad[0].focus(); return }
+    if (!cfg.web3formsKey) {
+      const body = `${message}\n\n— ${name} (${email})`;
+      location.href = `mailto:${to}?subject=${encodeURIComponent(`[${topic}] Message from ${name}`)}&body=${encodeURIComponent(body)}`;
+      status("ok", `<b>Opening your email app…</b>Your message is filled in. Just press send. Nothing opened? Email us at <a href="mailto:${esc(to)}">${esc(to)}</a>.`);
+      return;
+    }
+    const btn = f.querySelector(".ct-send"); btn.disabled = true; btn.firstElementChild.textContent = "Sending…";
+    try {
+      const r = await fetch("https://api.web3forms.com/submit", {
+        method: "POST", headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ access_key: cfg.web3formsKey, subject: `[${topic}] Message from ${name} via the site`, from_name: "College Basketball site", name, email, replyto: email, topic, message, botcheck: "" })
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j.success === false) throw new Error(j.message || "HTTP " + r.status);
+      f.reset(); $("#ctcount").textContent = "0 / 4000";
+      status("ok", `<b>Message sent 🏀</b>Thanks, ${esc(name)}! We'll get back to you at ${esc(email)}.`);
+    } catch {
+      status("err", `<b>That didn't go through</b>Please try again, or email us directly at <a href="mailto:${esc(to)}">${esc(to)}</a>.`);
+    }
+    btn.disabled = false; btn.firstElementChild.textContent = "Send message";
+  });
+})();
+
 // ---------- favorites (saved on this device) ----------
 let FAVS = [];
 try { FAVS = JSON.parse(localStorage.getItem("cbb_favs") || "[]").filter(x => typeof x === "string") } catch { FAVS = [] }
@@ -1168,7 +1210,7 @@ document.addEventListener("click", async e => {
 });
 
 // ---------- tabs ----------
-const VIEWS = ["scores", "news", "rankings", "standings", "stats", "teams", "discord", "rules"];
+const VIEWS = ["scores", "news", "rankings", "standings", "stats", "teams", "discord", "contact", "rules"];
 const loaded = {};
 function show(v) {
   if (!VIEWS.includes(v)) v = "scores";
