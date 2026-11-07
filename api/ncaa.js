@@ -91,9 +91,9 @@ const STAT_IDS = {
 function range(a, b) { return Array.from({ length: b - a + 1 }, (_, i) => a + i) }
 async function statCats(res) {
   const jobs = Object.entries(STAT_IDS).flatMap(([kind, ids]) => ids.map(id => ({ kind, id })));
-  const found = []; let i = 0;
+  const found = []; let i = 0; const stopAt = Date.now() + 40e3; // stay well inside Vercel's 60-second limit
   async function worker() {
-    while (i < jobs.length) {
+    while (i < jobs.length && Date.now() < stopAt) {
       const { kind, id } = jobs[i++];
       try {
         const r = await upstreamFetch(`stats/basketball-men/d1/current/${kind}/${id}`, apiHeaders());
@@ -106,7 +106,8 @@ async function statCats(res) {
   }
   await Promise.all(Array.from({ length: 5 }, worker));
   found.sort((a, b) => a.kind.localeCompare(b.kind) || a.id - b.id);
-  json(res, 200, { cats: found }, found.length >= 8 ? "public, s-maxage=604800, stale-while-revalidate=2592000" : "public, s-maxage=600");
+  const done = i >= jobs.length;
+  json(res, 200, { cats: found }, done && found.length >= 8 ? "public, s-maxage=604800, stale-while-revalidate=2592000" : "public, s-maxage=600");
 }
 
 // ---------- Discord ----------
