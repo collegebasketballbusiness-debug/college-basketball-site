@@ -762,7 +762,7 @@ async function loadStatCats() {
     // If it's missing or more than a day and a half old, ask the relay to find the categories instead.
     let r = await fetch("/stats.json", { cache: "no-cache" }).then(x => x.ok ? x.json() : null).catch(() => null);
     if (r && Array.isArray(r.cats) && r.cats.length && Date.now() - (+r.built || 0) < 36 * 3600e3) {
-      for (const c of r.cats) if (c.rows && c.rows.length) STATDATA[c.kind + "/" + c.id] = { rows: c.rows.slice(), page: 1, pages: c.pages || 1, title: c.title, updated: c.updated || "" };
+      for (const c of r.cats) if (c.rows && c.rows.length) STATDATA[c.kind + "/" + c.id] = { rows: c.rows.slice(), page: 1, pages: c.pages || 1, title: c.title, updated: c.updated || "", total: c.total };
     } else r = await api("stat-cats", 1);
     STATCATS = (r.cats || []).filter(c => c.kind === "individual" || c.kind === "team");
     for (const k of ["individual", "team"]) {
@@ -781,6 +781,26 @@ async function loadStatPage(kind, id, page) {
     D.rows.push(...(r.data || [])); D.page = page; D.pages = +r.pages || 1; D.title = r.title || ""; D.updated = r.updated || "";
   } catch { D.err = true }
   D.loading = false;
+  if (stKind === kind && stCat[kind] === id) drawStats();
+}
+// The complete list for one stat (everyone the NCAA ranks), for search and "Show more".
+// GitHub saves it as stats/<kind>-<id>.json; if that's missing, read the remaining pages from the relay.
+async function loadStatFull(kind, id) {
+  const key = kind + "/" + id, D = STATDATA[key]; if (!D || D.full || D.fullLoading) return;
+  D.fullLoading = true;
+  try {
+    const f = await fetch(`/stats/${kind}-${id}.json`, { cache: "no-cache" }).then(r => r.ok ? r.json() : null).catch(() => null);
+    if (f && Array.isArray(f.rows) && f.rows.length >= D.rows.length) { D.rows = f.rows; D.full = true; D.page = D.pages }
+    else {
+      for (let p = D.page + 1; p <= Math.min(D.pages, 40); p++) {
+        const r = await api(`stats/basketball-men/d1/current/${kind}/${id}?page=${p}`, 2);
+        D.rows.push(...(r.data || [])); D.page = p;
+        if (stKind === kind && stCat[kind] === id) drawStats();
+      }
+      D.full = true;
+    }
+  } catch { }
+  D.fullLoading = false;
   if (stKind === kind && stCat[kind] === id) drawStats();
 }
 // Which column holds the stat itself (the last numeric-looking column, usually)
@@ -820,7 +840,10 @@ function drawStats() {
   // the NCAA marks ties with "-" in the rank column; show them as "T-4"
   let last = "";
   for (const r of D.rows) { const k = r.Rank; if (k && k !== "-" && !/^T-/.test(k)) last = k; else if (k === "-" && last) { r.Rank = "T-" + last; const prev = D.rows[D.rows.indexOf(r) - 1]; if (prev && prev.Rank === last) prev.Rank = "T-" + last } }
-  const rows = D.rows.filter(r => !q || Object.values(r).some(v => String(v).toLowerCase().includes(q)));
+  D.show = D.show || 50;
+  if (q && !D.full) loadStatFull(stKind, id); // search covers everyone, not just the rows on screen
+  const rows = q ? D.rows.filter(r => [r.Name, r.Player, r.Team, r.School].some(v => v && fix(v).toLowerCase().includes(q))).slice(0, 300)
+    : D.rows.slice(0, D.show);
   $("#strows2").innerHTML = rows.length ? rows.map(row => {
     const t = teamOf(row), slug = logoSlug(t);
     return `<tr class="${isFav(slug) ? "mine" : ""}">${cols.map(c => {
@@ -828,16 +851,17 @@ function drawStats() {
       if (/^team$|^school$/i.test(c)) v = `<a class="tm" href="#team-${esc(slug)}">${mono(t, slug)}<span>${esc(fix(row[c]))}</span></a>`;
       return `<td class="${c === sc ? "hl" : ""} ${opt.test(c) ? "opt" : ""} ${/^(rank|name|team|school)$/i.test(c) ? "" : "num"}">${v}</td>`;
     }).join("")}</tr>`;
-  }).join("") : `<tr><td colspan="${cols.length}">No one in the loaded list matches “${esc(stQuery)}”.${D.page < D.pages ? " Try Show more." : ""}</td></tr>`;
-  $("#stmore").hidden = D.page >= D.pages;
-  $("#stmore").textContent = D.loading ? "Loading…" : `Show more (${D.rows.length} of about ${D.pages * 50})`;
+  }).join("") : `<tr><td colspan="${cols.length}">${D.fullLoading ? `Searching everyone in ${esc(shortStat(D.title || ""))}…` : `No one matches “${esc(stQuery)}” in this stat.${/%|percentage/i.test(D.title || "") ? " Percentage stats only list players with enough attempts." : ""}`}</td></tr>`;
+  const total = D.full ? D.rows.length : D.pages * 50;
+  $("#stmore").hidden = !!q || (D.show >= D.rows.length && (D.full || D.page >= D.pages));
+  $("#stmore").textContent = D.fullLoading && D.show >= D.rows.length ? "Loading…" : `Show more (${Math.min(D.show, D.rows.length)} of ${D.full ? "" : "about "}${total})`;
 }
 document.addEventListener("click", e => {
   const k = e.target.closest && e.target.closest("[data-stkind]");
   if (k) { stKind = k.dataset.stkind; drawStats(); return }
   const c = e.target.closest && e.target.closest("[data-stcat]");
   if (c) { stCat[stKind] = +c.dataset.stcat; drawStats(); return }
-  if (e.target.id === "stmore") { const id = stCat[stKind], D = STATDATA[stKind + "/" + id]; if (D) { loadStatPage(stKind, id, D.page + 1); drawStats() } }
+  if (e.target.id === "stmore") { const id = stCat[stKind], D = STATDATA[stKind + "/" + id]; if (D) { D.show = (D.show || 50) + 50; if (D.show > D.rows.length) loadStatFull(stKind, id); drawStats() } }
 });
 $("#stq").addEventListener("input", e => { stQuery = e.target.value; drawStats() });
 

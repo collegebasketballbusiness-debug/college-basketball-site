@@ -1,4 +1,5 @@
-// Builds stats.json: every Division I men's stat category the NCAA has, with its top 50, for the Stats tab.
+// Builds stats.json: every Division I men's stat category the NCAA has, with its top 50, for the Stats tab,
+// plus the complete list for each stat in the stats folder (used by search and "Show more").
 // GitHub runs this twice a day (see .github/workflows/update-season.yml), so the Stats tab loads instantly.
 // The NCAA numbers each stat (e.g. 136 = points per game); rather than hard-coding them, this checks the
 // likely numbers and keeps the ones that exist, with the NCAA's own names.
@@ -41,5 +42,26 @@ await Promise.all(Array.from({ length: 3 }, worker));
 cats.sort((a, b) => a.kind.localeCompare(b.kind) || a.id - b.id);
 
 if (cats.length < 5) { console.error(`Only found ${cats.length} stats; keeping the old file.`); process.exit(1) }
+
+// The complete list for each stat (every page), saved as stats/<kind>-<id>.json so search covers everyone.
+fs.mkdirSync("stats", { recursive: true });
+const pageJobs = cats.flatMap(c => Array.from({ length: Math.max(0, Math.min(c.pages, 60) - 1) }, (_, k) => ({ c, page: k + 2 })));
+const pagesOf = new Map(cats.map(c => [c, { 1: c.rows }]));
+let pj = 0, failed = 0;
+async function pageWorker() {
+  while (pj < pageJobs.length) {
+    const { c, page } = pageJobs[pj++];
+    const j = await get(`stats/basketball-men/d1/current/${c.kind}/${c.id}?page=${page}`);
+    if (j && Array.isArray(j.data)) pagesOf.get(c)[page] = j.data; else failed++;
+    await sleep(200);
+  }
+}
+await Promise.all(Array.from({ length: 3 }, pageWorker));
+for (const c of cats) {
+  const pages = pagesOf.get(c), all = Object.keys(pages).sort((a, b) => a - b).flatMap(k => pages[k]);
+  c.total = all.length; c.full = Object.keys(pages).length >= Math.min(c.pages, 60);
+  fs.writeFileSync(`stats/${c.kind}-${c.id}.json`, JSON.stringify({ title: c.title, updated: c.updated, rows: all }));
+}
+
 fs.writeFileSync(OUT, JSON.stringify({ cats, built: Date.now() }));
-console.log(`Saved ${cats.length} stat categories: ${cats.map(c => c.title).join(", ")}`);
+console.log(`Saved ${cats.length} stat categories (${failed} pages couldn't load): ${cats.map(c => `${c.title} (${c.total})`).join(", ")}`);
