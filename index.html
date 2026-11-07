@@ -144,7 +144,17 @@ label{font-weight:600;font-size:14px}
 form input,form textarea,form select{width:100%;padding:12px;border:1.5px solid var(--line);border-radius:8px;background:var(--surface)}
 .ok{background:var(--chip);border-radius:8px;padding:14px;font-weight:600}
 footer{border-top:1px solid var(--line);margin-top:40px;padding-block:28px;color:var(--muted);font-size:14px}
-footer .wrap{display:flex;gap:16px;justify-content:space-between;flex-wrap:wrap}
+footer .wrap{display:grid;gap:18px}
+.ft-top{display:flex;flex-wrap:wrap;gap:16px 28px;align-items:center;justify-content:space-between;padding-bottom:18px;border-bottom:1px solid var(--line)}
+.ft-brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font-family:var(--display);font-weight:900;font-size:20px;text-transform:uppercase;letter-spacing:.01em}
+.ft-brand img{filter:invert(1);border-radius:50%}
+.ft-links{display:flex;flex-wrap:wrap;gap:6px 18px}
+.ft-links a{color:var(--muted);text-decoration:none;font-weight:600}
+.ft-links a:hover{color:var(--ink)}
+.ft-legal{display:grid;gap:6px;font-size:13px;line-height:1.5}
+.ft-legal p{margin:0;max-width:80ch}
+.ft-legal p:first-child{color:var(--ink);font-weight:600}
+.ft-legal a{color:var(--muted)}.ft-legal a:hover{color:var(--ink)}
 .note{font-family:var(--mono);font-size:12px;background:var(--chip);padding:8px 12px;border-radius:6px;color:var(--muted);display:inline-block}
 
 @media (max-width:800px){
@@ -856,10 +866,24 @@ img{max-width:100%}
 
 <footer>
   <div class="wrap">
-    <span>© 2026 College Basketball · Scores and stats from NCAA.com · <a href="#rules">Chat rules &amp; privacy</a></span>
-    <a href="https://www.instagram.com/collegebasketball/" target="_blank" rel="noopener">Instagram @collegebasketball</a>
+    <div class="ft-top">
+      <a class="ft-brand" href="#scores"><img src="logo.png" alt="" width="34" height="34"><span>College Basketball</span></a>
+      <nav class="ft-links" aria-label="Footer">
+        <a href="#scores">Scores</a><a href="#news">News</a><a href="#rankings">Rankings</a><a href="#stats">Stats</a><a href="#teams">Teams</a>
+        <a href="https://www.instagram.com/collegebasketball/" target="_blank" rel="noopener">Instagram</a>
+        <a href="https://discord.gg/EUH6S3nzet" target="_blank" rel="noopener">Discord</a>
+        <a href="#rules">Chat rules &amp; privacy</a>
+        <a href="mailto:collegebasketballbusiness@gmail.com">Contact</a>
+      </nav>
+    </div>
+    <div class="ft-legal">
+      <p>© <span id="ftyear">2026</span> College Basketball Media LLC. All rights reserved.</p>
+      <p>Not affiliated with or endorsed by the NCAA or any school or conference. Team names and logos are trademarks of their respective schools. Scores and stats from NCAA.com.</p>
+      <p>Questions, corrections, partnerships or takedown requests: <a href="mailto:collegebasketballbusiness@gmail.com">collegebasketballbusiness@gmail.com</a></p>
+    </div>
   </div>
 </footer>
+<script>try{document.getElementById("ftyear").textContent=new Date().getFullYear()}catch(e){}</script>
 
 <script src="teams.js"></script>
 <script src="news.js"></script>
