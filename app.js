@@ -359,13 +359,24 @@ function flashChanges(list) {
 }
 
 // ---------- Game of the Night ----------
-// Picks today's headline game: ranked matchups first, live and close games get a boost, finished games last.
+// Picks today's headline game in tiers: (1) a ranked team is playing, (2) a Power 6 team or a notable program
+// is playing, (3) anything else. Games still to be played always beat finished ones; within a tier, live games
+// come first (close ones especially), then the next to tip off.
+const NOTABLE = new Set(["memphis", "gonzaga", "san-diego-st", "st-marys-ca", "dayton", "vcu", "wichita-st", "utah-st",
+  "new-mexico", "nevada", "boise-st", "unlv", "colorado-st", "fla-atlantic", "drake", "grand-canyon", "mcneese",
+  "saint-louis", "loyola-chicago", "davidson", "col-of-charleston", "uab", "north-texas", "liberty", "high-point",
+  "princeton", "st-bonaventure", "santa-clara", "san-francisco", "bradley", "belmont", "south-fla", "tulane", "george-mason", "yale", "akron", "lipscomb"]);
+function heroTier(g) {
+  if (rk(g.home) || rk(g.away)) return 3;
+  if ([g.home, g.away].some(t => P6.includes(confOf(t)) || NOTABLE.has(t.names?.seo))) return 2;
+  return 1;
+}
 function heroScore(g) {
-  let s = 0; for (const t of [g.home, g.away]) { const r = rk(t); if (r) s += 30 - r }
+  let s = (g.gameState === "final" ? 0 : 10000) + heroTier(g) * 1000;
+  for (const t of [g.home, g.away]) { const r = rk(t); if (r) s += 30 - r }
   if (rk(g.home) && rk(g.away)) s += 25;
-  if (g.gameState === "live") { s += 12; const m = Math.abs((+g.home.score || 0) - (+g.away.score || 0)); if (m <= 5) s += 10 }
-  if (g.gameState === "pre") s += 4;
-  if (g.gameState === "final") s -= 15;
+  if (g.gameState === "live") { s += 200; const m = Math.abs((+g.home.score || 0) - (+g.away.score || 0)); if (m <= 5) s += 10 }
+  if (g.gameState === "pre") { const hrs = Math.max(0, ((+g.startTimeEpoch || 0) * 1000 - Date.now()) / 36e5); s += Math.max(0, 100 - hrs * 8) } // sooner tip-off ranks higher
   if (g.network) s += 3;
   return s;
 }
@@ -387,8 +398,9 @@ function drawHero() {
   const el = $("#gotn"); const list = cache.t || [];
   if (!list.length) { el.hidden = true; return }
   const live = list.find(g => g.gameID === heroId);
-  // keep the same game all night unless it ends and a better one is on
-  let g = live && live.gameState !== "final" ? live : [...list].sort((a, b) => heroScore(b) - heroScore(a))[0];
+  // keep the same game while it's on, unless a game from a higher tier is live or still to come
+  const best = [...list].sort((a, b) => heroScore(b) - heroScore(a))[0];
+  let g = live && live.gameState !== "final" && heroTier(live) >= heroTier(best) ? live : best;
   heroId = g.gameID;
   const st = status(g), pre = g.gameState === "pre", a = +g.away.score || 0, h = +g.home.score || 0;
   const side = (t, sd, r) => { const slug = logoSlug(t.names.short, t.names.seo); return `<div class="tm2 ${r ? "r" : ""}">${mono(t.names.short, t.names.seo, null, "")}<div><div class="tn">${rankBadge(rk(t))}${esc(fix(t.names.short))}</div><div class="tr">${esc([recordOf(t.names.short, g, sd), CONF[confOf(t)]].filter(Boolean).join(" · "))}</div></div></div>` };
