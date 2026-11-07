@@ -1,0 +1,6 @@
+{
+  "name": "college-basketball-site",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=18" }
+}
