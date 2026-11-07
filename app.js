@@ -101,7 +101,7 @@ function filtered(list) {
 function trow(g, side) {
   const t = g[side], other = g[side === "home" ? "away" : "home"];
   const lose = g.gameState === "final" && +t.score < +other.score;
-  return `<div class="trow ${lose ? "lose" : ""}">${mono(t.names.short, t.names.seo)}<span class="nm">${t.rank ? `<sup>${t.rank}</sup>` : ""}${esc(fix(t.names.short))}</span><span class="sc" data-sc="${g.gameID}-${side}">${g.gameState === "pre" ? "" : esc(t.score)}</span></div>`;
+  return `<div class="trow ${lose ? "lose" : ""}">${mono(t.names.short, t.names.seo)}<span class="nm">${rankBadge(t.rank || apRank(t.names.short))}${esc(fix(t.names.short))}${recTag(recordOf(t.names.short, g, side))}</span><span class="sc" data-sc="${g.gameID}-${side}">${g.gameState === "pre" ? "" : esc(t.score)}</span></div>`;
 }
 function drawDays() {
   $("#days").innerHTML = DAYS.map(d => `<button aria-pressed="${d.k === gday}" data-day="${d.k}">${d.label}<small>${etDate(d.off).label}</small></button>`).join("");
@@ -197,7 +197,7 @@ function drawGame() {
   const c = d?.game, teams = c?.teams || [];
   const tHome = teams.find(t => t.isHome) || {}, tAway = teams.find(t => !t.isHome) || {};
   const st = status(sg), pre = sg.gameState === "pre";
-  const side = (s, t, r) => `<div class="side ${r ? "r" : ""}">${mono(s.names.short, s.names.seo, t.color, "lg")}<div><strong>${s.rank ? `<span style="color:var(--ball)">#${s.rank}</span> ` : ""}${esc(fix(s.names.short))}</strong><small>${esc(fix(t.record || ""))}${CONF[confOf(s)] ? " · " + CONF[confOf(s)] : ""}</small></div></div>`;
+  const side = (s, t, r) => `<div class="side ${r ? "r" : ""}">${mono(s.names.short, s.names.seo, t.color, "lg")}<div><strong>${(s.rank || apRank(s.names.short)) ? `<span style="color:var(--ball)">#${s.rank || apRank(s.names.short)}</span> ` : ""}${esc(fix(s.names.short))}</strong><small>${esc(recordOf(s.names.short, sg, s === sg.home ? "home" : "away") || fix(t.record || "").replace(/[()]/g, ""))}${CONF[confOf(s)] ? " · " + CONF[confOf(s)] : ""}</small></div></div>`;
   let html = `<div class="gh">${side(sg.away, tAway)}<div class="big">${pre ? "vs" : `${esc(sg.away.score)}–${esc(sg.home.score)}`}<small class="${st.cls}">${esc(st.txt)}${sg.network ? " · " + esc(sg.network) : ""}</small></div>${side(sg.home, tHome, 1)}</div>`;
   if (!d) { boxEl.innerHTML = html + `<div class="boxwrap"><p style="margin:0;color:var(--muted)">Loading game details…</p></div>`; return }
 
@@ -265,25 +265,81 @@ async function refresh() {
 }
 
 // ---------- rankings & standings ----------
+// AP rank lookup by school name. Names differ slightly between NCAA feeds ("Michigan St." vs "Michigan State"),
+// so they're normalized before matching.
+const AP = {};
+const ABBR = { fla: "florida", ala: "alabama", ky: "kentucky", tenn: "tennessee", wash: "washington", ill: "illinois", miss: "mississippi", ark: "arkansas", ga: "georgia", mich: "michigan", ind: "indiana", caro: "carolina", colo: "colorado", ariz: "arizona", okla: "oklahoma", tex: "texas", va: "virginia", mo: "missouri", neb: "nebraska", mont: "montana", ore: "oregon", cal: "california", wis: "wisconsin", conn: "connecticut", pa: "pennsylvania", ny: "new york", nc: "north carolina", so: "southern", mt: "mount", fort: "fort", ft: "fort" };
+const ABBR_FIRST = new Set(["so", "mt", "ft", "ark", "ga", "ala", "tenn", "fla", "mich", "miss", "ky", "okla", "tex", "colo", "ariz", "wis", "neb", "mont"]);
+const ALIAS = { "app state": "appalachian state", "southern miss": "southern mississippi", "ole miss": "mississippi", "umass": "massachusetts", "uconn": "uconn", "fiu": "florida international", "fau": "florida atlantic", "unlv": "nevada las vegas", "ucf": "central florida", "utep": "texas el paso", "utsa": "texas san antonio", "siue": "siu edwardsville", "liu": "long island", "vcu": "virginia commonwealth", "lmu": "loyola marymount", "uic": "illinois chicago", "umbc": "maryland baltimore county", "etsu": "east tennessee state", "uncw": "unc wilmington", "unc greensboro": "unc greensboro", "unc asheville": "unc asheville", "middle tennessee": "middle tennessee", "army west point": "army", "miami ohio": "miami oh", "loyola maryland": "loyola md", "loyola chicago": "loyola chicago", "queens north carolina": "queens",  "southern cal": "usc", "southern california": "usc", "connecticut": "uconn", "miami fla": "miami fl", "miami florida": "miami fl", "st johns ny": "st johns", "saint marys": "st marys", "saint marys ca": "st marys", "st marys ca": "st marys", "brigham young": "byu", "louisiana state": "lsu", "texas christian": "tcu", "southern methodist": "smu", "nc state": "north carolina state" };
+function normName(n) {
+  let s = fix(n).toLowerCase().replace(/\(([^)]*)\)/g, " $1 ").replace(/&/g, " and ").replace(/['’.]/g, "").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+  s = s.replace(/^saint /, "st ").replace(/ st$/, " state").replace(/ st /g, " state ").replace(/ univ(ersity)?$/, "");
+  // NCAA feeds abbreviate states inconsistently ("West Fla." vs "West Florida"), so expand them everywhere
+  s = s.split(" ").map((w, i) => (i > 0 || ABBR_FIRST.has(w)) && ABBR[w] ? ABBR[w] : w).join(" ");
+  return ALIAS[s] || s;
+}
+const apRank = name => AP[normName(name)] || 0;
+const rankBadge = r => r ? `<span class="rkb">${esc(r)}</span>` : "";
+
+// Win-loss records for every D-I team, from NCAA.com's daily "Winning Percentage" table (8 pages of 50).
+// The table runs through yesterday, so tonight's finished games are added on top.
+const REC = {}; let recThrough = 0; // recThrough: yyyymmdd of the last day the table includes
+const ymd = d => d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+async function loadRecords() {
+  try {
+    const first = await api("stats/basketball-men/d1/current/team/168");
+    const pages = [first];
+    for (let p = 2; p <= (+first.pages || 1) && p <= 12; p++) pages.push(await api(`stats/basketball-men/d1/current/team/168?page=${p}`));
+    for (const pg of pages) for (const x of pg.data || []) REC[normName(x.Team)] = { w: +x.W || 0, l: +x.L || 0 };
+    const m = /through games \w+,?\s+(\w+ \d+, \d{4})/i.exec(first.updated || "");
+    recThrough = m ? ymd(new Date(m[1])) : 0;
+    drawGames(); drawGame(); drawStand(); if (apRows) drawRankings();
+  } catch { /* records are optional; try again on the next hourly refresh */ }
+}
+function recordOf(name, g, side) {
+  const r = REC[normName(name)];
+  if (!r) return "";
+  let { w, l } = r;
+  if (g && g.gameState === "final" && recThrough) {
+    const [mm, dd, yy] = String(g.startDate || "").split("/").map(Number);
+    if (yy && yy * 10000 + mm * 100 + dd > recThrough) {
+      const me = +g[side].score, them = +g[side === "home" ? "away" : "home"].score;
+      if (me > them) w++; else if (me < them) l++;
+    }
+  }
+  return `${w}-${l}`;
+}
+const recTag = rec => rec ? `<span class="rec">${esc(rec)}</span>` : "";
+
+let apRows = null;
 async function loadRankings() {
-  const el = $("#aprows");
   try {
     const r = await api("rankings/basketball-men/d1/associated-press");
     $("#rkupdated").textContent = r.updated || "";
-    const rows = r.data || [];
-    const extra = Object.keys(rows[0] || {}).filter(k => !["RANK", "SCHOOL", "POINTS"].includes(k));
-    $("#rkhead").innerHTML = `<th class="num">Rk</th><th>Team</th>${extra.map(k => `<th class="num">${esc(k[0] + k.slice(1).toLowerCase())}</th>`).join("")}<th class="num">Pts</th>`;
-    el.innerHTML = rows.map(x => {
-      const m = /^(.*?)\s*\((\d+)\)\s*$/.exec(fix(x.SCHOOL)) || [0, fix(x.SCHOOL), ""];
-      return `<tr><td class="num rkn">${esc(x.RANK)}</td><td><span class="tm">${mono(m[1], m[1])}<span>${esc(m[1])} ${m[2] ? `<small>(${m[2]})</small>` : ""}</span></span></td>${extra.map(k => `<td class="num">${esc(x[k])}</td>`).join("")}<td class="num">${esc(x.POINTS)}</td></tr>`;
-    }).join("");
-  } catch { el.innerHTML = `<tr><td colspan="4">Rankings couldn't load. Try again in a minute.</td></tr>` }
+    apRows = r.data || [];
+    apRows.forEach(x => { const nm = fix(x.SCHOOL).replace(/\s*\(\d+\)\s*$/, ""); AP[normName(nm)] = +x.RANK || 0 });
+    drawRankings(); drawStand(); drawGames(); drawGame();
+  } catch { $("#aprows").innerHTML = `<tr><td colspan="4">Rankings couldn't load. Try again in a minute.</td></tr>` }
 }
-let standings = null, sconf = "";
+function drawRankings() {
+  const extra = Object.keys(apRows[0] || {}).filter(k => !["RANK", "SCHOOL", "POINTS", "RECORD"].includes(k));
+  $("#rkhead").innerHTML = `<th class="num">Rk</th><th>Team</th><th class="num">Record</th>${extra.map(k => `<th class="num">${esc(k[0] + k.slice(1).toLowerCase())}</th>`).join("")}<th class="num">Pts</th>`;
+  $("#aprows").innerHTML = apRows.map(x => {
+    const m = /^(.*?)\s*\((\d+)\)\s*$/.exec(fix(x.SCHOOL)) || [0, fix(x.SCHOOL), ""];
+    const rec = recordOf(m[1]) || (x.RECORD ? fix(x.RECORD) : "–");
+    return `<tr><td class="num rkn">${esc(x.RANK)}</td><td><span class="tm">${mono(m[1], m[1])}<span>${esc(m[1])} ${m[2] ? `<small>(${m[2]})</small>` : ""}</span></span></td><td class="num">${esc(rec)}</td>${extra.map(k => `<td class="num">${esc(x[k])}</td>`).join("")}<td class="num">${esc(x.POINTS)}</td></tr>`;
+  }).join("");
+}
+let standings = null, sconf = "", standingsStale = false;
 async function loadStandings() {
   try {
     const r = await api("standings/basketball-men/d1");
-    standings = r.data || []; $("#stupdated").textContent = r.updated ? "Updated " + r.updated : "";
+    standings = r.data || [];
+    // NCAA.com keeps last season's final standings up until conference play; spot that by the date.
+    const up = new Date(String(r.updated || "").replace(/(\d+:\d+)\s*(AM|PM)?.*$/i, "").trim());
+    const now = new Date(), seasonStart = new Date(now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1, 9, 1);
+    standingsStale = !isNaN(up) && up < seasonStart;
+    $("#stupdated").textContent = standingsStale ? "Conference play hasn't started · Overall records are current" : r.updated ? "Updated " + r.updated : "";
     sconf = sconf || (standings.find(c => c.conference === "Big Ten") || standings[0] || {}).conference || "";
     drawStand();
   } catch { $("#strows").innerHTML = `<tr><td colspan="6">Standings couldn't load. Try again in a minute.</td></tr>` }
@@ -293,10 +349,15 @@ function drawStand() {
   const P6N = ["ACC", "Big Ten", "Big 12", "SEC", "Big East", "Pac-12"];
   const names = standings.map(c => c.conference).sort((a, b) => (P6N.includes(b) - P6N.includes(a)) || a.localeCompare(b));
   $("#sconfs").innerHTML = names.map(c => `<button aria-pressed="${c === sconf}" data-sconf="${esc(c)}">${esc(c)}</button>`).join("");
-  const rows = (standings.find(c => c.conference === sconf) || {}).standings || [];
+  let rows = (standings.find(c => c.conference === sconf) || {}).standings || [];
+  if (standingsStale) {
+    // show this season: 0-0 in conference, current overall record, sorted by win percentage
+    rows = rows.map(x => { const [w, l] = (recordOf(x.School) || "0-0").split("-").map(Number); return { School: x.School, "Conference W": 0, "Conference L": 0, "Overall W": w, "Overall L": l, "Overall PCT": w + l ? (w / (w + l)).toFixed(3) : "", "Overall STREAK": "" } })
+      .sort((a, b) => ((+b["Overall PCT"] || 0) - (+a["Overall PCT"] || 0)) || (b["Overall W"] - a["Overall W"]) || (a["Overall L"] - b["Overall L"]) || fix(a.School).localeCompare(fix(b.School)));
+  }
   $("#strows").innerHTML = rows.map((x, i) => {
     const stk = String(x["Overall STREAK"] || "").replace(/^Won /, "W").replace(/^Lost /, "L");
-    return `<tr><td class="num">${i + 1}</td><td><span class="tm">${mono(x.School, x.School)}<span>${esc(fix(x.School))}</span></span></td><td class="num">${esc(x["Conference W"])}-${esc(x["Conference L"])}</td><td class="num">${esc(x["Overall W"])}-${esc(x["Overall L"])}</td><td class="num">${esc(String(x["Overall PCT"] || "").replace(/^0/, ""))}</td><td class="num ${stk[0] === "W" ? "in" : stk[0] === "L" ? "out" : ""}">${esc(stk)}</td></tr>`;
+    return `<tr><td class="num">${i + 1}</td><td><span class="tm">${mono(x.School, x.School)}<span>${rankBadge(apRank(x.School))}${esc(fix(x.School))}</span></span></td><td class="num">${esc(x["Conference W"])}-${esc(x["Conference L"])}</td><td class="num">${esc(x["Overall W"])}-${esc(x["Overall L"])}</td><td class="num">${esc(String(x["Overall PCT"] || "").replace(/^0/, ""))}</td><td class="num ${stk[0] === "W" ? "in" : stk[0] === "L" ? "out" : ""}">${esc(stk)}</td></tr>`;
   }).join("");
 }
 
@@ -358,6 +419,8 @@ $("#q").addEventListener("input", e => { query = e.target.value; drawGames() });
 
 // ---------- start ----------
 drawDays(); drawGames(); drawNews(); route();
+if (!loaded.rk) { loaded.rk = 1; loadRankings() } // AP ranks are also used on Scores and Standings
+loadRecords(); setInterval(loadRecords, 3600000);
 refresh();
 setInterval(() => { if (!document.hidden) refresh() }, REFRESH_MS);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh() });
