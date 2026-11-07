@@ -756,7 +756,12 @@ async function loadStatCats() {
   if (STATCATS) return drawStats();
   $("#strows2").innerHTML = `<tr><td>Loading stat leaders…</td></tr>`;
   try {
-    const r = await api("stat-cats", 2);
+    // First choice: stats.json, which GitHub rebuilds twice a day with every category and its top 50 (instant).
+    // If it's missing or more than a day and a half old, ask the relay to find the categories instead.
+    let r = await fetch("/stats.json", { cache: "no-cache" }).then(x => x.ok ? x.json() : null).catch(() => null);
+    if (r && Array.isArray(r.cats) && r.cats.length && Date.now() - (+r.built || 0) < 36 * 3600e3) {
+      for (const c of r.cats) if (c.rows && c.rows.length) STATDATA[c.kind + "/" + c.id] = { rows: c.rows.slice(), page: 1, pages: c.pages || 1, title: c.title, updated: c.updated || "" };
+    } else r = await api("stat-cats", 1);
     STATCATS = (r.cats || []).filter(c => c.kind === "individual" || c.kind === "team");
     for (const k of ["individual", "team"]) {
       const list = STATCATS.filter(c => c.kind === k).sort((a, b) => stRank(a.title) - stRank(b.title) || a.id - b.id);
