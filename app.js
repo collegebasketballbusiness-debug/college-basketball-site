@@ -52,12 +52,27 @@ let gday = "t", gfilt = "All", gconf = "", query = "", openGame = null, boxSide 
 const cache = {};          // day key -> games[]
 let lastScores = {};       // gameID -> "a-h" for flash
 let gameDetail = null;     // {id, game, box, pbp}
+const BEST = {};           // gameID -> freshest {home, away} score seen from any feed
+
+// The scoreboard feed can lag the game feeds by a basket or two, so always show the highest score seen
+// (scores never go down during a game).
+function applyBest(g) {
+  const b = BEST[g.gameID];
+  if (!b || g.gameState === "pre") return;
+  if ((+b.home || 0) > (+g.home.score || 0)) g.home.score = String(b.home);
+  if ((+b.away || 0) > (+g.away.score || 0)) g.away.score = String(b.away);
+}
+function noteBest(id, home, away) {
+  const b = BEST[id] || (BEST[id] = { home: 0, away: 0 });
+  b.home = Math.max(b.home, +home || 0); b.away = Math.max(b.away, +away || 0);
+}
 
 // ---------- scoreboard ----------
 async function loadDay(k) {
   const day = DAYS.find(d => d.k === k);
   const data = await api(`scoreboard/basketball-men/d1/${etDate(day.off).path}/all-conf`);
   cache[k] = (data.games || []).map(x => x.game);
+  cache[k].forEach(applyBest);
   return cache[k];
 }
 function status(g) {
@@ -156,6 +171,16 @@ async function loadGame(id) {
   ]);
   if (openGame !== id) return;
   gameDetail = { id, game: game?.contests?.[0] || null, box, pbp };
+  const ct = gameDetail.game?.teams || [];
+  const lastPlay = (pbp?.periods || []).flatMap(p => p.playbyplayStats || []).at(-1);
+  noteBest(id, ct.find(t => t.isHome)?.score, ct.find(t => !t.isHome)?.score);
+  if (lastPlay) noteBest(id, lastPlay.homeScore, lastPlay.visitorScore);
+  let moved = false;
+  for (const list of Object.values(cache)) for (const g of list) if (g.gameID === id) {
+    const before = g.home.score + "-" + g.away.score; applyBest(g);
+    if (before !== g.home.score + "-" + g.away.score) moved = true;
+  }
+  if (moved) { drawGames(); drawTicker(new Set()); }
   drawGame();
 }
 function statRow(lbl, a, h, fmt = x => x) {
