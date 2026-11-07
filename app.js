@@ -748,6 +748,7 @@ async function loadGame(id) {
   }
   if (moved) { drawGames(); drawTicker(new Set()); }
   drawGame();
+  loadPlayCounts(id);
 }
 function statRow(lbl, a, h, fmt = x => x) {
   const tot = (a + h) || 1;
@@ -786,10 +787,11 @@ function drawGame() {
       ${statRow("Reb", n(sa.totalRebounds), n(sh.totalRebounds))}${statRow("Ast", n(sa.assists), n(sh.assists))}${statRow("TO", n(sa.turnovers), n(sh.turnovers))}` : "";
   // play-by-play (newest first)
   const plays = (d.pbp?.periods || []).flatMap(p => (p.playbyplayStats || []).map(x => ({ ...x, per: p.periodDisplay || "" }))).reverse().slice(0, 25);
+  for (const p of plays) { p.key = playKey(p, p.per); notePlay(sg.gameID, p.key, { desc: fix(p.eventDescription || p.homeText || p.visitorText || "").replace(/\s+/g, " ").trim(), per: (p.per || "").replace(" Half", ""), clock: p.clock, h: p.homeScore, v: p.visitorScore }) }
   const pbpHtml = plays.length ? `<div class="plays">${plays.map(p => {
     const home = String(p.teamId) === idHome, away = String(p.teamId) === idAway;
     const who = home ? sg.home.names.short : away ? sg.away.names.short : "";
-    return `<div class="play"><span class="t">${esc((p.per || "").replace(" Half", "").replace(/^(\d)(st|nd)$/, "$1$2"))} ${esc(p.clock)}</span><span>${who ? `<b>${esc(fix(who))}</b> · ` : ""}${esc(fix(p.eventDescription || p.homeText || p.visitorText))}</span><b>${p.visitorScore}–${p.homeScore}</b></div>`;
+    return `<div class="play"><span class="t">${esc((p.per || "").replace(" Half", "").replace(/^(\d)(st|nd)$/, "$1$2"))} ${esc(p.clock)}</span><span>${who ? `<b>${esc(fix(who))}</b> · ` : ""}${esc(fix(p.eventDescription || p.homeText || p.visitorText))}</span><b>${p.visitorScore}–${p.homeScore}</b>${playBar(sg.gameID, p.key, true)}</div>`;
   }).join("")}</div>` : `<p style="margin:0;color:var(--muted)">${pre ? "Play-by-play starts at tip-off." : "No play-by-play for this game."}</p>`;
 
   html += `<div class="dbody"><div>${pre ? `<h4>Matchup</h4><p style="margin:0 0 16px;color:var(--muted)">Tip-off at ${esc(st.txt)}${sg.network ? " on " + esc(sg.network) : ""}.${loc ? "<br>" + esc(loc) : ""}</p>` : lsTable + tStats + (loc ? `<p style="margin:16px 0 0;color:var(--muted);font-size:14px">${esc(loc)}</p>` : "")}</div>
@@ -816,6 +818,156 @@ function drawGame() {
   GMAIN.innerHTML = html;
   GMAIN.scrollTop = keep; const np = GMAIN.querySelector(".plays"); if (np) np.scrollTop = keepPlays;
 }
+
+// ---------- comments + reactions on plays ----------
+// Each play gets a short ID from its period, clock, score and description, so phone and desktop agree.
+// Comments are chat messages tagged with that ID (same accounts and rules as the game chat); see plays-setup.sql.
+const EMOJIS = ["🔥", "😂", "😱", "🧱", "🐐", "👏"];
+const PLAYCT = {}, MYREACT = {}, PLAYINFO = {};   // per game: { playKey: {...} }
+let playsOn = !!(window.CHAT_CONFIG?.url && (window.CHAT_CONFIG?.anonKey || "").length > 20), playCtAt = {}, pickerFor = null;
+function playKey(x, per) {
+  const desc = fix(x.eventDescription || x.homeText || x.visitorText || "").replace(/\s+/g, " ").trim();
+  const str = `${per}|${x.clock || ""}|${x.homeScore ?? ""}-${x.visitorScore ?? ""}|${desc}`;
+  let h = 0x811c9dc5; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193) }
+  return (h >>> 0).toString(36);
+}
+function notePlay(gid, key, info) { (PLAYINFO[gid] ||= {})[key] = info }
+async function loadPlayCounts(gid, force) {
+  if (!playsOn || !gid || (!force && Date.now() - (playCtAt[gid] || 0) < 9e3)) return;
+  playCtAt[gid] = Date.now();
+  try {
+    const c = window.CHAT_CONFIG;
+    const r = await fetch(`${c.url}/rest/v1/rpc/play_counts`, { method: "POST", headers: { apikey: c.anonKey, "content-type": "application/json" }, body: JSON.stringify({ gid }) });
+    if (r.status === 404) { playsOn = false; return } // plays-setup.sql hasn't been run yet
+    if (!r.ok) return;
+    const rows = await r.json(), ct = {};
+    for (const x of rows || []) ct[x.play_key] = { c: +x.comments || 0, r: x.reactions || {} };
+    PLAYCT[gid] = ct;
+    await loadMyReactions(gid);
+    if (openGame === gid) drawGame();
+    if (THREAD && THREAD.gid === gid) drawThread();
+  } catch { }
+}
+async function loadMyReactions(gid) {
+  const chat = window.CBBChat; if (!chat?.on || !chat.hasSession()) return;
+  try {
+    const sb = await chat.client(); if (!chat.me()) return;
+    const { data } = await sb.from("play_reactions").select("play_key, emoji").eq("game_id", gid);
+    const mine = {}; for (const x of data || []) (mine[x.play_key] ||= new Set()).add(x.emoji);
+    MYREACT[gid] = mine;
+  } catch { }
+}
+window.addEventListener("cbb-auth", () => { for (const k in MYREACT) delete MYREACT[k]; if (openGame) loadPlayCounts(openGame, true); if (THREAD) drawThread() });
+async function toggleReact(gid, key, emoji) {
+  const chat = window.CBBChat; if (!chat?.on || !playsOn) return;
+  if (!chat.me()) { chat.auth(chat.hasSession() ? "login" : "signup", "React and comment on plays with a free account. It's the same account as the game chat."); return }
+  const mine = ((MYREACT[gid] ||= {})[key] ||= new Set()), ct = ((PLAYCT[gid] ||= {})[key] ||= { c: 0, r: {} });
+  const had = mine.has(emoji);
+  const apply = on => { if (on) { mine.add(emoji); ct.r[emoji] = (ct.r[emoji] || 0) + 1 } else { mine.delete(emoji); ct.r[emoji] = Math.max(0, (ct.r[emoji] || 1) - 1); if (!ct.r[emoji]) delete ct.r[emoji] } };
+  apply(!had); drawGame(); if (THREAD) drawThread();
+  try {
+    const sb = await chat.client();
+    const { error } = had ? await sb.from("play_reactions").delete().eq("game_id", gid).eq("play_key", key).eq("emoji", emoji)
+      : await sb.from("play_reactions").insert({ game_id: gid, play_key: key, emoji });
+    if (error && !/duplicate/i.test(error.message || "")) throw error;
+  } catch { apply(had); drawGame(); if (THREAD) drawThread() }
+}
+// The reaction + comment row under a play
+function playBar(gid, key, compact) {
+  if (!playsOn || !window.CBBChat?.on) return "";
+  const ct = PLAYCT[gid]?.[key] || { c: 0, r: {} }, mine = MYREACT[gid]?.[key] || new Set();
+  const tops = Object.entries(ct.r).sort((a, b) => b[1] - a[1]), total = tops.reduce((n, x) => n + x[1], 0);
+  const sum = total ? `${tops.slice(0, 3).map(x => `<i>${x[0]}</i>`).join("")}<b>${total}</b>` : `<i class="pr-add">☺</i><b>React</b>`;
+  if (compact) return `<span class="pact"><button class="pr-sum ${mine.size ? "on" : ""}" data-thread="${key}" title="React or comment">${sum}</button><button class="pr-com" data-thread="${key}" title="Comments">💬${ct.c ? ` <b>${ct.c}</b>` : ""}</button></span>`;
+  const picker = pickerFor === key ? `<div class="pr-pick">${EMOJIS.map(e => `<button class="${mine.has(e) ? "on" : ""}" data-react="${e}" data-rkey="${key}" aria-label="React ${e}">${e}${ct.r[e] ? `<b>${ct.r[e]}</b>` : ""}</button>`).join("")}</div>` : "";
+  return `<div class="pr"><button class="pr-sum ${mine.size ? "on" : ""}" data-picker="${key}">${sum}</button><button class="pr-com" data-thread="${key}">💬${ct.c ? ` <b>${ct.c}</b>` : ""}</button></div>${picker}`;
+}
+// ---- the thread for one play ----
+let THREAD = null; // { gid, key, msgs, channel, loading }
+const PT = document.createElement("div");
+PT.className = "pt"; PT.hidden = true;
+PT.innerHTML = `<div class="pt-card" role="dialog" aria-modal="true" aria-label="Comments on this play"><div class="pt-grab"></div><div class="pt-head"><b>Play</b><button class="mg-x" data-ptclose aria-label="Close">×</button></div><div class="pt-play"></div><div class="pt-list"></div><div class="pt-foot"></div></div>`;
+document.body.appendChild(PT);
+async function openThread(gid, key) {
+  closeThread();
+  THREAD = { gid, key, msgs: [], loading: true };
+  PT.hidden = false; drawThread();
+  try {
+    const sb = await window.CBBChat.client();
+    const { data } = await sb.from("messages").select("id, user_id, username, body, created_at").eq("game_id", gid).eq("play_key", key).eq("deleted", false).order("created_at", { ascending: true }).limit(200);
+    if (!THREAD || THREAD.key !== key) return;
+    THREAD.msgs = data || []; THREAD.loading = false;
+    THREAD.channel = sb.channel(`play-${gid}-${key}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `game_id=eq.${gid}` }, p => {
+      if (!THREAD || p.new.play_key !== key || THREAD.msgs.some(m => m.id === p.new.id)) return;
+      THREAD.msgs.push(p.new); bumpCount(gid, key, 1); drawThread(true);
+    }).subscribe();
+    drawThread(true);
+  } catch { if (THREAD) { THREAD.loading = false; THREAD.err = true; drawThread() } }
+}
+function closeThread() {
+  if (THREAD?.channel) { window.CBBChat.client().then(sb => sb.removeChannel(THREAD.channel)).catch(() => { }) }
+  THREAD = null; PT.hidden = true;
+}
+function bumpCount(gid, key, d) { const ct = ((PLAYCT[gid] ||= {})[key] ||= { c: 0, r: {} }); ct.c = Math.max(0, ct.c + d); drawGame() }
+function drawThread(scrollDown) {
+  if (!THREAD) return;
+  const { gid, key } = THREAD, info = PLAYINFO[gid]?.[key] || {}, g = Object.values(cache).flat().find(x => x.gameID === gid);
+  const me = window.CBBChat?.me(), ct = PLAYCT[gid]?.[key] || { c: 0, r: {} }, mine = MYREACT[gid]?.[key] || new Set();
+  PT.querySelector(".pt-play").innerHTML = `${g ? `<div class="fp-meta">${mono(g.away.names.short, g.away.names.seo)}<b>${esc(info.v ?? "")}–${esc(info.h ?? "")}</b>${mono(g.home.names.short, g.home.names.seo)}<span>${esc(info.per || "")} ${esc(info.clock || "")}</span></div>` : ""}<div class="pt-desc">${esc(info.desc || "Play")}</div>
+    <div class="pr-pick open">${EMOJIS.map(e => `<button class="${mine.has(e) ? "on" : ""}" data-react="${e}" data-rkey="${key}" aria-label="React ${e}">${e}${ct.r[e] ? `<b>${ct.r[e]}</b>` : ""}</button>`).join("")}</div>`;
+  const list = PT.querySelector(".pt-list"), near = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
+  list.innerHTML = THREAD.loading ? `<p class="pt-empty">Loading comments…</p>` : THREAD.err ? `<p class="pt-empty">Comments couldn't load. Try again.</p>`
+    : THREAD.msgs.length ? THREAD.msgs.map(m => `<div class="chat-msg ${me && m.user_id === me.id ? "mine" : ""}"><div class="chat-meta"><b>${esc(m.username)}</b><time>${new Date(m.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</time><span class="chat-tools">${me && me.is_admin ? `<button class="chat-link danger" data-ptdel="${m.id}">Delete</button>` : me && m.user_id !== me.id ? `<button class="chat-link" data-ptrep="${m.id}">Report</button>` : ""}</span></div><p>${esc(m.body)}</p></div>`).join("")
+    : `<p class="pt-empty">No comments yet. Be the first to react to this play.</p>`;
+  if (scrollDown || near) list.scrollTop = list.scrollHeight;
+  const foot = PT.querySelector(".pt-foot");
+  const want = !me ? "join" : me.banned ? "banned" : "form";
+  if (foot.dataset.mode !== want) {
+    foot.dataset.mode = want;
+    foot.innerHTML = want === "join" ? `<div class="chat-join"><span>Log in to comment and react.</span><button class="chat-btn" data-ptauth="signup">Create account</button><button class="chat-btn ghost" data-ptauth="login">Log in</button></div>`
+      : want === "banned" ? `<div class="chat-join"><span>You've been removed from the chat.</span></div>`
+      : `<form class="chat-form" data-ptform><input maxlength="280" autocomplete="off" placeholder="Add a comment…" aria-label="Comment on this play"><button class="chat-btn" type="submit">Post</button></form><p class="pt-msg" role="status"></p>`;
+  }
+}
+PT.addEventListener("click", async e => {
+  const t = e.target;
+  if (t === PT || t.closest("[data-ptclose]")) { closeThread(); return }
+  const a = t.closest("[data-ptauth]"); if (a) { window.CBBChat.auth(a.dataset.ptauth, "Comment and react on plays with a free account. It's the same account as the game chat."); return }
+  const r = t.closest("[data-react]"); if (r && THREAD) { toggleReact(THREAD.gid, r.dataset.rkey, r.dataset.react); return }
+  const del = t.closest("[data-ptdel]"); if (del && THREAD) {
+    const sb = await window.CBBChat.client(); const { error } = await sb.from("messages").update({ deleted: true }).eq("id", +del.dataset.ptdel);
+    if (!error) { THREAD.msgs = THREAD.msgs.filter(m => m.id !== +del.dataset.ptdel); bumpCount(THREAD.gid, THREAD.key, -1); drawThread() } return;
+  }
+  const rep = t.closest("[data-ptrep]"); if (rep && THREAD) {
+    const sb = await window.CBBChat.client(); const me = window.CBBChat.me();
+    await sb.from("reports").insert({ message_id: +rep.dataset.ptrep, game_id: THREAD.gid, reporter: me.id });
+    rep.replaceWith(Object.assign(document.createElement("span"), { className: "chat-done", textContent: "Reported" })); return;
+  }
+});
+PT.addEventListener("submit", async e => {
+  e.preventDefault(); if (!THREAD) return;
+  const f = e.target, input = f.querySelector("input"), msg = PT.querySelector(".pt-msg"), body = input.value.replace(/\s+/g, " ").trim();
+  if (!body) return;
+  const me = window.CBBChat.me(); if (!me) return;
+  input.disabled = true; msg.textContent = "";
+  const { gid, key } = THREAD;
+  try {
+    const sb = await window.CBBChat.client();
+    const { data, error } = await sb.from("messages").insert({ game_id: gid, user_id: me.id, username: me.username, body, play_key: key }).select().single();
+    if (error) throw error;
+    input.value = "";
+    if (THREAD && THREAD.key === key && !THREAD.msgs.some(m => m.id === data.id)) { THREAD.msgs.push(data); bumpCount(gid, key, 1); drawThread(true) }
+  } catch (err) { msg.textContent = String(err.message || "").replace(/^.*?:\s*(?=[A-Z])/, "") || "That didn't post. Try again." }
+  input.disabled = false; input.focus();
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape" && THREAD) closeThread() });
+// taps on reaction buttons and comment counts, in the phone feed and the desktop play-by-play
+document.addEventListener("click", e => {
+  const t = e.target; if (!t.closest || t.closest(".pt")) return;
+  const pk = t.closest("[data-picker]"); if (pk) { e.stopPropagation(); pickerFor = pickerFor === pk.dataset.picker ? null : pk.dataset.picker; mgBodyKey = ""; drawGame(); return }
+  const r = t.closest("[data-react]"); if (r && openGame) { e.stopPropagation(); toggleReact(openGame, r.dataset.rkey, r.dataset.react); return }
+  const th = t.closest("[data-thread]"); if (th && openGame) { e.stopPropagation(); if (!window.CBBChat?.on) return; openThread(openGame, th.dataset.thread) }
+}, true);
 
 // ---------- phone game view (like the Real app) ----------
 // On phones, tapping a game opens a full-screen view: other games across the top, the score, then tabs for
@@ -846,6 +998,7 @@ function openPhoneGame(id) {
 }
 function closePhoneGame(fromHistory) {
   if (MG.hidden) return;
+  closeThread();
   if (!fromHistory && mgPushed) { mgPushed = false; history.back(); return } // popstate brings us back here
   mgPushed = false;
   MG.hidden = true; document.documentElement.classList.remove("mg-open");
@@ -903,11 +1056,12 @@ function drawPhoneGame(sg) {
         if (nh === nv) tags.push(["tie", "Ties it"]);
       }
       const desc = fix(x.eventDescription || x.homeText || x.visitorText || "").replace(/\s+/g, " ").trim();
-      if (desc) items.push({ desc, per: x.per, clock: x.clock || "", h: nh, v: nv, side, pts, tags });
+      if (desc) { const key = playKey(x, x.per); items.push({ key, desc, per: x.per, clock: x.clock || "", h: nh, v: nv, side, pts, tags }) }
       ph = nh; pv = nv;
     }
     const shown = (mgFeed === "scoring" ? items.filter(i => i.pts > 0) : items).reverse().slice(0, 250);
     const perLbl = p => String(p).replace(/1st Half|1st/i, "H1").replace(/2nd Half|2nd/i, "H2").replace(/Overtime/i, "OT");
+    for (const i of shown) notePlay(sg.gameID, i.key, { desc: i.desc, per: perLbl(i.per), clock: i.clock, h: i.h, v: i.v });
     body = `<div class="mg-feedbar"><button data-mgfeed="all" aria-pressed="${mgFeed === "all"}">All plays</button><button data-mgfeed="scoring" aria-pressed="${mgFeed === "scoring"}">Scoring</button></div>` +
       (shown.length ? shown.map(i => {
         const t = i.side ? sg[i.side] : null;
@@ -916,7 +1070,7 @@ function drawPhoneGame(sg) {
         return `<div class="fp ${big} ${i.tags.length ? "key" : ""}" style="--tc:${tc}">
           <div class="fp-av">${t ? mono(t.names.short, t.names.seo) : `<span class="fp-dot"></span>`}${i.pts > 0 ? `<span class="fp-pts">+${i.pts}</span>` : ""}</div>
           <div class="fp-main"><div class="fp-meta">${mono(sg.away.names.short, sg.away.names.seo)}<b>${i.v}–${i.h}</b>${mono(sg.home.names.short, sg.home.names.seo)}<span>${esc(perLbl(i.per))} ${esc(i.clock)}</span></div>
-          <div class="fp-desc">${esc(i.desc)}</div>${i.tags.length ? `<div class="fp-tags">${i.tags.map(([k, l]) => `<span class="fpt-${k}">${esc(l)}</span>`).join("")}</div>` : ""}</div></div>`;
+          <div class="fp-desc">${esc(i.desc)}</div>${i.tags.length ? `<div class="fp-tags">${i.tags.map(([k, l]) => `<span class="fpt-${k}">${esc(l)}</span>`).join("")}</div>` : ""}${playBar(sg.gameID, i.key)}</div></div>`;
       }).join("") : `<p class="mg-empty">${pre ? "The feed starts at tip-off. Check the Game tab to make your pick." : "No play-by-play for this game."}</p>`);
   } else if (mgTab === "game") {
     const ls = c?.linescores || [];

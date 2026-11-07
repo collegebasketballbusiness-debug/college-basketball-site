@@ -225,7 +225,7 @@ footer .wrap{display:grid;gap:18px}
 .stbar .bar i{display:block;height:100%}
 .stbar span:nth-child(3){text-align:center;font-family:var(--mono);font-size:11px;text-transform:uppercase;color:var(--muted)}
 .plays{display:grid;gap:0;max-height:300px;overflow:auto}
-.play{display:grid;grid-template-columns:4.5em 1fr auto;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.play{display:grid;grid-template-columns:4.5em 1fr auto auto;align-items:start;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
 .play .t{font-family:var(--mono);font-size:12px;color:var(--muted)}
 .play b{font-variant-numeric:tabular-nums}
 .fbar{display:flex;gap:6px;overflow-x:auto;padding:4px 0 8px;margin-top:18px;scrollbar-width:thin}
@@ -589,6 +589,42 @@ html.mg-open,html.mg-open body{overflow:hidden}
 .mg-chat .chat-head{display:none}
 .mg-chat .chat-list{flex:1;min-height:0;max-height:none;height:auto}
 @media (prefers-reduced-motion:reduce){.mg-sheet{animation:none}}
+/* ---- reactions + comments on plays ---- */
+.pr{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:9px}
+.pr-sum,.pr-com{display:inline-flex;align-items:center;gap:3px;background:none;border:0;color:#A8A8A4;font:600 15px var(--body);cursor:pointer;padding:4px 2px;border-radius:999px}
+.pr-sum i{font-style:normal;font-size:17px;margin-right:-2px}
+.pr-sum b,.pr-com b{font-weight:700;color:#C8C8C4;margin-left:5px}
+.pr-sum .pr-add{font-size:19px;color:#8A8A86;margin-right:2px}
+.pr-sum.on b{color:var(--ball)}
+.pr-com{font-size:16px}
+.pr-pick{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.pr-pick button{display:inline-flex;align-items:center;gap:4px;font-size:20px;line-height:1;background:#141416;border:1px solid #2A2A2E;border-radius:999px;padding:6px 10px;cursor:pointer;transition:transform .1s}
+.pr-pick button:active{transform:scale(.88)}
+.pr-pick button b{font:700 13px var(--body);color:#C8C8C4}
+.pr-pick button.on{border-color:var(--ball);background:rgba(255,106,19,.16)}
+.pact{display:inline-flex;gap:2px;align-items:center;white-space:nowrap}
+.pact .pr-sum,.pact .pr-com{font-size:12px;padding:2px 6px;border:1px solid transparent}
+.pact .pr-sum i{font-size:13px}.pact .pr-sum .pr-add{font-size:14px}.pact .pr-sum b,.pact .pr-com b{margin-left:3px}
+.play:hover .pact .pr-sum,.play:hover .pact .pr-com{border-color:var(--line)}
+.pt{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center}
+.pt[hidden]{display:none}
+.pt-card{width:100%;max-width:560px;height:82vh;display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:18px 18px 0 0;box-shadow:0 -20px 50px rgba(0,0,0,.6);animation:mgup .22s ease;padding-bottom:env(safe-area-inset-bottom,0px)}
+.pt-grab{width:40px;height:5px;border-radius:3px;background:#3A3A40;margin:8px auto 0}
+.pt-head{display:flex;justify-content:space-between;align-items:center;padding:4px 16px 0}
+.pt-head b{font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:500}
+.pt-play{padding:6px 16px 14px;border-bottom:1px solid var(--line)}
+.pt-desc{font-size:20px;font-weight:800;margin-top:6px;line-height:1.3}
+.pt-play .pr-pick{margin-top:12px}
+.pt-list{flex:1;min-height:0;overflow-y:auto;padding:6px 16px;overscroll-behavior:contain}
+.pt-empty{color:var(--muted);text-align:center;padding:30px 10px;margin:0}
+.pt-foot{border-top:1px solid var(--line);padding:10px 16px 12px}
+.pt-foot .chat-form{display:flex;gap:8px}
+.pt-foot .chat-form input{flex:1;min-width:0;font:500 16px var(--body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:10px 14px}
+.pt-foot .chat-join{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.pt-foot .chat-join span{color:var(--muted);font-size:14px;flex-basis:100%}
+.pt-msg{margin:6px 0 0;color:var(--bad);font-size:13px;min-height:0}
+.pt-msg:empty{display:none}
+@media (min-width:761px){.pt{align-items:center}.pt-card{height:min(720px,86vh);border-radius:18px}.pt-grab{display:none}}
 /* ---- Teams ---- */
 .ttools{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:18px}
 .ttools .search{flex:1 1 320px;max-width:480px}

@@ -56,8 +56,10 @@ function leave() { if (channel && sb) { sb.removeChannel(channel); channel = nul
 
 // ---------- data ----------
 async function loadMessages(id) {
-  const { data, error } = await sb.from("messages").select("id, game_id, user_id, username, body, deleted, created_at")
-    .eq("game_id", id).eq("deleted", false).order("created_at", { ascending: false }).limit(KEEP);
+  // comments on individual plays are stored with the chat but shown under their play, not here
+  const base = () => sb.from("messages").select("id, game_id, user_id, username, body, deleted, created_at").eq("game_id", id).eq("deleted", false);
+  let { data, error } = await base().is("play_key", null).order("created_at", { ascending: false }).limit(KEEP);
+  if (error && /play_key/i.test(error.message || "")) ({ data, error } = await base().order("created_at", { ascending: false }).limit(KEEP)); // database not updated yet
   if (gameId !== id) return;
   if (error) { setStatus("Chat couldn't load. Try again in a minute."); return }
   msgs = (data || []).reverse();
@@ -71,7 +73,7 @@ async function loadReports(id) {
 function subscribe(id) {
   channel = sb.channel("game-" + id)
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `game_id=eq.${id}` }, p => {
-      if (gameId !== id || msgs.some(m => m.id === p.new.id)) return;
+      if (gameId !== id || p.new.play_key || msgs.some(m => m.id === p.new.id)) return;
       msgs.push(p.new); if (msgs.length > KEEP) msgs.shift(); renderList(true);
     })
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `game_id=eq.${id}` }, p => {
