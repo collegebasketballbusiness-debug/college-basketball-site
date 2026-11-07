@@ -58,6 +58,29 @@ async function apOthers(res) {
   }
 }
 
+// ---------- where to watch ----------
+// The NCAA feed leaves the TV network blank, so read each day's broadcasts from ESPN's public scoreboard.
+// Returns, per game: tip time, every name each team goes by (for matching), and the networks.
+async function tv(res, y, m, d) {
+  try {
+    const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard?dates=${y}${m}${d}&groups=50&limit=500`,
+      { headers: { "user-agent": "collegebasketball-site" } });
+    if (!r.ok) return json(res, 502, { error: "ESPN " + r.status });
+    const data = await r.json();
+    const games = (data.events || []).map(e => {
+      const c = (e.competitions || [])[0] || {};
+      const names = side => { const t = ((c.competitors || []).find(x => x.homeAway === side) || {}).team || {}; return [t.location, t.shortDisplayName, t.displayName, t.name].filter(Boolean) };
+      const geo = (c.geoBroadcasts || []).slice().sort((a, b) => (a.market?.type === "National" ? 0 : 1) - (b.market?.type === "National" ? 0 : 1)).map(g => g.media?.shortName);
+      const tvs = [...new Set([...geo, ...(c.broadcasts || []).flatMap(b => b.names || [])].filter(Boolean))].slice(0, 3);
+      return { t: Math.round(Date.parse(e.date) / 1000) || 0, a: names("away"), h: names("home"), tv: tvs };
+    }).filter(g => g.tv.length);
+    const date = `${y}-${m}-${d}`;
+    json(res, 200, { date, games }, date < etToday() ? "public, s-maxage=86400" : "public, s-maxage=1800, stale-while-revalidate=7200");
+  } catch {
+    json(res, 502, { error: "Could not reach ESPN" });
+  }
+}
+
 // ---------- season schedules ----------
 // Today's date in US Eastern time as yyyy-mm-dd (NCAA dates are Eastern).
 function etToday() {
@@ -117,6 +140,7 @@ export default async function handler(req, res) {
   if (path === "ap-others") return apOthers(res);
   let m;
   if ((m = /^day\/(\d{4})\/(\d{2})\/(\d{2})$/.exec(path))) return day(res, m[1], m[2], m[3]);
+  if ((m = /^tv\/(\d{4})\/(\d{2})\/(\d{2})$/.exec(path))) return tv(res, m[1], m[2], m[3]);
   if ((m = /^team-season\/([a-z0-9-]{1,60})$/.exec(path))) return teamSeason(req, res, m[1]);
   const route = ROUTES.find(([re]) => re.test(path));
   if (!route) return json(res, 400, { error: "Unsupported path" });
