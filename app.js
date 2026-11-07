@@ -421,6 +421,22 @@ function drawHero() {
 // ---------- Instagram ----------
 function drawInstagram() {
   const box = $("#igposts"), posts = (window.IG_POSTS || []).filter(u => /instagram\.com\/(p|reel)\//.test(u)).slice(0, 6);
+  // The phone's grid: tile 1 is the first post in posts.js, and so on. If the repo has a picture for it in the
+  // ig folder (ig/1.jpg, ig/2.jpg … or .png), the tile shows that picture; otherwise it keeps its colored label.
+  const PROFILE = "https://www.instagram.com/collegebasketball/";
+  document.querySelectorAll("#igxgrid .t").forEach((t, i) => {
+    const url = posts[i] ? posts[i].split("?")[0] : PROFILE;
+    const a = document.createElement("a");
+    a.className = t.className; a.innerHTML = t.innerHTML; a.href = url; a.target = "_blank"; a.rel = "noopener";
+    a.setAttribute("aria-label", posts[i] ? `Instagram post ${i + 1}` : "Open @collegebasketball on Instagram");
+    if (posts[i]) {
+      const img = document.createElement("img"); img.alt = ""; img.loading = "lazy";
+      img.onload = () => a.classList.add("has-img");
+      img.onerror = () => { if (!img.dataset.png) { img.dataset.png = 1; img.src = `ig/${i + 1}.png` } else img.remove() };
+      img.src = `ig/${i + 1}.jpg`; a.prepend(img);
+    }
+    t.replaceWith(a);
+  });
   if (!posts.length) { box.innerHTML = ""; return } // the follow block above stands on its own until posts are added in posts.js
   box.innerHTML = `<p class="ig-latest">Latest posts</p><div class="ig-grid">${posts.map(u => `<blockquote class="instagram-media" data-instgrm-permalink="${esc(u.split("?")[0])}" data-instgrm-version="14"><a href="${esc(u)}" target="_blank" rel="noopener">View this post on Instagram</a></blockquote>`).join("")}</div>`;
   if (window.instgrm) window.instgrm.Embeds.process();

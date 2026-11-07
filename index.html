@@ -656,6 +656,15 @@ td.srt{color:var(--ink);font-weight:700}
 .igx-nav .me{width:22px;height:22px;border-radius:50%;background:#fff url(logo.png) center/cover;border:1.5px solid #fff}
 .igx-grid .t{aspect-ratio:1;display:flex;flex-direction:column;justify-content:flex-end;padding:7px;font-family:var(--display);font-weight:900;text-transform:uppercase;line-height:.92;font-size:15px;transition:filter .2s;background-size:cover}
 .igx-grid .t i{font-style:normal;display:block}
+.igx-grid .t{position:relative;overflow:hidden;color:inherit;text-decoration:none}
+.igx-grid a.t,.igx-prof{cursor:pointer}
+.igx-prof{text-decoration:none;color:#fff}
+.igx-grid .t img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .3s,transform .3s}
+.igx-grid .t.has-img img{opacity:1}
+.igx-grid .t.has-img i{visibility:hidden}
+.igx-grid a.t:hover img{transform:scale(1.06)}
+.igx-grid a.t::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,0);transition:background .2s}
+.igx-grid a.t:hover::after{background:rgba(0,0,0,.15)}
 .igx-phone:hover .t{filter:saturate(1.2)}
 .t1{background:linear-gradient(160deg,#FF6A13,#B83A00)}
 .t2{background:repeating-linear-gradient(-45deg,#FFD23F 0 10px,#F5C21B 10px 20px);color:#111}
@@ -773,14 +782,14 @@ img{max-width:100%}
               <span class="igx-tip">Tip: tap <b>Following → Notifications</b> to get a ping for every post.</span>
             </div>
           </div>
-          <a class="igx-phone" href="https://www.instagram.com/collegebasketball/" target="_blank" rel="noopener" aria-label="Open @collegebasketball on Instagram">
+          <div class="igx-phone">
             <span class="igx-notch"></span>
-            <span class="igx-prof">
+            <a class="igx-prof" href="https://www.instagram.com/collegebasketball/" target="_blank" rel="noopener" aria-label="Open @collegebasketball on Instagram">
               <span class="igx-ring sm"><img src="logo.png" alt=""></span>
               <span class="igx-who"><b>collegebasketball</b><small>College hoops, every night</small></span>
               <span class="igx-btn">Follow</span>
-            </span>
-            <span class="igx-grid" aria-hidden="true">
+            </a>
+            <span class="igx-grid" id="igxgrid">
               <span class="t t1"><i>Buzzer</i><i>beater</i></span>
               <span class="t t2"><i>Upset</i><i>alert</i></span>
               <span class="t t3"><i>AP</i><i>Top 25</i></span>
@@ -799,7 +808,7 @@ img{max-width:100%}
               <span class="me"></span>
             </span>
             <span class="igx-heart" aria-hidden="true">♥</span>
-          </a>
+          </div>
         </div>
         <div id="igposts"></div>
       </section>
