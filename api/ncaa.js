@@ -12,6 +12,7 @@ const ROUTES = [
   [/^rankings\/basketball-men\/d1\/associated-press$/, 1800],
   [/^standings\/basketball-men\/d1$/, 1800],
   [/^news\/basketball-men\/d1$/, 600],
+       [/^stats\/basketball-men\/d1\/current\/team\/168(\?page=\d{1,2})?$/, 1800],
 ];
 
 export default async function handler(req, res) {
