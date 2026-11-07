@@ -50,9 +50,44 @@ function logoSlug(name, seo) {
 const logoURL = (slug, dark) => { const path = `logo/${slug}.svg${dark ? "?dark=true" : ""}`; return API === "" ? "/" + path : API + encodeURIComponent(path) };
 const mono = (name, seo, color, cls = "") => {
   const slug = logoSlug(name, seo);
-  const logo = slug ? `<picture><source media="(prefers-color-scheme: dark)" srcset="${logoURL(slug, true)}"><img src="${logoURL(slug, false)}" alt="" loading="lazy" decoding="async" onerror="var m=this.closest('.mono');m.classList.remove('has-logo');this.parentNode.remove()"></picture>` : "";
+  const logo = slug ? `<img src="${logoURL(slug, true)}" alt="" loading="lazy" decoding="async" onerror="var m=this.closest('.mono');m.classList.remove('has-logo');this.remove()">` : "";
   return `<span class="mono ${cls} ${logo ? "has-logo" : ""}" style="--mc:${teamColor(seo, color)}" aria-hidden="true"><b>${esc(initials(name))}</b>${logo}</span>`;
 };
+
+// ---------- team colors ----------
+// Each school's main color is read from its NCAA logo file (the most-used color that isn't white, black or gray).
+const TCOL = {}; const colorQueue = []; let colorBusy = 0;
+try { Object.assign(TCOL, JSON.parse(localStorage.getItem("cbb-colors") || "{}")) } catch { }
+function saveColors() { try { localStorage.setItem("cbb-colors", JSON.stringify(TCOL)) } catch { } }
+function pickColor(svg) {
+  const counts = {};
+  for (const m of svg.matchAll(/(?:fill|stop-color)\s*[:=]\s*["']?\s*#([0-9a-f]{6}|[0-9a-f]{3})\b/gi)) {
+    let h = m[1].toLowerCase(); if (h.length === 3) h = h.split("").map(c => c + c).join("");
+    const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    if (mx - mn < 40 || mx < 35 || mn > 225) continue; // skip grays, black, white
+    counts[h] = (counts[h] || 0) + 1;
+  }
+  const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+  return best ? "#" + best[0] : "";
+}
+function teamColorFor(slug) {
+  if (!slug) return "";
+  if (TCOL[slug] !== undefined) return TCOL[slug];
+  if (!colorQueue.includes(slug)) { colorQueue.push(slug); pumpColors() }
+  return "";
+}
+function pumpColors() {
+  while (colorBusy < 4 && colorQueue.length) {
+    const slug = colorQueue.shift(); colorBusy++;
+    fetch(logoURL(slug, false)).then(r => r.ok ? r.text() : "").catch(() => "").then(svg => {
+      TCOL[slug] = pickColor(svg || ""); colorBusy--;
+      document.querySelectorAll(`[data-slug="${slug}"]`).forEach(el => TCOL[slug] && el.style.setProperty("--tc", TCOL[slug]));
+      if (!colorQueue.length) { saveColors(); drawHero() }
+      pumpColors();
+    });
+  }
+}
 
 // ---------- dates (NCAA dates are Eastern time) ----------
 function etDate(offsetDays) {
@@ -105,6 +140,56 @@ function status(g) {
   return { cls: "", txt: g.startTime || "TBA" };
 }
 const isLive = g => g.gameState === "live";
+const clockSecs = c => { const m = /^(\d+):(\d+)/.exec(String(c || "")); return m ? +m[1] * 60 + +m[2] : 9999 };
+const rk = t => +(t.rank || apRank(t.names.short) || 0);
+const BUZZ = {}; const buzzAsked = new Set();
+function badges(g) {
+  const out = [], a = +g.away.score || 0, h = +g.home.score || 0, margin = Math.abs(a - h);
+  const per = String(g.currentPeriod || ""), fm = String(g.finalMessage || "");
+  const ot = /OT/i.test(per) || /OT/i.test(fm);
+  const ra = rk(g.away), rh = rk(g.home);
+  const leader = a > h ? "away" : h > a ? "home" : "";
+  const upset = leader && (() => { const lr = leader === "away" ? ra : rh, tr = leader === "away" ? rh : ra; return tr && (!lr || lr - tr >= 10) })();
+  if (g.gameState === "live") {
+    const late = (/2nd|OT/i.test(per)) && clockSecs(g.contestClock) <= 300;
+    if (upset && (late || /2nd|OT/i.test(per))) out.push(["upset", "Upset Alert"]);
+    if (late && margin <= 5) out.push(["close", "Close Game"]);
+    if (ot) out.push(["ot", per.toUpperCase().includes("OT") ? per.toUpperCase() : "OT"]);
+    if (/2nd/i.test(per) && margin >= 30) out.push(["blowout", "Blowout"]);
+  } else if (g.gameState === "final") {
+    if (upset) out.push(["upset", "Upset"]);
+    if (BUZZ[g.gameID]) out.push(["buzzer", "Buzzer Beater"]);
+    if (ot) out.push(["ot", (/(\d)\s*OT/i.exec(fm)?.[1] || "") + "OT"]);
+    if (margin >= 30) out.push(["blowout", "Blowout"]);
+    if (margin <= 3 && !buzzAsked.has(g.gameID)) checkBuzzer(g);
+  }
+  return out;
+}
+const badgeHTML = list => list.length ? `<div class="badges">${list.map(([c, t]) => `<span class="bdg ${c}">${esc(t)}</span>`).join("")}</div>` : "";
+// A buzzer beater: the winning team's last basket came in the final 3 seconds and turned a tie or deficit into the win.
+const buzzQueue = []; let buzzBusy = false;
+function checkBuzzer(g) { buzzAsked.add(g.gameID); buzzQueue.push(g.gameID); pumpBuzz() }
+async function pumpBuzz() {
+  if (buzzBusy) return; buzzBusy = true;
+  while (buzzQueue.length) {
+    const id = buzzQueue.shift();
+    try {
+      const pbp = await api(`game/${id}/play-by-play`);
+      const per = (pbp.periods || []).at(-1)?.playbyplayStats || [];
+      for (let i = per.length - 1; i >= 0; i--) {
+        const p = per[i], prev = per.slice(0, i).reverse().find(x => x.homeScore !== p.homeScore || x.visitorScore !== p.visitorScore) || { homeScore: 0, visitorScore: 0 };
+        if (p.homeScore === prev.homeScore && p.visitorScore === prev.visitorScore) continue;
+        const homeScored = p.homeScore > prev.homeScore, final = per.at(-1);
+        const homeWon = final.homeScore > final.visitorScore;
+        const wasntWinning = homeWon ? prev.homeScore <= prev.visitorScore : prev.visitorScore <= prev.homeScore;
+        if (homeScored === homeWon && clockSecs(p.clock) <= 3 && wasntWinning) BUZZ[id] = true;
+        break;
+      }
+    } catch { }
+    await new Promise(r => setTimeout(r, 300));
+  }
+  buzzBusy = false; drawGames(); drawHero();
+}
 const rankOf = t => t.rank ? +t.rank : 0;
 
 function filtered(list) {
@@ -118,7 +203,8 @@ function filtered(list) {
 function trow(g, side) {
   const t = g[side], other = g[side === "home" ? "away" : "home"];
   const lose = g.gameState === "final" && +t.score < +other.score;
-  return `<div class="trow ${lose ? "lose" : ""}">${mono(t.names.short, t.names.seo)}<span class="nm">${rankBadge(t.rank || apRank(t.names.short))}${esc(fix(t.names.short))}${recTag(recordOf(t.names.short, g, side))}</span><span class="sc" data-sc="${g.gameID}-${side}">${g.gameState === "pre" ? "" : esc(t.score)}</span></div>`;
+  const slug = logoSlug(t.names.short, t.names.seo), tc = teamColorFor(slug);
+  return `<div class="trow ${lose ? "lose" : ""}" data-slug="${esc(slug)}"${tc ? ` style="--tc:${tc}"` : ""}>${mono(t.names.short, t.names.seo)}<span class="nm">${rankBadge(t.rank || apRank(t.names.short))}${esc(fix(t.names.short))}${recTag(recordOf(t.names.short, g, side))}</span><span class="sc" data-sc="${g.gameID}-${side}">${g.gameState === "pre" ? "" : esc(t.score)}</span></div>`;
 }
 function drawDays() {
   $("#days").innerHTML = DAYS.map(d => `<button aria-pressed="${d.k === gday}" data-day="${d.k}">${d.label}<small>${etDate(d.off).label}</small></button>`).join("");
@@ -138,7 +224,7 @@ function drawGames() {
   const list = filtered(all);
   $("#games").innerHTML = list.length ? list.map(g => {
     const st = status(g);
-    return `<button class="game ${openGame === g.gameID ? "sel" : ""}" data-game="${g.gameID}"><div class="gstat ${st.cls}"><span class="l">${st.cls ? '<span class="dot"></span>' : ""}${esc(st.txt)}</span><span>${esc(g.network || "")}</span></div>${trow(g, "away")}${trow(g, "home")}</button>`;
+    return `<button class="game ${openGame === g.gameID ? "sel" : ""}" data-game="${g.gameID}"><div class="gstat ${st.cls}"><span class="l">${st.cls ? '<span class="dot"></span>' : ""}${esc(st.txt)}</span><span>${esc(g.network || "")}</span></div>${trow(g, "away")}${trow(g, "home")}${badgeHTML(badges(g))}</button>`;
   }).join("") : `<div class="empty">${all.length ? "No games match this filter." : "No Division I games scheduled for this day."}</div>`;
 }
 function flashChanges(list) {
@@ -151,12 +237,55 @@ function flashChanges(list) {
   return changed;
 }
 
+// ---------- Game of the Night ----------
+// Picks today's headline game: ranked matchups first, live and close games get a boost, finished games last.
+function heroScore(g) {
+  let s = 0; for (const t of [g.home, g.away]) { const r = rk(t); if (r) s += 30 - r }
+  if (rk(g.home) && rk(g.away)) s += 25;
+  if (g.gameState === "live") { s += 12; const m = Math.abs((+g.home.score || 0) - (+g.away.score || 0)); if (m <= 5) s += 10 }
+  if (g.gameState === "pre") s += 4;
+  if (g.gameState === "final") s -= 15;
+  if (g.network) s += 3;
+  return s;
+}
+let heroId = null;
+function drawHero() {
+  const el = $("#gotn"); const list = cache.t || [];
+  if (!list.length) { el.hidden = true; return }
+  const live = list.find(g => g.gameID === heroId);
+  // keep the same game all night unless it ends and a better one is on
+  let g = live && live.gameState !== "final" ? live : [...list].sort((a, b) => heroScore(b) - heroScore(a))[0];
+  heroId = g.gameID;
+  const st = status(g), pre = g.gameState === "pre", a = +g.away.score || 0, h = +g.home.score || 0;
+  const side = (t, sd, r) => { const slug = logoSlug(t.names.short, t.names.seo); return `<div class="tm2 ${r ? "r" : ""}">${mono(t.names.short, t.names.seo, null, "")}<div><div class="tn">${rankBadge(rk(t))}${esc(fix(t.names.short))}</div><div class="tr">${esc([recordOf(t.names.short, g, sd), CONF[confOf(t)]].filter(Boolean).join(" · "))}</div></div></div>` };
+  const sa = logoSlug(g.away.names.short, g.away.names.seo), sh = logoSlug(g.home.names.short, g.home.names.seo);
+  el.style.setProperty("--ca", teamColorFor(sa) || "#333"); el.style.setProperty("--ch", teamColorFor(sh) || "#333");
+  const fin = g.gameState === "final";
+  el.dataset.game = g.gameID; el.dataset.dayOf = "t";
+  el.setAttribute("aria-label", `Game of the Night: ${fix(g.away.names.short)} at ${fix(g.home.names.short)}. Open game.`);
+  el.innerHTML = `<div class="gt"><div class="lbl">Game of the <span>Night</span></div>${badgeHTML(badges(g))}</div>
+    <div class="gm">${side(g.away, "away")}<div class="mid"><div class="big2">${pre ? "VS" : `<span class="${fin && a < h ? "l" : "w"}">${a}</span>–<span class="${fin && h < a ? "l" : "w"}">${h}</span>`}</div><div class="st2 ${st.cls}">${esc(st.txt)}${g.network ? " · " + esc(g.network) : ""}</div></div>${side(g.home, "home", 1)}</div>`;
+  el.hidden = false;
+}
+
+// ---------- Instagram ----------
+function drawInstagram() {
+  const box = $("#igposts"), posts = (window.IG_POSTS || []).filter(u => /instagram\.com\/(p|reel)\//.test(u)).slice(0, 6);
+  if (!posts.length) {
+    box.innerHTML = `<div class="ig-empty"><div><strong>Highlights, takes and game-day coverage</strong><p>Follow along on Instagram for the moments that matter every night of the season.</p></div><a class="follow" href="https://www.instagram.com/collegebasketball/" target="_blank" rel="noopener">Follow @collegebasketball</a></div>`;
+    return;
+  }
+  box.innerHTML = `<div class="ig-grid">${posts.map(u => `<blockquote class="instagram-media" data-instgrm-permalink="${esc(u.split("?")[0])}" data-instgrm-version="14"><a href="${esc(u)}" target="_blank" rel="noopener">View this post on Instagram</a></blockquote>`).join("")}</div>`;
+  if (window.instgrm) window.instgrm.Embeds.process();
+  else { const sc = document.createElement("script"); sc.async = true; sc.src = "https://www.instagram.com/embed.js"; document.body.appendChild(sc) }
+}
+
 // ---------- Top 25 ticker ----------
 function tickerItems() {
-  return (cache.t || []).filter(g => rankOf(g.home) || rankOf(g.away))
-    .sort((a, b) => Math.min(rankOf(a.home) || 99, rankOf(a.away) || 99) - Math.min(rankOf(b.home) || 99, rankOf(b.away) || 99))
+  return (cache.t || []).filter(g => rk(g.home) || rk(g.away))
+    .sort((a, b) => Math.min(rk(a.home) || 99, rk(a.away) || 99) - Math.min(rk(b.home) || 99, rk(b.away) || 99))
     .map(g => {
-      const st = status(g), side = t => `${t.rank ? `<b>${t.rank}</b>` : ""}${esc(fix(t.names.short))}`;
+      const st = status(g), side = t => `<span class="tt"><img class="tlogo" src="${logoURL(logoSlug(t.names.short, t.names.seo), true)}" alt="" onerror="this.remove()">${rk(t) ? `<b>${rk(t)}</b>` : ""}${esc(fix(t.names.short))}</span>`;
       return { key: g.gameID, html: `${side(g.away)} ${g.gameState === "pre" ? "at" : `<span class="tsc">${esc(g.away.score)}–${esc(g.home.score)}</span>`} ${side(g.home)} <span class="tst ${st.cls ? "lv" : ""}">${esc(st.txt)}</span>` };
     });
 }
@@ -272,7 +401,7 @@ async function refresh() {
     errShown = false; $("#apierr").hidden = true;
     const changed = before ? flashChanges(cache.t) : (flashChanges(cache.t), new Set());
     if (gday === "t") { drawFilters(); drawGames(); }
-    drawTicker(changed);
+    drawTicker(changed); drawHero();
     changed.forEach(id => ["away", "home"].forEach(s => { const el = document.querySelector(`[data-sc="${id}-${s}"]`); if (el) { el.classList.add("flash"); setTimeout(() => el.classList.remove("flash"), 900) } }));
     if (openGame && gday === "t") { const g = cache.t.find(x => x.gameID === openGame); if (g && (isLive(g) || changed.has(openGame))) loadGame(openGame); else drawGame(); }
   } catch (e) {
@@ -310,7 +439,7 @@ async function loadRecords() {
     for (const pg of pages) for (const x of pg.data || []) REC[normName(x.Team)] = { w: +x.W || 0, l: +x.L || 0 };
     const m = /through games \w+,?\s+(\w+ \d+, \d{4})/i.exec(first.updated || "");
     recThrough = m ? ymd(new Date(m[1])) : 0;
-    drawGames(); drawGame(); drawStand(); if (apRows) drawRankings();
+    drawGames(); drawGame(); drawStand(); if (apRows) drawRankings(); drawHero();
     fillMissingRecords();
   } catch { /* records are optional; try again on the next hourly refresh */ }
 }
@@ -363,7 +492,7 @@ async function loadRankings() {
     $("#rkupdated").textContent = r.updated || "";
     apRows = r.data || [];
     apRows.forEach(x => { const nm = fix(x.SCHOOL).replace(/\s*\(\d+\)\s*$/, ""); AP[normName(nm)] = +x.RANK || 0 });
-    drawRankings(); drawStand(); drawGames(); drawGame();
+    drawRankings(); drawStand(); drawGames(); drawGame(); drawHero(); tickerSig = ""; drawTicker(new Set());
   } catch { $("#aprows").innerHTML = `<tr><td colspan="4">Rankings couldn't load. Try again in a minute.</td></tr>` }
 }
 function drawRankings() {
@@ -463,7 +592,7 @@ document.addEventListener("click", async e => {
 $("#q").addEventListener("input", e => { query = e.target.value; drawGames() });
 
 // ---------- start ----------
-drawDays(); drawGames(); drawNews(); route();
+drawDays(); drawGames(); drawNews(); drawInstagram(); route();
 if (!loaded.rk) { loaded.rk = 1; loadRankings() } // AP ranks are also used on Scores and Standings
 loadRecords(); setInterval(loadRecords, 3600000);
 refresh();

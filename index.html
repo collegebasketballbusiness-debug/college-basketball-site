@@ -11,18 +11,15 @@
 <style>
 /* Layout: arena scoreboard — sticky nav, Top 25 ticker, search hero, featured team, team grid, team detail, tip form */
 :root{
-  --bg:#F5F3EF; --surface:#FFFFFF; --ink:#14181D; --muted:#5E6670; --line:#E2DED6;
-  --ball:#D9541E; --ball-ink:#FFFFFF; --court:#1E3A5F; --chip:#EEEAE2; --good:#2E7D4F; --bad:#B23A2B; --live:#D2242B;
+  /* Brand: the CBB logo is black and white, so the site is too, with one loud accent (basketball orange) */
+  --bg:#0B0B0C; --surface:#151517; --raised:#1C1C1F; --ink:#F5F5F2; --muted:#9C9C98; --line:#2A2A2E;
+  --ball:#FF6A13; --ball-ink:#0B0B0C; --court:#151517; --chip:#202024; --good:#4ADE80; --bad:#FF7A6B; --live:#FF4D4D; --upset:#FFD23F;
   --display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
   --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --seams:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420' viewBox='0 0 420 420'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='.06' stroke-width='3'%3E%3Ccircle cx='210' cy='210' r='196'/%3E%3Cpath d='M40 112c90-60 250-60 340 0M70 140c80-40 200-40 280 0M40 308c90 60 250 60 340 0M70 280c80 40 200 40 280 0'/%3E%3C/g%3E%3C/svg%3E");
+  color-scheme:dark;
 }
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0E1216; --surface:#161B21; --ink:#ECEAE6; --muted:#9AA3AD; --line:#262D35;
-  --ball:#F0703A; --ball-ink:#14181D; --court:#8DB3E2; --chip:#1F262E; --good:#5BC489; --bad:#F07A6A; --live:#FF5A5F; color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#0E1216; --surface:#161B21; --ink:#ECEAE6; --muted:#9AA3AD; --line:#262D35;
-  --ball:#F0703A; --ball-ink:#14181D; --court:#8DB3E2; --chip:#1F262E; --good:#5BC489; --bad:#F07A6A; --live:#FF5A5F; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.5}
 body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
@@ -37,7 +34,7 @@ h1,h2,h3{font-family:var(--display);text-transform:uppercase;letter-spacing:.01e
 /* nav */
 
 /* ticker */
-.ticker{background:var(--ink);color:var(--bg);overflow:hidden;border-bottom:3px solid var(--ball)}
+.ticker{background:#000;color:var(--ink);overflow:hidden;border-bottom:3px solid var(--ball);border-top:1px solid var(--line)}
 .ticker .row{display:flex;align-items:stretch}
 .ticker .tag{flex:none;position:relative;z-index:1;font-family:var(--display);font-weight:800;font-size:15px;text-transform:uppercase;background:var(--ball);color:var(--ball-ink);padding:9px 14px;letter-spacing:.04em;display:flex;align-items:center}
 .ticker .track{display:flex;gap:28px;padding:9px 18px;white-space:nowrap;animation:scroll 60s linear infinite}
@@ -75,7 +72,7 @@ h1,h2,h3{font-family:var(--display);text-transform:uppercase;letter-spacing:.01e
 /* monogram */
 .mono{flex:none;position:relative;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:15px;color:#fff;letter-spacing:.02em;background:var(--mc,#1E3A5F)}
 .mono>b{font-weight:inherit}
-.mono picture,.mono img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+.mono img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 .mono.has-logo{background:transparent;border-radius:0}
 .mono.has-logo>b{visibility:hidden}
 .mono.lg{width:84px;height:84px;font-size:30px}
@@ -86,8 +83,6 @@ section{padding-block:40px}
 
 /* featured */
 .featured{background:var(--court);color:#fff;border-radius:14px;padding:32px;display:grid;grid-template-columns:auto 1fr auto;gap:28px;align-items:center;position:relative;overflow:hidden}
-:root[data-theme="dark"] .featured{color:#0E1216}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .featured{color:#0E1216}}
 .featured::after{content:"";position:absolute;right:-90px;top:-90px;width:300px;height:300px;border:2px solid currentColor;border-radius:50%;opacity:.15}
 .featured h3{font-size:clamp(36px,5vw,56px);font-weight:900}
 .featured .meta{opacity:.8;margin-top:6px;font-weight:500}
@@ -175,13 +170,14 @@ footer .wrap{display:flex;gap:16px;justify-content:space-between;flex-wrap:wrap}
 .toolbar .search{flex:1 1 260px;max-width:360px}
 .toolbar .search input{padding:10px 14px;border-width:1.5px;font-size:15px}
 .games{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
-.game{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px 12px;cursor:pointer;text-align:left;width:100%;display:grid;gap:8px}
+.game{position:relative;overflow:hidden;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px 12px 20px;cursor:pointer;text-align:left;width:100%;display:grid;gap:8px}
 .game:hover{border-color:var(--ink)}
 .game.sel{border-color:var(--ball);box-shadow:0 0 0 1px var(--ball)}
 .gstat{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .gstat.live{color:var(--live)}
 .gstat .l{display:inline-flex;align-items:center;gap:6px}
-.trow{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center}
+.trow{position:relative;display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center}
+.trow::before{content:"";position:absolute;left:-20px;top:-4px;bottom:-4px;width:5px;background:var(--tc,transparent);transition:background .4s}
 .trow .mono{width:30px;height:30px;font-size:11px}
 .trow .nm{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
 .trow .nm sup{font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:500;margin-right:4px;vertical-align:baseline}
@@ -258,9 +254,7 @@ table.box tr.totals td{font-weight:700;border-top:2px solid var(--ink)}
 .story .body p{margin:0 0 1em}
 @media (max-width:800px){.lead{grid-template-columns:1fr}.lead .art{min-height:150px}.story{padding:20px}}
 .others{color:var(--muted);font-size:14px;max-width:80ch}
-.dc{margin-top:28px;background:var(--court);color:#fff;border-radius:14px;padding:36px;display:grid;grid-template-columns:1.5fr 1fr;gap:28px;align-items:end}
-:root[data-theme="dark"] .dc{color:#0E1216}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dc{color:#0E1216}}
+.dc{margin-top:28px;background:var(--surface) var(--seams) right -60px center/420px no-repeat;border:1px solid var(--line);color:var(--ink);border-radius:14px;padding:36px;display:grid;grid-template-columns:1.5fr 1fr;gap:28px;align-items:end}
 .dc h1{font-size:clamp(40px,6vw,72px);font-weight:900;margin-top:8px}
 .dc p{max-width:52ch;opacity:.85;font-size:17px}
 .dc-btn{background:var(--bg);color:var(--ink);font-size:16px;padding:14px 22px}
@@ -278,13 +272,60 @@ table.box tr.totals td{font-weight:700;border-top:2px solid var(--ink)}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
 
 /* live-site additions */
+/* ---- Game of the Night ---- */
+.gotn{margin-top:22px;position:relative;overflow:hidden;border-radius:18px;border:1px solid var(--line);background:#000 var(--seams) center/520px no-repeat;padding:22px 26px 24px;cursor:pointer;display:block;width:100%;text-align:left;color:var(--ink)}
+.gotn::before,.gotn::after{content:"";position:absolute;top:0;bottom:0;width:45%;opacity:.28;pointer-events:none}
+.gotn::before{left:0;background:linear-gradient(90deg,var(--ca,#333),transparent)}
+.gotn::after{right:0;background:linear-gradient(270deg,var(--ch,#333),transparent)}
+.gotn:hover{border-color:var(--ball)}
+.gotn .gt{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.gotn .lbl{font-family:var(--display);font-weight:900;font-size:clamp(20px,2.6vw,28px);text-transform:uppercase;letter-spacing:.02em;line-height:1}
+.gotn .lbl span{color:var(--ball)}
+.gotn .gm{position:relative;z-index:1;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:18px;margin-top:18px}
+.gotn .tm2{display:flex;align-items:center;gap:18px;min-width:0}
+.gotn .tm2.r{flex-direction:row-reverse;text-align:right}
+.gotn .mono{width:96px;height:96px;font-size:30px}
+.gotn .tn{font-family:var(--display);font-weight:900;font-size:clamp(26px,4vw,48px);text-transform:uppercase;line-height:.95;overflow-wrap:normal;word-break:normal;hyphens:none}
+.gotn .tn .rkb{font-size:.5em;vertical-align:middle}
+.gotn .tr{font-family:var(--mono);font-size:13px;color:var(--muted);margin-top:6px}
+.gotn .mid{text-align:center}
+.gotn .big2{font-family:var(--display);font-weight:900;font-size:clamp(48px,7vw,88px);line-height:.9;font-variant-numeric:tabular-nums;white-space:nowrap}
+.gotn .big2 .w{color:var(--ink)}.gotn .big2 .l{color:var(--muted)}
+.gotn .st2{font-family:var(--mono);font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-top:8px}
+.gotn .st2.live{color:var(--live)}
+@media (max-width:700px){.gotn{padding:18px}.gotn .gm{grid-template-columns:1fr auto 1fr;gap:10px}.gotn .tm2,.gotn .tm2.r{flex-direction:column;text-align:center;gap:8px}.gotn .mono{width:64px;height:64px}.gotn .tn{font-size:clamp(15px,4.6vw,20px)}.gotn .tn .rkb{display:block;margin:0 0 2px}.gotn .big2{font-size:clamp(34px,11vw,48px)}.gotn .tr{font-size:11px}}
+
+/* ---- badges ---- */
+.badges{display:flex;gap:6px;flex-wrap:wrap}
+.bdg{font-family:var(--display);font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px 2px;border-radius:4px;line-height:1.2;white-space:nowrap}
+.bdg.upset{background:var(--upset);color:#000}
+.bdg.close{background:var(--live);color:#fff}
+.bdg.ot{background:var(--ink);color:var(--bg)}
+.bdg.buzzer{background:var(--ball);color:#000}
+.bdg.blowout{background:var(--raised);color:var(--muted);border:1px solid var(--line)}
+.game .badges{margin-top:2px}
+
+/* ---- ticker logos ---- */
+.ticker .ti .tlogo{width:20px;height:20px;object-fit:contain;flex:none}
+.ticker .ti .tt{display:inline-flex;align-items:center;gap:6px}
+
+/* ---- Instagram ---- */
+.ig{margin-top:44px}
+.ig-head{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.ig-head h2{font-size:clamp(30px,4vw,44px);font-weight:900}
+.ig-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;align-items:start}
+.ig-grid .instagram-media{min-width:0!important;max-width:100%!important;width:100%!important;margin:0!important;border-radius:12px!important}
+.ig-empty{display:flex;gap:20px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--surface) var(--seams) right -80px center/360px no-repeat;border:1px solid var(--line);border-radius:14px;padding:26px}
+.ig-empty p{margin:0;color:var(--muted);max-width:52ch}
+.ig-empty strong{display:block;font-family:var(--display);font-size:28px;text-transform:uppercase;color:var(--ink);margin-bottom:4px}
+
 .rec{margin-left:7px;font-family:var(--mono);font-size:12px;font-weight:500;color:var(--muted);font-variant-numeric:tabular-nums}
 .rkb{display:inline-block;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ball);margin-right:6px;font-variant-numeric:tabular-nums}
 /* header: logo, tabs and follow button in one row on wide screens; tabs drop to a second row on phones */
 header.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
 .navbar{display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"brand tabs follow";align-items:stretch;column-gap:28px;min-height:64px}
 .brand{grid-area:brand;display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
-.brand .logo{width:40px;height:40px;flex:none;display:block}
+.brand .logo{width:40px;height:40px;flex:none;display:block;filter:invert(1)}
 .bname{font-family:var(--display);font-weight:900;font-size:22px;text-transform:uppercase;letter-spacing:.01em;line-height:1;white-space:nowrap}
 .tabs{grid-area:tabs;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;min-width:0}
 .tabs::-webkit-scrollbar{display:none}
@@ -294,8 +335,6 @@ header.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background
 .follow{grid-area:follow;align-self:center;display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:700;font-size:14px;color:var(--ink);border:1.5px solid var(--ink);border-radius:999px;padding:8px 14px;white-space:nowrap}
 .follow:hover{background:var(--ink);color:var(--bg)}
 .follow svg{width:18px;height:18px;flex:none}
-:root[data-theme="dark"] .brand .logo{filter:invert(1)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .brand .logo{filter:invert(1)}}
 @media (max-width:1000px){.follow .long{display:none}}
 @media (max-width:760px){
   .navbar{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"brand follow" "tabs tabs";column-gap:12px;min-height:0;padding-top:10px}
@@ -303,7 +342,7 @@ header.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background
   .bname{overflow:hidden;text-overflow:ellipsis}
   .follow{padding:7px 12px}
   .tabs{margin:6px -6px 0}
-  .tabs a{padding:10px 12px 9px}
+  .tabs a{padding:10px 9px 9px;font-size:14px}
   .bname{font-size:20px}
 }
 @media (max-width:420px){.follow>span{display:none}.follow{padding:8px}.bname{font-size:18px}}
@@ -345,6 +384,7 @@ img{max-width:100%}
   <div class="wrap">
   <div class="view" data-view="scores">
     <section id="scores-sec" style="padding-top:0">
+      <button class="gotn" id="gotn" hidden></button>
       <div class="sb-top">
         <div>
           <div class="eyebrow">@collegebasketball · Live</div>
@@ -362,6 +402,10 @@ img{max-width:100%}
       <div class="apierr" id="apierr" hidden>Live scores are having trouble updating. We'll keep trying.</div>
       <div class="games" id="games"></div>
       <div class="detail gdetail" id="gdetail" hidden></div>
+      <section class="ig" id="ig">
+        <div class="ig-head"><div><div class="eyebrow">From Instagram</div><h2>Latest from @collegebasketball</h2></div><a class="follow" href="https://www.instagram.com/collegebasketball/" target="_blank" rel="noopener">Open Instagram</a></div>
+        <div id="igposts"></div>
+      </section>
     </section>
   </div>
 
@@ -419,6 +463,7 @@ img{max-width:100%}
 </footer>
 
 <script src="news.js"></script>
+<script src="posts.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
