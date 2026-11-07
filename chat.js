@@ -195,7 +195,8 @@ function drawModal(mode, note = "") {
       <div><label for="au-email">Email</label><input id="au-email" type="email" autocomplete="email" required></div>
       <div><label for="au-pass">Password</label><input id="au-pass" type="password" autocomplete="${signup ? "new-password" : "current-password"}" minlength="8" required ${signup ? 'placeholder="At least 8 characters"' : ""}></div>
       ${signup ? `<label class="check"><input id="au-age" type="checkbox"><span>I'm 13 or older</span></label>
-      <label class="check"><input id="au-rules" type="checkbox"><span>I agree to the <a href="#rules" data-auth="close">chat rules and privacy policy</a></span></label>` : ""}
+      <label class="check"><input id="au-rules" type="checkbox"><span>I agree to the <a href="#rules" data-auth="close">chat rules and privacy policy</a></span></label>
+      <label class="check"><input id="au-updates" type="checkbox"><span>Email me College Basketball updates <small>(optional, unsubscribe anytime)</small></span></label>` : ""}
       <p class="auth-msg" role="alert">${esc(note)}</p>
       <button class="chat-btn wide" type="submit">${signup ? "Create account" : "Log in"}</button>
     </form>`;
@@ -220,7 +221,7 @@ async function submitAuth(form) {
     if (!form.querySelector("#au-rules").checked) return say("Please agree to the chat rules.");
     const { data: taken } = await sb.from("profiles").select("id").ilike("username", name.replace(/_/g, "\\_")).maybeSingle();
     if (taken) return say("That username is taken. Try another.");
-    const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { username: name, age_ok: true }, emailRedirectTo: location.origin + location.pathname } });
+    const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { username: name, age_ok: true, updates_ok: !!form.querySelector("#au-updates")?.checked }, emailRedirectTo: location.origin + location.pathname } });
     if (error) {
       const m = error.message || "";
       return say(/registered|exists/i.test(m) ? "There's already an account with that email. Log in instead."

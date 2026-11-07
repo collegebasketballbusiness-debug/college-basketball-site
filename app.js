@@ -1694,6 +1694,97 @@ $("#stq").addEventListener("input", e => { stQuery = e.target.value; drawStats()
   });
 })();
 
+// ---------- email updates: footer sign-up ----------
+(function () {
+  const f = $("#ftnews"); if (!f) return;
+  const msg = f.querySelector(".ft-news-msg"), input = f.querySelector("input"), btn = f.querySelector("button");
+  const say = (cls, t) => { msg.className = "ft-news-msg " + cls; msg.textContent = t };
+  f.addEventListener("submit", async e => {
+    e.preventDefault();
+    const c = window.CHAT_CONFIG || {}, addr = input.value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(addr)) { say("err", "Enter a valid email address."); input.focus(); return }
+    if (!c.url || !c.anonKey) { say("err", "Sign-ups aren't open yet. Check back soon."); return }
+    btn.disabled = true;
+    try {
+      const r = await fetch(`${c.url}/rest/v1/rpc/subscribe_updates`, { method: "POST", headers: { apikey: c.anonKey, "content-type": "application/json" }, body: JSON.stringify({ addr }) });
+      if (r.status === 404) throw new Error("setup");
+      if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.message || "HTTP " + r.status) }
+      input.value = ""; say("ok", "🏀 You're on the list! Watch your inbox for College Basketball updates.");
+    } catch (err) { say("err", /valid email/i.test(err.message) ? "Enter a valid email address." : "That didn't go through. Try again in a minute.") }
+    btn.disabled = false;
+  });
+})();
+
+// ---------- admin: the email list ----------
+// Only admin accounts can read it (the database enforces this). Copy or download the list for your email tool.
+let ADMIN = { rows: null, names: {}, q: "", err: "" };
+async function drawAdmin(reload) {
+  const box = $("#adminbox"), chat = window.CBBChat;
+  if (!chat?.on) { box.innerHTML = `<p class="adm-note">The admin page needs the chat to be connected (chat-config.js).</p>`; return }
+  try { await chat.client() } catch { box.innerHTML = `<p class="adm-note">Couldn't connect. Try again in a minute.</p>`; return }
+  const me = chat.me();
+  if (!me) { box.innerHTML = `<p class="adm-note">Log in with your admin account to see the email list.</p><div class="adm-tools"><button class="chat-btn" data-admlogin>Log in</button></div>`; return }
+  if (!me.is_admin) { box.innerHTML = `<p class="adm-note">This page is for admins only.</p>`; return }
+  if (!ADMIN.rows || reload) {
+    box.innerHTML = `<p class="empty">Loading the email list…</p>`;
+    try {
+      const sb = await chat.client();
+      const { data, error } = await sb.from("subscribers").select("id, email, user_id, source, subscribed, created_at, unsubscribed_at").order("created_at", { ascending: false }).limit(10000);
+      if (error) throw error;
+      ADMIN.rows = data || []; ADMIN.err = "";
+      const ids = [...new Set(ADMIN.rows.map(r => r.user_id).filter(Boolean))];
+      if (ids.length) { const { data: ps } = await sb.from("profiles").select("id, username").in("id", ids.slice(0, 1000)); for (const p of ps || []) ADMIN.names[p.id] = p.username }
+    } catch (e) {
+      box.innerHTML = /subscribers/i.test(e.message || "") ? `<p class="adm-note">The email list isn't set up yet. Run <b>updates-setup.sql</b> in Supabase (SQL Editor → New snippet → Run).</p>` : `<p class="adm-note">The list couldn't load: ${esc(e.message || "unknown error")}</p>`;
+      return;
+    }
+  }
+  const rows = ADMIN.rows, on = rows.filter(r => r.subscribed), week = Date.now() - 7 * 864e5;
+  const q = ADMIN.q.trim().toLowerCase();
+  const shown = rows.filter(r => !q || r.email.includes(q) || (ADMIN.names[r.user_id] || "").toLowerCase().includes(q));
+  const src = { signup: "Account sign-up", site: "Footer box", account: "Signed-in fan" };
+  box.innerHTML = `<div class="adm-stats">
+      <div><b>${on.length}</b><span>Subscribed</span></div>
+      <div><b>${on.filter(r => new Date(r.created_at) > week).length}</b><span>New this week</span></div>
+      <div><b>${on.filter(r => r.source === "signup").length}</b><span>From account sign-ups</span></div>
+      <div><b>${rows.length - on.length}</b><span>Unsubscribed</span></div></div>
+    <div class="adm-tools"><div class="search"><input id="admq" type="search" placeholder="Search emails or usernames" value="${esc(ADMIN.q)}" aria-label="Search the email list"></div>
+      <button class="chat-btn" data-admcopy>Copy subscribed emails</button><button class="chat-btn ghost" data-admcsv>Download CSV</button><button class="chat-btn ghost" data-admreload>Refresh</button></div>
+    <p class="adm-msg" id="admmsg"></p>
+    <div class="tblwrap"><table class="box adm-table"><thead><tr><th>Email</th><th>Username</th><th>Signed up from</th><th>Date</th><th>Status</th><th></th></tr></thead><tbody>
+      ${shown.length ? shown.map(r => `<tr class="${r.subscribed ? "" : "off"}"><td>${esc(r.email)}</td><td>${esc(ADMIN.names[r.user_id] || "–")}</td><td><span class="adm-src">${esc(src[r.source] || r.source)}</span></td><td>${new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td><td>${r.subscribed ? "✅ Subscribed" : "Unsubscribed"}</td><td><button class="chat-link ${r.subscribed ? "danger" : ""}" data-admtoggle="${r.id}">${r.subscribed ? "Unsubscribe" : "Re-subscribe"}</button></td></tr>`).join("")
+        : `<tr><td colspan="6">${rows.length ? "No one matches that search." : "No sign-ups yet. They'll show up here as people join."}</td></tr>`}</tbody></table></div>
+    <p class="adm-note" style="margin-top:16px">To send an email, click <b>Download CSV</b> and import it into an email tool like Mailchimp, Beehiiv or ConvertKit. Those tools add the unsubscribe link every email needs. If someone unsubscribes there, mark them unsubscribed here too.</p>`;
+  const qi = $("#admq"); qi.oninput = () => { ADMIN.q = qi.value; const pos = qi.selectionStart; drawAdmin(); const n = $("#admq"); n.focus(); n.setSelectionRange(pos, pos) };
+}
+document.addEventListener("click", async e => {
+  const t = e.target; if (!t.closest || !t.closest("#adminbox")) return;
+  const say = m => { const el = $("#admmsg"); if (el) el.textContent = m };
+  if (t.closest("[data-admlogin]")) { window.CBBChat.auth("login", "Log in with your admin account."); return }
+  if (t.closest("[data-admreload]")) { drawAdmin(true); return }
+  if (t.closest("[data-admcopy]")) {
+    const list = (ADMIN.rows || []).filter(r => r.subscribed).map(r => r.email).join(", ");
+    try { await navigator.clipboard.writeText(list); say(`Copied ${list ? list.split(", ").length : 0} emails.`) } catch { say("Couldn't copy. Use Download CSV instead.") }
+    return;
+  }
+  if (t.closest("[data-admcsv]")) {
+    const rows = [["email", "username", "source", "subscribed", "signed_up"], ...(ADMIN.rows || []).map(r => [r.email, ADMIN.names[r.user_id] || "", r.source, r.subscribed ? "yes" : "no", r.created_at.slice(0, 10)])];
+    const csv = rows.map(r => r.map(v => /[",\n]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : v).join(",")).join("\n");
+    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })), download: `college-basketball-email-list-${new Date().toISOString().slice(0, 10)}.csv` });
+    document.body.appendChild(a); a.click(); a.remove(); say("Downloaded the CSV.");
+    return;
+  }
+  const tg = t.closest("[data-admtoggle]");
+  if (tg) {
+    const r = (ADMIN.rows || []).find(x => x.id === +tg.dataset.admtoggle); if (!r) return;
+    const sb = await window.CBBChat.client(), on = !r.subscribed;
+    const { error } = await sb.from("subscribers").update({ subscribed: on, unsubscribed_at: on ? null : new Date().toISOString() }).eq("id", r.id);
+    if (error) { say("That didn't save: " + error.message); return }
+    r.subscribed = on; await drawAdmin(); say(on ? `${r.email} is subscribed again.` : `${r.email} is unsubscribed.`);
+  }
+});
+window.addEventListener("cbb-auth", () => { if (!$("[data-view=admin]").hidden) { ADMIN.rows = null; drawAdmin() } });
+
 // ---------- favorites (saved on this device) ----------
 let FAVS = [];
 try { FAVS = JSON.parse(localStorage.getItem("cbb_favs") || "[]").filter(x => typeof x === "string") } catch { FAVS = [] }
@@ -1974,7 +2065,7 @@ document.addEventListener("click", async e => {
 });
 
 // ---------- tabs ----------
-const VIEWS = ["scores", "news", "rankings", "standings", "stats", "teams", "discord", "contact", "rules"];
+const VIEWS = ["scores", "news", "rankings", "standings", "stats", "teams", "discord", "contact", "rules", "admin"];
 const loaded = {};
 function show(v) {
   if (!VIEWS.includes(v)) v = "scores";
@@ -1982,6 +2073,7 @@ function show(v) {
   document.querySelectorAll("[data-tab]").forEach(a => a.dataset.tab === v ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
   if (v === "news") drawNews(); // coming back to News always starts on the list of stories
   if (v === "discord") loadDiscord();
+  if (v === "admin") drawAdmin();
   if (v === "stats") loadStatCats();
   if (v === "teams" || v.startsWith("team-")) loadSeason().catch(() => { }); // get schedules ready before a team is tapped
   if (v === "rankings" && !loaded.ao) { loaded.ao = 1; loadApOthers() }

@@ -678,6 +678,33 @@ html.mg-open,html.mg-open body{overflow:hidden}
 .ntag.auto{display:inline-block;width:fit-content;align-self:flex-start;background:rgba(255,210,63,.14);color:#FFD23F;border:1px solid rgba(255,210,63,.35);border-radius:4px;padding:1px 6px;margin-left:8px}
 .autonote{margin-top:22px;padding:12px 14px;border:1px dashed #3A3A40;border-radius:10px;color:var(--muted);font-size:14px}
 .autonote a{color:var(--ink);font-weight:700}
+/* ---- footer email sign-up ---- */
+.ft-news{display:grid;grid-template-columns:1fr minmax(260px,420px);gap:10px 24px;align-items:center;padding:18px 20px;border:1px solid var(--line);border-radius:14px;background:radial-gradient(80% 140% at 100% 0%,rgba(255,106,19,.12),transparent 60%),var(--surface)}
+.ft-news b{display:block;color:var(--ink);font-size:17px}
+.ft-news span{font-size:14px;color:var(--muted)}
+.ft-news-row{display:flex;gap:8px}
+.ft-news-row input{flex:1;min-width:0;font:500 16px var(--body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:11px 16px}
+.ft-news-row input:focus{outline:none;border-color:var(--ball)}
+.ft-news-row button{font:800 15px var(--body);color:var(--ball-ink);background:var(--ball);border:0;border-radius:999px;padding:11px 20px;cursor:pointer;white-space:nowrap}
+.ft-news-row button:disabled{opacity:.6}
+.ft-news-msg{grid-column:1/-1;margin:0;font-size:14px}.ft-news-msg:empty{display:none}
+.ft-news-msg.ok{color:var(--good)}.ft-news-msg.err{color:var(--bad)}
+.ft-admin{opacity:.5}
+@media (max-width:700px){.ft-news{grid-template-columns:1fr}}
+/* ---- admin: email list ---- */
+.adm-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0}
+.adm-stats div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.adm-stats b{display:block;font-family:var(--display);font-weight:900;font-size:40px;line-height:1}
+.adm-stats span{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.adm-tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+.adm-tools .search{flex:1 1 260px;max-width:380px}
+.adm-tools .chat-btn{font-size:14px;padding:10px 16px;text-decoration:none}
+.adm-table td,.adm-table th{white-space:nowrap}
+.adm-table tr.off td{opacity:.45}
+.adm-src{font-family:var(--mono);font-size:11px;text-transform:uppercase;border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--muted)}
+.adm-note{color:var(--muted);font-size:14px;max-width:70ch}
+.adm-msg{color:var(--good);font-size:14px;min-height:1.2em}
+@media (max-width:700px){.adm-stats{grid-template-columns:1fr 1fr}}
 /* ---- Teams ---- */
 .ttools{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:18px}
 .ttools .search{flex:1 1 320px;max-width:480px}
@@ -1177,6 +1204,11 @@ img{max-width:100%}
     </div>
   </div>
 
+  <div class="view" data-view="admin" hidden>
+    <div class="sb-top"><div><div class="eyebrow">Admin</div><h1>Email list</h1></div></div>
+    <div id="adminbox"><p class="empty">Loading…</p></div>
+  </div>
+
   <div class="view" data-view="rules" hidden>
     <div class="sb-top"><div><div class="eyebrow">Game chat</div><h1>Chat rules &amp; privacy</h1></div></div>
     <div class="rules">
@@ -1193,7 +1225,8 @@ img{max-width:100%}
       <h2>Privacy policy</h2>
       <p><b>What we collect.</b> To chat, you create an account with an email address, a password and a username. We store your messages, the game they were posted in and when, and any reports you send. Your password is stored securely by our account provider and we can't see it.</p>
       <p><b>What others see.</b> Your username and your messages are public to anyone viewing the game. Your email address is never shown.</p>
-      <p><b>How we use it.</b> Only to run the chat: logging you in, showing messages and keeping the chat safe. We don't sell your information or use it for ads.</p>
+      <p><b>How we use it.</b> To run the chat: logging you in, showing messages and keeping the chat safe. We don't sell your information or use it for ads.</p>
+      <p><b>Email updates.</b> We only email you College Basketball updates if you choose to, by ticking the box when you create an account or entering your email in the "Get updates" box. Every email includes a way to unsubscribe, or you can email <a href="mailto:collegebasketballbusiness@gmail.com">collegebasketballbusiness@gmail.com</a> and we'll remove you.</p>
       <p><b>Who stores it.</b> Accounts and messages are stored with Supabase, our database provider. Scores and stats come from NCAA.com; the site itself is hosted by Vercel.</p>
       <p><b>Your choices.</b> To delete your account and messages, message <a href="https://www.instagram.com/collegebasketball/" target="_blank" rel="noopener">@collegebasketball on Instagram</a> from the account you want removed and we'll take care of it.</p>
       <p class="note">Last updated November 7, 2026.</p>
@@ -1284,10 +1317,15 @@ img{max-width:100%}
         <a href="#contact">Contact</a>
       </nav>
     </div>
+    <form class="ft-news" id="ftnews" novalidate>
+      <div><b>📬 Get College Basketball updates</b><span>Big games, upsets and new features, straight to your inbox. Unsubscribe anytime.</span></div>
+      <div class="ft-news-row"><input type="email" name="email" placeholder="you@email.com" autocomplete="email" aria-label="Your email" maxlength="254" required><button type="submit">Sign up</button></div>
+      <p class="ft-news-msg" role="status"></p>
+    </form>
     <div class="ft-legal">
       <p>© <span id="ftyear">2026</span> College Basketball Media LLC. All rights reserved.</p>
       <p>Not affiliated with or endorsed by the NCAA or any school or conference. Team names and logos are trademarks of their respective schools. Scores and stats from NCAA.com.</p>
-      <p>Questions, corrections, partnerships or takedown requests: <a href="mailto:collegebasketballbusiness@gmail.com">collegebasketballbusiness@gmail.com</a></p>
+      <p>Questions, corrections, partnerships or takedown requests: <a href="mailto:collegebasketballbusiness@gmail.com">collegebasketballbusiness@gmail.com</a> · <a href="#admin" class="ft-admin">Admin</a></p>
     </div>
   </div>
 </footer>
