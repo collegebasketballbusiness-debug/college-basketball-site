@@ -621,7 +621,7 @@ async function loadHeroExtra(id) {
   const [info, pbp] = await Promise.all([api(`game/${id}`, 1).catch(() => null), api(`game/${id}/play-by-play`, 1).catch(() => null)]);
   if (heroId !== id) return;
   const plays = (pbp?.periods || []).flatMap(p => p.playbyplayStats || []);
-  const last = [...plays].reverse().find(p => (p.eventDescription || p.homeText || p.visitorText) && !/^(subbing|timeout)/i.test(p.eventDescription || ""));
+  const last = [...plays].reverse().find(p => (p.eventDescription || p.homeText || p.visitorText) && !/^(subbing|timeout)/i.test(p.eventDescription || "") && !isSub(p.eventDescription || p.homeText || p.visitorText));
   const ct = info?.contests?.[0];
   if (ct) noteBest(id, ct.teams?.find(t => t.isHome)?.score, ct.teams?.find(t => !t.isHome)?.score);
   const lp = [...plays].reverse().find(p => p.homeScore !== undefined); if (lp) noteBest(id, lp.homeScore, lp.visitorScore);
@@ -786,7 +786,7 @@ function drawGame() {
       ${statRow("3PT%", pct(n(sa.threePointsMade), n(sa.threePointsAttempted)), pct(n(sh.threePointsMade), n(sh.threePointsAttempted)))}
       ${statRow("Reb", n(sa.totalRebounds), n(sh.totalRebounds))}${statRow("Ast", n(sa.assists), n(sh.assists))}${statRow("TO", n(sa.turnovers), n(sh.turnovers))}` : "";
   // play-by-play (newest first)
-  const plays = (d.pbp?.periods || []).flatMap(p => (p.playbyplayStats || []).map(x => ({ ...x, per: p.periodDisplay || "" }))).reverse().slice(0, 25);
+  const plays = (d.pbp?.periods || []).flatMap(p => (p.playbyplayStats || []).map(x => ({ ...x, per: p.periodDisplay || "" }))).filter(x => !isSub(x.eventDescription || x.homeText || x.visitorText)).reverse().slice(0, 25);
   for (const p of plays) { p.key = playKey(p, p.per); notePlay(sg.gameID, p.key, { desc: fix(p.eventDescription || p.homeText || p.visitorText || "").replace(/\s+/g, " ").trim(), per: (p.per || "").replace(" Half", ""), clock: p.clock, h: p.homeScore, v: p.visitorScore }) }
   const pbpHtml = plays.length ? `<div class="plays">${plays.map(p => {
     const home = String(p.teamId) === idHome, away = String(p.teamId) === idAway;
@@ -838,6 +838,8 @@ function playMood(desc) {
   if (/made|good|dunk|slam|steal|block|assist|and.?one|offensive rebound|alley/i.test(d)) return "good";
   return "other";
 }
+// Substitutions ("Subbing in for …", "… enters the game") are left out of the play-by-play.
+const isSub = d => /^\s*subbing|substitution|enters the game|leaves the game|\bsubbing (in|out)\b|\bsub (in|out)\b/i.test(String(d || ""));
 const MOOD_ICON = { good: "🔥", bad: "🗑️", other: "👀" };
 // The player a play is about: "… by La Salle's Rob Dockery" → "Rob Dockery"
 function playerOf(desc) {
@@ -1097,7 +1099,7 @@ function drawPhoneGame(sg) {
         const st = (P["foul:" + who] ||= { n: 0 }); st.n++;
         line = `${shortName(who)} · ${st.n} foul${st.n === 1 ? "" : "s"}`;
       }
-      if (desc) { const key = playKey(x, x.per); items.push({ key, desc, line, per: x.per, clock: x.clock || "", h: nh, v: nv, side, pts, tags }) }
+      if (desc && !isSub(desc)) { const key = playKey(x, x.per); items.push({ key, desc, line, per: x.per, clock: x.clock || "", h: nh, v: nv, side, pts, tags }) }
       ph = nh; pv = nv;
     }
     const shown = (mgFeed === "scoring" ? items.filter(i => i.pts > 0) : items).reverse().slice(0, 250);
