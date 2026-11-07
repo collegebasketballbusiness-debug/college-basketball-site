@@ -17,8 +17,29 @@ const ROUTES = [
   [/^logo\/[a-z0-9-]{1,60}\.svg(\?dark=true)?$/, 604800],
 ];
 
+// "Others receiving votes" isn't in the free API, so read it straight from NCAA.com's AP poll page.
+async function apOthers(res) {
+  try {
+    const page = await fetch("https://www.ncaa.com/rankings/basketball-men/d1/associated-press", {
+      headers: { "user-agent": "Mozilla/5.0 (compatible; collegebasketball-site)", accept: "text/html" }, redirect: "follow"
+    });
+    const html = await page.text();
+    const m = /OTHERS RECEIVING VOTES:?\s*<\/strong>([\s\S]*?)<\/p>/i.exec(html);
+    const text = (m ? m[1] : "").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").replace(/&#0?39;|&rsquo;/g, "'").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+    const others = text.split(/\s*[,;]\s*/).map(x => /^(.*\S)\s+(\d+)\.?$/.exec(x.trim())).filter(Boolean)
+      .map(x => ({ school: x[1], votes: +x[2] })).sort((a, b) => b.votes - a.votes);
+    res.setHeader("content-type", "application/json; charset=utf-8");
+    res.setHeader("cache-control", page.ok ? "public, s-maxage=1800, stale-while-revalidate=7200" : "no-store");
+    res.status(200).json({ others });
+  } catch {
+    res.setHeader("cache-control", "no-store");
+    res.status(502).json({ error: "Could not reach NCAA.com" });
+  }
+}
+
 export default async function handler(req, res) {
   const path = String(req.query.path || "").replace(/^\/+/, "");
+  if (path === "ap-others") return apOthers(res);
   const route = ROUTES.find(([re]) => re.test(path));
   if (!route) {
     res.status(400).json({ error: "Unsupported path" });
