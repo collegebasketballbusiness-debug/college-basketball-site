@@ -53,7 +53,7 @@ function logoSlug(name, seo) {
 const logoURL = (slug, dark) => { const path = `logo/${slug}.svg${dark ? "?dark=true" : ""}`; return API === "" ? "/" + path : API + encodeURIComponent(path) };
 const mono = (name, seo, color, cls = "") => {
   const slug = logoSlug(name, seo);
-  const logo = slug ? `<img src="${logoURL(slug, true)}" alt="" loading="lazy" decoding="async" onerror="if(!this.dataset.r){this.dataset.r=1;var i=this;setTimeout(function(){i.src=i.src+'&r=1'},2500+Math.random()*3000)}else{var m=this.closest('.mono');m.classList.remove('has-logo');this.remove()}">` : "";
+  const logo = slug ? `<img src="${logoURL(slug, true)}" alt="" loading="lazy" decoding="async" onload="this.dataset.ok=1" onerror="if(!this.dataset.r){this.dataset.r=1;var i=this;setTimeout(function(){i.src=i.src+'&r=1'},2500+Math.random()*3000)}else{var m=this.closest('.mono');m.classList.remove('has-logo');this.remove()}">` : "";
   return `<span class="mono ${cls} ${logo ? "has-logo" : ""}" style="--mc:${teamColor(seo, color)}" aria-hidden="true"><b>${esc(initials(name))}</b>${logo}</span>`;
 };
 
@@ -473,7 +473,7 @@ async function loadRecords() {
     for (const pg of pages) for (const x of pg.data || []) REC[normName(x.Team)] = { w: +x.W || 0, l: +x.L || 0 };
     const m = /through games \w+,?\s+(\w+ \d+, \d{4})/i.exec(first.updated || "");
     recThrough = m ? ymd(new Date(m[1])) : 0;
-    drawGames(); drawGame(); drawStand(); if (apRows) drawRankings(); drawHero();
+    drawGames(); drawGame(); drawStand(); if (apRows) drawRankings(); drawApOthers(); drawHero();
     fillMissingRecords();
   } catch { setTimeout(loadRecords, 20000) /* try again shortly */ }
 }
@@ -543,6 +543,16 @@ function drawRankings() {
     return `<tr><td class="num rkn">${esc(x.RANK)}</td><td><span class="tm">${mono(m[1], m[1])}<span>${esc(m[1])} ${m[2] ? `<small>(${m[2]})</small>` : ""}</span></span></td><td class="num">${esc(rec)}</td>${extra.map(k => `<td class="num">${esc(x[k])}</td>`).join("")}<td class="num">${esc(x.POINTS)}</td></tr>`;
   }).join("");
 }
+// Teams that got AP votes but missed the Top 25, most votes first
+let apOthers = null;
+async function loadApOthers() {
+  try { const r = await api("ap-others"); apOthers = r.others || []; drawApOthers() } catch { }
+}
+function drawApOthers() {
+  const box = $("#apothers"); if (!apOthers || !apOthers.length) { box.hidden = true; return }
+  $("#otherrows").innerHTML = apOthers.map(x => `<tr><td><span class="tm">${mono(x.school, x.school)}<span>${esc(x.school)}</span></span></td><td class="num">${esc(recordOf(x.school) || "–")}</td><td class="num">${x.votes}</td></tr>`).join("");
+  box.hidden = false;
+}
 let standings = null, sconf = "", standingsStale = false;
 async function loadStandings() {
   try {
@@ -598,6 +608,7 @@ function show(v) {
   if (!VIEWS.includes(v)) v = "scores";
   document.querySelectorAll(".view").forEach(el => el.hidden = el.dataset.view !== v);
   document.querySelectorAll("[data-tab]").forEach(a => a.dataset.tab === v ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
+  if (v === "rankings" && !loaded.ao) { loaded.ao = 1; loadApOthers() }
   if (v === "rankings" && !loaded.rk) { loaded.rk = 1; loadRankings() }
   if (v === "standings" && !loaded.st) { loaded.st = 1; loadStandings() }
   scrollTo(0, 0);

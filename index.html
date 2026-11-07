@@ -273,6 +273,11 @@ table.box tr.totals td{font-weight:700;border-top:2px solid var(--ink)}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
 
 /* live-site additions */
+.ap-others{padding-block:36px 0}
+.ap-others h2{font-size:clamp(26px,3vw,34px);font-weight:900;margin-bottom:12px;color:var(--ink)}
+.ap-others .rk-table{min-width:0;width:100%}
+.ap-others .rk-table td{padding:7px 8px}
+.mono img{visibility:hidden}.mono img[data-ok]{visibility:visible}
 /* ---- chat ---- */
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .chatmount:empty{display:none}
@@ -513,6 +518,10 @@ img{max-width:100%}
   <div class="view" data-view="rankings" hidden>
     <div class="sb-top"><div><div class="eyebrow" id="rkupdated"></div><h1>AP Top 25</h1></div></div>
     <div class="tblwrap" style="margin-top:18px"><table class="rk-table"><thead><tr id="rkhead"><th class="num">Rk</th><th>Team</th><th class="num">Pts</th></tr></thead><tbody id="aprows"><tr><td colspan="3">Loading…</td></tr></tbody></table></div>
+    <section class="ap-others" id="apothers" hidden>
+      <h2>Others receiving votes</h2>
+      <div class="tblwrap"><table class="rk-table"><thead><tr><th>Team</th><th class="num">Record</th><th class="num">Votes</th></tr></thead><tbody id="otherrows"></tbody></table></div>
+    </section>
   </div>
 
   <div class="view" data-view="standings" hidden>
