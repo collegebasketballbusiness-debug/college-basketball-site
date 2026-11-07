@@ -75,6 +75,8 @@ h1,h2,h3{font-family:var(--display);text-transform:uppercase;letter-spacing:.01e
 .mono img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 .mono.has-logo{background:transparent;border-radius:0}
 .mono.has-logo>b{visibility:hidden}
+/* dark logos (navy, black) get a light outline so they show on the dark background */
+img.dk{filter:drop-shadow(0 0 .6px rgba(255,255,255,.95)) drop-shadow(0 0 .6px rgba(255,255,255,.95)) drop-shadow(0 0 3px rgba(255,255,255,.25))}
 .mono.lg{width:84px;height:84px;font-size:30px}
 
 section{padding-block:40px}

@@ -58,10 +58,31 @@ function logoSlug(name, seo) {
   const key = normName(clean);
   return SLUG_BY_NORM[key] || NAME2SEO[key] || guessSlug(name);
 }
+// Some logos are mostly navy or black and disappear on the dark background. After a logo loads, measure how
+// light it is; dark ones get a light outline (class "dk") so they stand out. Results are remembered per logo.
+const LOGO_DARK = {};
+window.cbbLogoCheck = img => {
+  const key = img.src.replace(/[&?]r=1$/, "");
+  const done = v => { LOGO_DARK[key] = v; img.classList.toggle("dk", v) };
+  if (key in LOGO_DARK) return done(LOGO_DARK[key]);
+  try {
+    const c = document.createElement("canvas"); c.width = c.height = 40;
+    const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(img, 0, 0, 40, 40);
+    const d = x.getImageData(0, 0, 40, 40).data; let n = 0, light = 0, sum = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < 128) continue;
+      const V = Math.max(d[i], d[i + 1], d[i + 2]) / 255; // brightness: bright reds and blues read fine on black, navy doesn't
+      n++; sum += V; if (V > 0.55) light++;
+    }
+    // dark = little of the logo is bright enough to read on black
+    done(n > 20 && light / n < 0.2 && sum / n < 0.42);
+  } catch { LOGO_DARK[key] = false }
+};
+const LOGO_ONLOAD = "this.dataset.ok=1;window.cbbLogoCheck&&cbbLogoCheck(this)";
 const logoURL = (slug, dark) => { const path = `logo/${slug}.svg${dark ? "?dark=true" : ""}`; return API === "" ? "/" + path : API + encodeURIComponent(path) };
 const mono = (name, seo, color, cls = "") => {
   const slug = logoSlug(name, seo);
-  const logo = slug ? `<img src="${logoURL(slug, true)}" alt="" loading="lazy" decoding="async" onload="this.dataset.ok=1" onerror="if(!this.dataset.r){this.dataset.r=1;var i=this;setTimeout(function(){i.src=i.src+'&r=1'},2500+Math.random()*3000)}else{var m=this.closest('.mono');m.classList.remove('has-logo');this.remove()}">` : "";
+  const logo = slug ? `<img src="${logoURL(slug, true)}" alt="" loading="lazy" decoding="async" onload="${LOGO_ONLOAD}" onerror="if(!this.dataset.r){this.dataset.r=1;var i=this;setTimeout(function(){i.src=i.src+'&r=1'},2500+Math.random()*3000)}else{var m=this.closest('.mono');m.classList.remove('has-logo');this.remove()}">` : "";
   return `<span class="mono ${cls} ${logo ? "has-logo" : ""}" style="--mc:${teamColor(slug, color)}" aria-hidden="true"><b>${esc(initials(name))}</b>${logo}</span>`;
 };
 
@@ -412,7 +433,7 @@ function tickerItems() {
   return (cache.t || []).filter(g => rk(g.home) || rk(g.away))
     .sort((a, b) => Math.min(rk(a.home) || 99, rk(a.away) || 99) - Math.min(rk(b.home) || 99, rk(b.away) || 99))
     .map(g => {
-      const st = status(g), side = t => `<span class="tt"><img class="tlogo" src="${logoURL(logoSlug(t.names.short, t.names.seo), true)}" alt="" onerror="this.remove()">${rk(t) ? `<b>${rk(t)}</b>` : ""}${esc(fix(t.names.short))}</span>`;
+      const st = status(g), side = t => `<span class="tt"><img class="tlogo" src="${logoURL(logoSlug(t.names.short, t.names.seo), true)}" alt="" onload="${LOGO_ONLOAD}" onerror="this.remove()">${rk(t) ? `<b>${rk(t)}</b>` : ""}${esc(fix(t.names.short))}</span>`;
       return { key: g.gameID, html: `${side(g.away)} ${g.gameState === "pre" ? "at" : `<span class="tsc">${esc(g.away.score)}–${esc(g.home.score)}</span>`} ${side(g.home)} <span class="tst ${st.cls ? "lv" : ""}">${esc(st.txt)}</span>` };
     });
 }
