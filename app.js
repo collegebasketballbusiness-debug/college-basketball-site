@@ -857,6 +857,8 @@ function playKey(x, per) {
   return (h >>> 0).toString(36);
 }
 function notePlay(gid, key, info) { (PLAYINFO[gid] ||= {})[key] = info }
+// the game chat labels play comments with the play's description
+window.CBBPlayLabel = (gid, key) => { const i = PLAYINFO[gid]?.[key]; if (!i) return ""; const d = i.desc.length > 70 ? i.desc.slice(0, 68) + "…" : i.desc; return `${d}${i.per ? ` (${i.per} ${i.clock || ""})` : ""}`.trim() };
 async function loadPlayCounts(gid, force) {
   if (!playsOn || !gid || (!force && Date.now() - (playCtAt[gid] || 0) < 9e3)) return;
   playCtAt[gid] = Date.now();

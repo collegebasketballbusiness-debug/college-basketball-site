@@ -56,10 +56,10 @@ function leave() { if (channel && sb) { sb.removeChannel(channel); channel = nul
 
 // ---------- data ----------
 async function loadMessages(id) {
-  // comments on individual plays are stored with the chat but shown under their play, not here
-  const base = () => sb.from("messages").select("id, game_id, user_id, username, body, deleted, created_at").eq("game_id", id).eq("deleted", false);
-  let { data, error } = await base().is("play_key", null).order("created_at", { ascending: false }).limit(KEEP);
-  if (error && /play_key/i.test(error.message || "")) ({ data, error } = await base().order("created_at", { ascending: false }).limit(KEEP)); // database not updated yet
+  // comments on individual plays show up here too, labeled with the play they're about
+  const base = cols => sb.from("messages").select(cols).eq("game_id", id).eq("deleted", false).order("created_at", { ascending: false }).limit(KEEP);
+  let { data, error } = await base("id, game_id, user_id, username, body, deleted, created_at, play_key");
+  if (error && /play_key/i.test(error.message || "")) ({ data, error } = await base("id, game_id, user_id, username, body, deleted, created_at")); // database not updated yet
   if (gameId !== id) return;
   if (error) { setStatus("Chat couldn't load. Try again in a minute."); return }
   msgs = (data || []).reverse();
@@ -73,7 +73,7 @@ async function loadReports(id) {
 function subscribe(id) {
   channel = sb.channel("game-" + id)
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `game_id=eq.${id}` }, p => {
-      if (gameId !== id || p.new.play_key || msgs.some(m => m.id === p.new.id)) return;
+      if (gameId !== id || msgs.some(m => m.id === p.new.id)) return;
       msgs.push(p.new); if (msgs.length > KEEP) msgs.shift(); renderList(true);
     })
     .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages", filter: `game_id=eq.${id}` }, p => {
@@ -118,7 +118,9 @@ function msgHTML(m) {
     if (!mine) tools.push(`<button class="chat-link danger" data-chat="ban" data-uid="${esc(m.user_id)}" data-name="${esc(m.username)}">Ban</button>`);
   }
   const flags = me?.is_admin && reportsByMsg[m.id] ? `<span class="chat-flag">${reportsByMsg[m.id]} report${reportsByMsg[m.id] > 1 ? "s" : ""}</span>` : "";
-  return `<div class="chat-msg ${mine ? "mine" : ""}" data-mid="${m.id}"><div class="chat-meta"><b>${esc(m.username)}</b><time>${timeOf(m.created_at)}</time>${flags}<span class="chat-tools">${tools.join("")}</span></div><p>${esc(m.body)}</p></div>`;
+  // a comment left on a play: show which play, and tapping it opens that play's comments
+  const ref = m.play_key ? `<button class="chat-ref" data-thread="${esc(m.play_key)}" title="Open this play's comments">↳ on: ${esc((window.CBBPlayLabel && window.CBBPlayLabel(m.game_id || gameId, m.play_key)) || "a play")}</button>` : "";
+  return `<div class="chat-msg ${mine ? "mine" : ""}" data-mid="${m.id}">${ref}<div class="chat-meta"><b>${esc(m.username)}</b><time>${timeOf(m.created_at)}</time>${flags}<span class="chat-tools">${tools.join("")}</span></div><p>${esc(m.body)}</p></div>`;
 }
 function renderList(scrollDown) {
   const list = mount?.querySelector(".chat-list"); if (!list) { render(); return }

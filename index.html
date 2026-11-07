@@ -593,6 +593,8 @@ html.mg-open,html.mg-open body{overflow:hidden}
 .mg-chat .chat-list{flex:1;min-height:0;max-height:none;height:auto}
 @media (prefers-reduced-motion:reduce){.mg-sheet{animation:none}}
 /* ---- reactions + comments on plays ---- */
+.chat-ref{display:block;max-width:100%;margin:2px 0 1px;padding:0;background:none;border:0;color:#8F95E8;font:600 12px var(--body);text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-ref:hover{text-decoration:underline}
 .pr{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:9px}
 .pr-sum,.pr-com{display:inline-flex;align-items:center;gap:3px;background:none;border:0;color:#A8A8A4;font:600 15px var(--body);cursor:pointer;padding:4px 2px;border-radius:999px}
 .pr-sum i{font-style:normal;font-size:17px;margin-right:-2px}
@@ -785,7 +787,7 @@ td.srt{color:var(--ink);font-weight:700}
 }
 @media (min-width:1000px) and (max-width:1240px){.gdetail.with-chat .dbody{grid-template-columns:1fr}.gdetail.with-chat .dbody>div+div{border-left:0;border-top:1px solid var(--line)}}
 /* sign-up / log-in window */
-.modal{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.72);display:grid;place-items:center;padding:16px}
+.modal{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.72);display:grid;place-items:center;padding:16px}
 .modal-card{position:relative;width:100%;max-width:400px;max-height:calc(100vh - 32px);overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:26px}
 .modal-logo{filter:invert(1);display:block;margin-bottom:12px}
 .modal-card h2{font-size:34px;font-weight:900;margin-bottom:14px}
