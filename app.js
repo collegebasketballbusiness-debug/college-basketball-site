@@ -204,9 +204,25 @@ function drawFilters() {
   $("#gfilters").innerHTML = ["All", "AP Top 25", "Power 6"].map(o => `<button aria-pressed="${o === gfilt && !gconf}" data-gf="${o}">${o === "All" ? "All games" : o}</button>`).join("")
     + `<span class="sep" aria-hidden="true"></span>` + confs.map(c => `<button aria-pressed="${c === gconf}" data-conf-f="${c}">${CONF[c]}</button>`).join("");
 }
+// The game panel opens inside the grid, directly under the row of the game that was tapped.
+const DETAIL = document.getElementById("gdetail");
+function placeDetail() {
+  const grid = $("#games");
+  if (!openGame) { if (DETAIL.parentNode !== grid.parentNode) grid.after(DETAIL); return }
+  const card = grid.querySelector(`.game[data-game="${openGame}"]`);
+  if (!card) { grid.prepend(DETAIL); return }
+  // find the last card on the same row as the tapped one
+  let last = card, top = card.offsetTop;
+  for (let n = card.nextElementSibling; n; n = n.nextElementSibling) {
+    if (!n.classList.contains("game")) continue;
+    if (Math.abs(n.offsetTop - top) > 4) break;
+    last = n;
+  }
+  if (last.nextElementSibling !== DETAIL) last.after(DETAIL);
+}
 function drawGames() {
   const all = cache[gday];
-  if (!all) { $("#games").innerHTML = `<div class="empty">Loading games…</div>`; return }
+  if (!all) { $("#games").innerHTML = `<div class="empty">Loading games…</div>`; placeDetail(); return }
   const live = (cache.t || []).filter(isLive).length;
   $("#livecount").innerHTML = live ? `<span class="dot"></span>${live} game${live === 1 ? "" : "s"} live now` : `No games live right now`;
   const list = filtered(all);
@@ -214,6 +230,7 @@ function drawGames() {
     const st = status(g);
     return `<button class="game ${openGame === g.gameID ? "sel" : ""}" data-game="${g.gameID}"><div class="gstat ${st.cls}"><span class="l">${st.cls ? '<span class="dot"></span>' : ""}${esc(st.txt)}</span><span>${esc(g.network || "")}</span></div>${trow(g, "away")}${trow(g, "home")}${badgeHTML(badges(g))}</button>`;
   }).join("") : `<div class="empty">${all.length ? "No games match this filter." : "No Division I games scheduled for this day."}</div>`;
+  placeDetail();
 }
 function flashChanges(list) {
   const changed = new Set();
@@ -324,7 +341,7 @@ function statRow(lbl, a, h, fmt = x => x) {
 }
 const pct = (m, a) => a ? Math.round(m / a * 100) : 0;
 function drawGame() {
-  const boxEl = $("#gdetail");
+  const boxEl = DETAIL;
   const sg = (cache[gday] || []).concat(cache.t || []).find(g => g.gameID === openGame);
   if (!openGame || !sg) { boxEl.hidden = true; return }
   boxEl.hidden = false;
@@ -573,10 +590,22 @@ document.addEventListener("click", async e => {
   const bx = t.closest("[data-box]"); if (bx) { boxSide = bx.dataset.box; drawGame(); return }
   if (t.closest("[data-closegame]")) { openGame = null; gameDetail = null; drawGames(); drawGame(); return }
   const gm = t.closest("[data-game]"); if (gm) {
+    const fromCard = gm.classList.contains("game");
+    if (fromCard && openGame === gm.dataset.game) { openGame = null; gameDetail = null; drawGames(); drawGame(); return } // tap again to close
     if (location.hash && location.hash !== "#scores") { location.hash = "scores" }
     if (gm.dataset.dayOf === "t" && gday !== "t") { gday = "t"; drawDays(); drawFilters() }
+    const before = fromCard ? gm.getBoundingClientRect().top : null;
     openGame = gm.dataset.game; boxSide = "away"; gameDetail = null; drawGames(); drawGame(); loadGame(openGame);
-    $("#gdetail").scrollIntoView({ behavior: reduced() ? "auto" : "smooth", block: "nearest" }); return;
+    const card = $(`#games .game[data-game="${openGame}"]`);
+    if (fromCard && card) {
+      // keep the tapped card exactly where it was on screen
+      scrollBy(0, card.getBoundingClientRect().top - before);
+    } else {
+      // opened from the banner or ticker: bring that game into view
+      const target = card || DETAIL;
+      scrollTo({ top: target.getBoundingClientRect().top + scrollY - 140, behavior: reduced() ? "auto" : "smooth" });
+    }
+    return;
   }
   const sc = t.closest("[data-sconf]"); if (sc) { sconf = sc.dataset.sconf; drawStand(); return }
   const nc = t.closest("[data-ncat]"); if (nc) { ncat = nc.dataset.ncat; drawNews(); return }
