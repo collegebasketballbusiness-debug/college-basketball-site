@@ -14,7 +14,7 @@ const ROUTES = [
   [/^rankings\/basketball-men\/d1\/associated-press$/, 1800],
   [/^standings\/basketball-men\/d1$/, 1800],
   [/^news\/basketball-men\/d1$/, 600],
-  [/^stats\/basketball-men\/d1\/current\/team\/168(\?page=\d{1,2})?$/, 1800],
+  [/^stats\/basketball-men\/d1\/current\/(individual|team)\/\d{1,4}(\?page=\d{1,2})?$/, 1800],
   [/^logo\/[a-z0-9-]{1,60}\.svg(\?dark=true)?$/, 604800],
 ];
 
@@ -79,6 +79,34 @@ async function tv(res, y, m, d) {
   } catch {
     json(res, 502, { error: "Could not reach ESPN" });
   }
+}
+
+// ---------- stat categories ----------
+// The NCAA numbers each stat (e.g. 136 = points per game). Rather than hard-coding a list, check the likely
+// numbers once a week and keep the ones that exist, with the NCAA's own name and columns.
+const STAT_IDS = {
+  individual: [...range(130, 152), ...range(600, 630)],
+  team: [...range(142, 172), ...range(210, 222), 286, 518, ...range(625, 640), ...range(930, 934)],
+};
+function range(a, b) { return Array.from({ length: b - a + 1 }, (_, i) => a + i) }
+async function statCats(res) {
+  const jobs = Object.entries(STAT_IDS).flatMap(([kind, ids]) => ids.map(id => ({ kind, id })));
+  const found = []; let i = 0;
+  async function worker() {
+    while (i < jobs.length) {
+      const { kind, id } = jobs[i++];
+      try {
+        const r = await upstreamFetch(`stats/basketball-men/d1/current/${kind}/${id}`, apiHeaders());
+        if (!r.ok) continue;
+        const j = await r.json();
+        const row = (j.data || [])[0];
+        if (j.title && row) found.push({ kind, id, title: String(j.title).trim(), cols: Object.keys(row), pages: +j.pages || 1, updated: j.updated || "" });
+      } catch { }
+    }
+  }
+  await Promise.all(Array.from({ length: 5 }, worker));
+  found.sort((a, b) => a.kind.localeCompare(b.kind) || a.id - b.id);
+  json(res, 200, { cats: found }, found.length >= 8 ? "public, s-maxage=604800, stale-while-revalidate=2592000" : "public, s-maxage=600");
 }
 
 // ---------- Discord ----------
@@ -193,6 +221,7 @@ export default async function handler(req, res) {
   const path = String(req.query.path || "").replace(/^\/+/, "");
   if (path === "ap-others") return apOthers(res);
   if (path === "discord-invite") return discordInvite(res);
+  if (path === "stat-cats") return statCats(res);
   let m;
   if ((m = /^day\/(\d{4})\/(\d{2})\/(\d{2})$/.exec(path))) return day(res, m[1], m[2], m[3]);
   if ((m = /^tv\/(\d{4})\/(\d{2})\/(\d{2})$/.exec(path))) return tv(res, m[1], m[2], m[3]);
