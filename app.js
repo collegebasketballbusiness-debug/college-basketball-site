@@ -453,23 +453,20 @@ function tickerItems() {
       return { key: g.gameID, html: `${side(g.away)} ${g.gameState === "pre" ? "at" : `<span class="tsc">${esc(g.away.score)}–${esc(g.home.score)}</span>`} ${side(g.home)} <span class="tst ${st.cls ? "lv" : ""}">${esc(st.txt)}</span>` };
     });
 }
-let tickerSig = "";
+let tickerContent = "", tickerSig = "";
 function drawTicker(changed) {
   const items = tickerItems(), track = $("#ticker");
   const sig = items.map(i => i.key).join(",");
   if (!items.length) { track.innerHTML = `<span class="ti">No ranked teams playing today</span>`; tickerSig = ""; return }
-  if (sig !== tickerSig) {
-    const reps = Math.max(2, Math.ceil(12 / items.length));
-    track.innerHTML = Array.from({ length: reps }, () => items).flat().map(i => `<button class="ti" data-tk="${i.key}" data-game="${i.key}" data-day-of="t">${i.html}</button>`).join("");
-    track.style.animationDuration = Math.max(30, items.length * reps * 4) + "s";
-    tickerSig = sig; return;
-  }
-  items.forEach(i => track.querySelectorAll(`[data-tk="${i.key}"]`).forEach(el => {
-    if (el.innerHTML !== i.html) {
-      el.innerHTML = i.html;
-      if (changed.has(i.key)) { el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash") }
-    }
-  }));
+  // Rebuild the items whenever anything in them changes. Editing them in place while the ticker scrolls can leave
+  // iPhone Safari drawing the new score on top of the old layout (overlapping text).
+  const reps = Math.max(2, Math.ceil(12 / items.length));
+  const html = Array.from({ length: reps }, () => items).flat().map(i => `<button class="ti${changed && changed.has(i.key) ? " flash" : ""}" data-tk="${i.key}" data-game="${i.key}" data-day-of="t">${i.html}</button>`).join("");
+  const content = items.map(i => i.html).join("|");
+  if (sig === tickerSig && content === tickerContent) return;
+  track.innerHTML = html;
+  if (sig !== tickerSig) track.style.animationDuration = Math.max(30, items.length * reps * 4) + "s";
+  tickerSig = sig; tickerContent = content;
 }
 
 // ---------- game page ----------

@@ -37,8 +37,8 @@ h1,h2,h3{font-family:var(--display);text-transform:uppercase;letter-spacing:.01e
 .ticker{background:#000;color:var(--ink);overflow:hidden;border-bottom:3px solid var(--ball);border-top:1px solid var(--line)}
 .ticker .row{display:flex;align-items:stretch}
 .ticker .tag{flex:none;position:relative;z-index:1;font-family:var(--display);font-weight:800;font-size:15px;text-transform:uppercase;background:var(--ball);color:var(--ball-ink);padding:9px 14px;letter-spacing:.04em;display:flex;align-items:center}
-.ticker .track{display:flex;gap:28px;padding:9px 18px;white-space:nowrap;animation:scroll 60s linear infinite}
-.ticker .ti{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;cursor:pointer;background:none;border:0;color:inherit;padding:0}
+.ticker .track{display:flex;flex:none;width:max-content;gap:28px;padding:9px 18px;white-space:nowrap;animation:scroll 60s linear infinite;will-change:transform}
+.ticker .ti{flex:none;display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;cursor:pointer;background:none;border:0;color:inherit;padding:0;white-space:nowrap;min-width:max-content}
 .ticker .ti b{font-family:var(--mono);font-size:12px;opacity:.65}
 .ticker:hover .track{animation-play-state:paused}
 .ticker .ti .tsc{font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums}
@@ -616,7 +616,8 @@ td.srt{color:var(--ink);font-weight:700}
 
 /* ---- ticker logos ---- */
 .ticker .ti .tlogo{width:20px;height:20px;object-fit:contain;flex:none}
-.ticker .ti .tt{display:inline-flex;align-items:center;gap:6px}
+.ticker .ti .tt{display:inline-flex;align-items:center;gap:6px;flex:none;white-space:nowrap}
+.ticker .ti>*{flex:none}
 
 /* ---- Instagram ---- */
 .ig{margin-top:56px}
