@@ -68,14 +68,15 @@ window.cbbLogoCheck = img => {
   try {
     const c = document.createElement("canvas"); c.width = c.height = 40;
     const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(img, 0, 0, 40, 40);
-    const d = x.getImageData(0, 0, 40, 40).data; let n = 0, light = 0, sum = 0;
+    const d = x.getImageData(0, 0, 40, 40).data; let n = 0, dark = 0;
     for (let i = 0; i < d.length; i += 4) {
       if (d[i + 3] < 128) continue;
-      const V = Math.max(d[i], d[i + 1], d[i + 2]) / 255; // brightness: bright reds and blues read fine on black, navy doesn't
-      n++; sum += V; if (V > 0.55) light++;
+      const V = Math.max(d[i], d[i + 1], d[i + 2]) / 255; // brightness: bright reds and blues read fine on black, navy and black don't
+      n++; if (V < 0.36) dark++;
     }
-    // dark = little of the logo is bright enough to read on black
-    done(n > 20 && light / n < 0.2 && sum / n < 0.42);
+    // outline the logo when a real part of it (a quarter or more) would blend into the background,
+    // e.g. Cincinnati's black C even though it has a red edge
+    done(n > 20 && dark / n >= 0.25);
   } catch { LOGO_DARK[key] = false }
 };
 const LOGO_ONLOAD = "this.dataset.ok=1;window.cbbLogoCheck&&cbbLogoCheck(this)";
