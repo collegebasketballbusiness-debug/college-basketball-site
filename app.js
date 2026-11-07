@@ -748,10 +748,12 @@ function teamConf(slug) {
 let STATCATS = null, stKind = "individual", stCat = { individual: null, team: null }, stQuery = "";
 const STATDATA = {};   // "kind/id" -> {rows, pages, page, title, updated}
 // Most-wanted categories go first; anything else the NCAA has follows in its own order.
-const ST_ORDER = [/^points per game/i, /^scoring offense/i, /^rebound/i, /^assists per game/i, /^steals per game/i, /^blocks? (shots )?per game|^blocked shots per game/i,
-  /^field.goal percentage$/i, /^three.point field.goal percentage$/i, /three.point field goals per game/i, /^free.throw percentage$/i, /^scoring defense/i, /^scoring margin/i, /^winning percentage/i];
+const ST_ORDER = [/^points per game/i, /^scoring offense/i, /^rebounds per game/i, /^assists per game/i, /^steals per game/i, /^blocks per game/i,
+  /^field goal percentage$/i, /^three point percentage$/i, /^three pointers per game/i, /^free throw percentage$/i, /^minutes per game/i,
+  /^scoring defense/i, /^scoring margin/i, /^winning percentage/i, /^rebound margin/i, /^turnovers per game/i, /^turnovers forced/i];
 const stRank = t => { const i = ST_ORDER.findIndex(re => re.test(t)); return i < 0 ? 99 : i };
-const shortStat = t => t.replace(/\bPer Game\b/i, "/ game").replace(/\bPercentage\b/i, "%").replace(/Field.Goal/i, "FG").replace(/Three.Point/i, "3PT").replace(/Free.Throw/i, "FT").trim();
+const shortStat = t => t.replace(/\bPer Game\b/i, "/ game").replace(/\bPercentage\b/i, "%").replace(/Field.Goals?/i, "FG").replace(/Three.Pointers?|Three.Point|3-point/i, "3PT")
+  .replace(/Free.Throws?/i, "FT").replace(/^Total /i, "").replace(/\bAttempts\b/i, "attempts").replace(/\bMade\b/i, "made").replace(/^FG$/, "FG made").replace(/ FGM$/, " made").trim();
 async function loadStatCats() {
   if (STATCATS) return drawStats();
   $("#strows2").innerHTML = `<tr><td>Loading stat leaders…</td></tr>`;
@@ -783,9 +785,11 @@ async function loadStatPage(kind, id, page) {
 }
 // Which column holds the stat itself (the last numeric-looking column, usually)
 function statCol(cols) {
-  const skip = /^(rank|name|team|cl|class|height|ht|position|pos|g|games)$/i;
+  const skip = /^(rank|name|team|cl|class|height|ht|position|pos|g|gm|games|dq)$/i;
   const nums = cols.filter(c => !skip.test(c));
-  return nums[nums.length - 1] || cols[cols.length - 1];
+  // per-game, percentage and margin columns are the stat when there is one (e.g. PFPG, not DQ)
+  const rate = nums.filter(c => /PG$|%$|^pct$|^avg$|MAR$/i.test(c));
+  return rate[rate.length - 1] || nums[nums.length - 1] || cols[cols.length - 1];
 }
 function drawStats() {
   document.querySelectorAll("[data-stkind]").forEach(b => b.setAttribute("aria-pressed", b.dataset.stkind === stKind));
@@ -799,7 +803,8 @@ function drawStats() {
   const cols = Object.keys(D.rows[0]), sc = statCol(cols), isP = stKind === "individual";
   const teamOf = row => fix(row.Team || row.School || "").replace(/\s*\([^)]*\)\s*$/, "").trim();
   const nameOf = row => isP ? fix(row.Name || row.Player || "") : teamOf(row);
-  $("#stupd").textContent = D.updated ? `Division I · ${D.updated}` : "Division I leaders";
+  const thru = /through games\s+(?:\w+day,\s*)?([A-Za-z]+ \d+)/i.exec(D.updated || "");
+  $("#stupd").textContent = thru ? `Division I · Through games ${thru[1].replace(/^(\w{3})\w*/, "$1.").replace(/ 0(\d)$/, " $1")}` : "Division I leaders";
   // podium: top 3
   const q = stQuery.trim().toLowerCase();
   const pod = q ? [] : D.rows.slice(0, 3);
@@ -812,6 +817,9 @@ function drawStats() {
   $("#stpod").innerHTML = pod.length === 3 ? [podCard(pod[1], 1), podCard(pod[0], 0), podCard(pod[2], 2)].join("") : "";
   const opt = /^(cl|class|height|ht|position|pos)$/i;
   $("#sthead").innerHTML = `<tr>${cols.map(c => `<th class="${c === sc ? "hl" : ""} ${opt.test(c) ? "opt" : ""} ${/^(rank|name|team)$/i.test(c) ? "" : "num"}">${esc(c)}</th>`).join("")}</tr>`;
+  // the NCAA marks ties with "-" in the rank column; show them as "T-4"
+  let last = "";
+  for (const r of D.rows) { const k = r.Rank; if (k && k !== "-" && !/^T-/.test(k)) last = k; else if (k === "-" && last) { r.Rank = "T-" + last; const prev = D.rows[D.rows.indexOf(r) - 1]; if (prev && prev.Rank === last) prev.Rank = "T-" + last } }
   const rows = D.rows.filter(r => !q || Object.values(r).some(v => String(v).toLowerCase().includes(q)));
   $("#strows2").innerHTML = rows.length ? rows.map(row => {
     const t = teamOf(row), slug = logoSlug(t);
