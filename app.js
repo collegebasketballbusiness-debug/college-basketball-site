@@ -1224,6 +1224,7 @@ async function refresh() {
     const changed = before ? flashChanges(cache.t) : (flashChanges(cache.t), new Set());
     if (gday === "t") { drawFilters(); drawGames(); }
     drawTicker(changed); drawHero(); loadSocial();
+    if (!$("[data-view=news]").hidden) loadAutoNews(); // new finals become recaps while the News tab is open
     if (!teamOpen && !$("#teamdir-wrap").closest(".view").hidden) drawTeamDir(); // live tags on the Teams tab
     if (teamOpen && !$("#teampage").hidden && teamTab === "schedule" && (cache.t || []).some(g => (isLive(g) || changed.has(g.gameID)) && [g.home, g.away].some(t => t.names.seo === teamOpen))) drawTeam(); // live scores on a team page
     { const hg = (cache.t || []).find(x => x.gameID === heroId); if (hg && hg.gameState === "live") loadHeroExtra(heroId) }
@@ -1377,19 +1378,142 @@ function drawStand() {
 
 // ---------- news (sample stories until real ones are added) ----------
 const NEWS = window.NEWS || [];
-const NCATS = ["All", "Top 25", "Games", "Transfer Portal", "Recruiting", "Conferences"]; let ncat = "All";
+const NCATS = ["All", "Recaps", "Top 25", "Games", "Transfer Portal", "Recruiting", "Conferences"]; let ncat = "All";
 const art = n => `<div class="art" style="background:${teamColor(n.team)}" aria-hidden="true"><img class="artlogo" src="${logoURL(n.team, true)}" alt="" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${esc(initials(n.team.replace(/-/g, " ")))}'}))"></div>`;
+// ---------- auto recaps ----------
+// Notable finals from the last few days become stories automatically, written only from the game's own data
+// (score, box score, play-by-play), so nothing is made up. Notable = an upset, a Top 25 matchup, an overtime game
+// with a ranked team, or a 35-point night by a player on a ranked team.
+let AUTO = [], autoAt = 0, autoBusy = false;
+const ordinal = n => ["", "first", "second", "third", "fourth", "fifth"][n] || `${n}th`;
+const etDay = off => { const d = etDate(off).path.split("/"); return { y: d[0], m: d[1], d: d[2] } };
+async function loadAutoNews(force) {
+  if (autoBusy || (!force && Date.now() - autoAt < 120e3)) return;
+  autoBusy = true; autoAt = Date.now();
+  try {
+    const days = await Promise.all([0, -1, -2, -3].map(o => { const x = etDay(o); return api(`day/${x.y}/${x.m}/${x.d}`, 1).catch(() => ({ games: [] })) }));
+    const finals = days.flatMap(d => d.games || []).filter(g => g.s === "final" && +g.a[2] + +g.h[2] > 0);
+    const rank = t => +t[3] || 0;
+    const pick = [];
+    for (const g of finals) {
+      const aw = +g.a[2] > +g.h[2], W = aw ? g.a : g.h, L = aw ? g.h : g.a, rw = rank(W), rl = rank(L), ot = /OT/i.test(g.f || "");
+      let why = "", score = 0;
+      if (rl && (!rw || rw - rl >= 10)) { why = "upset"; score = 200 - rl }
+      else if (rw && rl) { why = "top25"; score = 150 - Math.min(rw, rl) }
+      else if (ot && (rw || rl)) { why = "ot"; score = 100 }
+      else if (rw || rl) { why = "ranked"; score = 0 } // only becomes a story if someone scores 35+
+      if (why) pick.push({ g, W, L, why, score, ot });
+    }
+    pick.sort((x, y) => y.score - x.score || y.g.t - x.g.t);
+    const chosen = pick.filter(p => p.why !== "ranked").slice(0, 14).concat(pick.filter(p => p.why === "ranked").slice(0, 12));
+    const out = [];
+    let i = 0;
+    async function worker() {
+      while (i < chosen.length) {
+        const p = chosen[i++];
+        try {
+          const [info, box, pbp] = await Promise.all([api(`game/${p.g.id}`, 1).catch(() => null), api(`game/${p.g.id}/boxscore?final=1`, 1).catch(() => null), api(`game/${p.g.id}/play-by-play`, 1).catch(() => null)]);
+          const st = buildRecap(p, info?.contests?.[0], box, pbp);
+          if (st) out.push(st);
+        } catch { }
+      }
+    }
+    await Promise.all([worker(), worker(), worker()]);
+    out.sort((a, b) => b.when - a.when);
+    AUTO = out;
+    if (!$("#newslist").hidden && !$("[data-view=news]").hidden) drawNews();
+  } catch { }
+  autoBusy = false;
+}
+function buildRecap(p, c, box, pbp) {
+  const { g, W, L, why, ot } = p, aw = W === g.a;
+  const nm = t => fix(t[1]), rk = t => +t[3] || 0, rn = t => rk(t) ? `No. ${rk(t)} ${nm(t)}` : nm(t);
+  const ws = +W[2], ls = +L[2], score = `${ws}–${ls}`, otTxt = (g.f || "").match(/(\d)?\s*OT/i), otWord = otTxt ? (otTxt[1] && otTxt[1] !== "1" ? `${otTxt[1]} overtimes` : "overtime") : "";
+  const teams = c?.teams || [], tW = teams.find(t => !!t.isHome === !aw) || {}, tL = teams.find(t => !!t.isHome === aw) || {};
+  const tb = box?.teamBoxscore || [], bW = tb.find(x => String(x.teamId) === String(tW.teamId)), bL = tb.find(x => String(x.teamId) === String(tL.teamId));
+  const players = b => (b?.playerStats || []).map(x => ({ name: fix(`${x.firstName || ""} ${x.lastName || ""}`).trim(), pts: +x.points || 0, reb: +x.totalRebounds || 0, ast: +x.assists || 0, threes: +x.threePointsMade || 0, fgm: +x.fieldGoalsMade || 0, fga: +x.fieldGoalsAttempted || 0 })).sort((a, b) => b.pts - a.pts);
+  const pW = players(bW), pL = players(bL), star = [...pW, ...pL].sort((a, b) => b.pts - a.pts)[0];
+  const big = star && star.pts >= 35;
+  if (why === "ranked" && !big) return null;
+  const line = x => { const parts = [`${x.pts} points`]; if (x.reb >= 8) parts.push(`${x.reb} rebounds`); if (x.ast >= 6) parts.push(`${x.ast} assists`); return parts.join(", ").replace(/, ([^,]*)$/, " and $1") };
+  const shoot = x => x.fga ? ` on ${x.fgm}-of-${x.fga} shooting` : "";
+  const dayName = new Date(g.d + "T12:00:00").toLocaleDateString("en-US", { weekday: "long" });
+  const dateShort = new Date(g.d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const starTeam = star && pW.includes(star) ? W : L;
+  // headline
+  let t;
+  if (why === "upset") t = rk(W) ? `${rn(W)} upsets ${rn(L)}, ${score}` : `${nm(W)} stuns ${rn(L)}, ${score}`;
+  else if (why === "top25") t = `${rn(W)} ${ot ? "outlasts" : "beats"} ${rn(L)}${ot ? ` in ${otWord}` : ""}, ${score}`;
+  else if (why === "ot") t = `${rn(W)} survives ${rn(L)} in ${otWord}, ${score}`;
+  else t = `${star.name} scores ${star.pts} as ${rn(W)} ${starTeam === W ? "beats" : "holds off"} ${starTeam === W ? nm(L) : nm(starTeam)}`;
+  if (big && why !== "ranked" && starTeam === W && t.length < 60) t = `${star.name}'s ${star.pts} lifts ${rn(W)} past ${rn(L)}, ${score}`;
+  // play-by-play: lead changes, ties, biggest leads, the go-ahead basket
+  let lc = 0, ties = 0, prevLead = 0, maxW = 0, maxL = 0, goAhead = null;
+  const all = (pbp?.periods || []).flatMap(per => (per.playbyplayStats || []).map(x => ({ ...x, per: per.periodDisplay || "" })));
+  for (const x of all) {
+    if (x.homeScore === undefined || x.homeScore === "") continue;
+    const lead = (aw ? -1 : 1) * ((+x.homeScore || 0) - (+x.visitorScore || 0)); // from the winner's side
+    if (lead !== 0 && prevLead !== 0 && Math.sign(lead) !== Math.sign(prevLead)) lc++;
+    if (lead === 0 && prevLead !== 0) ties++;
+    if (lead > 0 && prevLead <= 0) goAhead = x;
+    maxW = Math.max(maxW, lead); maxL = Math.max(maxL, -lead); prevLead = lead;
+  }
+  // halftime
+  const ls1 = (c?.linescores || []).find(l => String(l.period) === "1");
+  const hW = ls1 ? +(aw ? ls1.visit : ls1.home) : null, hL = ls1 ? +(aw ? ls1.home : ls1.visit) : null;
+  const venue = c?.location?.venue ? ` at ${fix(c.location.venue)}` : "";
+  const body = [];
+  // 1. the result
+  let lead = `${rn(W)} beat ${rn(L)} ${score}${ot ? ` in ${otWord}` : ""} on ${dayName}${venue}.`;
+  if (why === "upset") lead += rk(W) ? ` ${nm(W)} came in ranked No. ${rk(W)}, ${rk(W) - rk(L)} spots below ${nm(L)} in the AP poll.` : ` ${nm(L)} came in ranked No. ${rk(L)} in the AP poll; ${nm(W)} was unranked.`;
+  if (why === "top25") lead += ` It was a matchup of two Top 25 teams.`;
+  body.push(lead);
+  // 2. how it unfolded
+  if (hW !== null && !isNaN(hW)) {
+    let flow = hW > hL ? `${nm(W)} led ${hW}–${hL} at halftime` : hW < hL ? `${nm(W)} trailed ${hL}–${hW} at halftime` : `The teams were tied ${hW}–${hL} at halftime`;
+    if (maxL >= 8 && hW <= hL) flow += ` and was down by as many as ${maxL} before coming back`;
+    else if (maxW >= 15) flow += ` and built a lead as large as ${maxW}`;
+    flow += ".";
+    if (lc >= 3) flow += ` The lead changed hands ${lc} times${ties ? `, with ${ties} ties` : ""}.`;
+    if (goAhead && /2nd|ot|overtime/i.test(goAhead.per) && clockSecs(goAhead.clock) <= 180) flow += ` ${nm(W)} went ahead for good with ${String(goAhead.clock).replace(/^0(\d:)/, "$1")} left in the ${/ot|overtime/i.test(goAhead.per) ? "overtime" : "second half"}: ${fix(goAhead.eventDescription || goAhead.homeText || goAhead.visitorText || "").replace(/\s+/g, " ").trim()}.`;
+    body.push(flow);
+  }
+  // 3. top performers
+  if (pW[0]) {
+    let perf = `${pW[0].name} led ${nm(W)} with ${line(pW[0])}${shoot(pW[0])}${pW[0].threes >= 3 ? `, including ${pW[0].threes} threes` : ""}.`;
+    if (pW[1] && pW[1].pts >= 10) perf += ` ${pW[1].name} added ${line(pW[1])}.`;
+    if (pL[0]) perf += ` For ${nm(L)}, ${pL[0].name} had ${line(pL[0])}${shoot(pL[0])}.`;
+    body.push(perf);
+  }
+  // 4. the numbers
+  const sw = bW?.teamStats, sl = bL?.teamStats, pc = (m, a) => a ? Math.round(+m / +a * 100) : 0;
+  if (sw && sl) {
+    const bits = [];
+    const fw = pc(sw.fieldGoalsMade, sw.fieldGoalsAttempted), fl = pc(sl.fieldGoalsMade, sl.fieldGoalsAttempted);
+    bits.push(`${nm(W)} shot ${fw}% from the field to ${nm(L)}'s ${fl}%`);
+    if (Math.abs(+sw.threePointsMade - +sl.threePointsMade) >= 4) bits.push(`made ${sw.threePointsMade} threes to ${sl.threePointsMade}`);
+    if (Math.abs(+sw.totalRebounds - +sl.totalRebounds) >= 8) bits.push(`${+sw.totalRebounds > +sl.totalRebounds ? "won" : "lost"} the rebounding battle ${sw.totalRebounds}–${sl.totalRebounds}`);
+    if (Math.abs(+sw.turnovers - +sl.turnovers) >= 5) bits.push(`committed ${sw.turnovers} turnovers to ${sl.turnovers}`);
+    body.push(bits.join(", ").replace(/, ([^,]*)$/, " and $1") + ".");
+  }
+  body.push(`Relive every play, the box score and the fan chat on the Scores tab.`);
+  const dek = pW[0] ? `${pW[0].name} had ${pW[0].pts} for ${nm(W)}${pL[0] ? `; ${pL[0].name} scored ${pL[0].pts} for ${nm(L)}` : ""}.` : `${nm(W)} ${score} ${nm(L)}.`;
+  return { id: "auto-" + g.id, gameId: g.id, auto: true, cat: "Recaps", team: W[0], t, dek, time: dateShort, read: `${Math.max(1, Math.round(body.join(" ").split(" ").length / 200))} min`, body, when: (+g.t || 0) + (why === "upset" ? 1 : 0) };
+}
+const allNews = () => [...AUTO, ...NEWS];
+
 function drawNews() {
   $("#ncats").innerHTML = NCATS.map(c => `<button aria-pressed="${c === ncat}" data-ncat="${c}">${c}</button>`).join("");
-  const list = NEWS.filter(n => ncat === "All" || n.cat === ncat); $("#story").hidden = true; $("#newslist").hidden = false;
+  loadAutoNews();
+  const list = allNews().filter(n => ncat === "All" || n.cat === ncat); $("#story").hidden = true; $("#newslist").hidden = false;
   if (!list.length) { $("#newslist").innerHTML = `<div class="empty" style="margin-top:14px">No stories in this topic yet.</div>`; return }
   const [lead, ...rest] = list;
-  $("#newslist").innerHTML = `<button class="lead" data-story="${lead.id}">${art(lead)}<div class="txt"><span class="ntag">${lead.cat}</span><h2>${esc(lead.t)}</h2><p class="ndek">${esc(lead.dek)}</p><span class="nmeta">${lead.time} · ${lead.read} read</span></div></button>
-   <div class="ngrid">${rest.map(n => `<button class="ncard" data-story="${n.id}">${art(n)}<div class="txt"><span class="ntag">${n.cat}</span><h3>${esc(n.t)}</h3><p class="ndek">${esc(n.dek)}</p><span class="nmeta">${n.time} · ${n.read} read</span></div></button>`).join("")}</div>`;
+  $("#newslist").innerHTML = `<button class="lead" data-story="${lead.id}">${art(lead)}<div class="txt"><span class="ntag">${lead.cat}</span>${lead.auto ? `<span class="ntag auto">⚡ Auto recap</span>` : ""}<h2>${esc(lead.t)}</h2><p class="ndek">${esc(lead.dek)}</p><span class="nmeta">${lead.time} · ${lead.read} read</span></div></button>
+   <div class="ngrid">${rest.map(n => `<button class="ncard" data-story="${n.id}">${art(n)}<div class="txt"><span class="ntag">${n.cat}</span>${n.auto ? `<span class="ntag auto">⚡ Auto</span>` : ""}<h3>${esc(n.t)}</h3><p class="ndek">${esc(n.dek)}</p><span class="nmeta">${n.time} · ${n.read} read</span></div></button>`).join("")}</div>`;
 }
 function openStory(id) {
-  const n = NEWS.find(x => x.id === id); if (!n) return; $("#newslist").hidden = true; const st = $("#story"); st.hidden = false;
-  st.innerHTML = `<button class="closebtn" data-closestory>← All news</button><div style="margin-top:18px"><span class="ntag">${n.cat}</span><h2>${esc(n.t)}</h2><p class="nmeta" style="margin:0 0 20px">By @collegebasketball · ${n.time} · ${n.read} read</p><div class="body">${n.body.map(p => `<p>${esc(p)}</p>`).join("")}</div></div>`; scrollTo(0, 0);
+  const n = allNews().find(x => x.id === id); if (!n) return; $("#newslist").hidden = true; const st = $("#story"); st.hidden = false;
+  st.innerHTML = `<button class="closebtn" data-closestory>← All news</button><div style="margin-top:18px"><span class="ntag">${n.cat}</span><h2>${esc(n.t)}</h2><p class="nmeta" style="margin:0 0 20px">${n.auto ? "Auto recap" : "By @collegebasketball"} · ${n.time} · ${n.read} read</p><div class="body">${n.body.map(p => `<p>${esc(p)}</p>`).join("")}</div>${n.auto ? `<p class="autonote">⚡ This recap was written automatically from the official box score and play-by-play. <a href="#scores">See the latest scores →</a></p>` : ""}</div>`; scrollTo(0, 0);
 }
 
 
