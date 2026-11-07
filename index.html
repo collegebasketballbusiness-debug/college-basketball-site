@@ -592,6 +592,24 @@ html.mg-open,html.mg-open body{overflow:hidden}
 .mg-chat .chat-head{display:none}
 .mg-chat .chat-list{flex:1;min-height:0;max-height:none;height:auto}
 @media (prefers-reduced-motion:reduce){.mg-sheet{animation:none}}
+/* desktop: the same game view under the site header, with the chat fixed in a column on the right */
+@media (min-width:761px){
+  .mg{top:var(--navh,64px);padding:0 max(0px,calc((100vw - 1440px) / 2));display:grid;grid-template-columns:minmax(0,1fr) 380px;grid-template-rows:auto auto auto minmax(0,1fr);grid-template-areas:"top chat" "score chat" "tabs chat" "body chat";border-top:1px solid #1C1C1F}
+  .mg-top{grid-area:top;padding-left:16px}.mg-score{grid-area:score;padding:18px 28px 16px}.mg-tabs{grid-area:tabs}.mg-body{grid-area:body;padding-bottom:90px}
+  .mg-score .mono{width:56px;height:56px}.mg-sc{font-size:64px}
+  .mg-tabs button{font-size:17px;padding:14px 4px 12px}
+  .fp{padding:16px 28px 16px 22px;grid-template-columns:56px 1fr}
+  .mg-feedbar{padding:14px 28px 6px}.mg-card,.mg-body .pk{padding:18px 28px}
+  .mg-dock{left:auto;right:calc(380px + 20px + max(0px,calc((100vw - 1440px) / 2)));bottom:20px;padding:6px;background:rgba(28,28,31,.85)}
+  .mg-dock-chat,.mg-hint{display:none}
+  .mg-dock,.mg.chat-up .mg-dock{display:none}
+  .mg-dock:has(.mg-dock-btn),.mg.chat-up .mg-dock:has(.mg-dock-btn){display:flex}
+  .mg-sheet{grid-area:chat;position:relative;inset:auto;height:auto;min-height:0;border-radius:0;border-top:0;border-left:1px solid #1C1C1F;box-shadow:none;animation:none;background:#0B0B0C}
+  .mg-sheet[hidden]{display:flex}
+  .mg-sheet-grab,.mg-x{display:none}
+  .mg-sheet-head{padding:16px 18px 10px;border-bottom:1px solid #1C1C1F}
+  .mg-chat .chat-list{padding:6px 18px 10px}
+}
 /* ---- reactions + comments on plays ---- */
 .chat-ref{display:block;max-width:100%;margin:2px 0 1px;padding:0;background:none;border:0;color:#8F95E8;font:600 12px var(--body);text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chat-ref:hover{text-decoration:underline}

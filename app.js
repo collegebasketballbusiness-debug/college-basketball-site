@@ -1015,7 +1015,7 @@ document.addEventListener("click", e => {
 // Desktop keeps the panel that opens under the card.
 const MQ = matchMedia("(max-width: 760px)");
 const isPhone = () => MQ.matches;
-let mgTab = "feed", mgFeed = "all", mgPushed = false, mgBodyKey = "";
+let mgTab = "feed", mgFeed = "all", mgPushed = false, mgBodyKey = "", mgScrollY = 0;
 const MG = document.createElement("div");
 MG.className = "mg"; MG.id = "mg"; MG.hidden = true;
 MG.innerHTML = `<div class="mg-top"><button class="mg-back" data-mgback aria-label="Back to scores"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button><div class="mg-strip" id="mgstrip"></div></div>
@@ -1024,17 +1024,18 @@ MG.innerHTML = `<div class="mg-top"><button class="mg-back" data-mgback aria-lab
   <div class="mg-sheet" id="mgsheet" hidden><div class="mg-sheet-grab"></div><div class="mg-sheet-head"><b>Game chat</b><button class="mg-x" data-mgchatclose aria-label="Close chat">×</button></div><div class="mg-chat" id="mgchat"></div></div>`;
 document.body.appendChild(MG);
 // the chat's own "Hide chat" button closes the sheet on phones
-MG.querySelector("#mgsheet").addEventListener("click", e => { if (e.target.closest('[data-chat="hide"]')) { e.stopPropagation(); closeChatSheet() } }, true);
+MG.querySelector("#mgsheet").addEventListener("click", e => { if (e.target.closest('[data-chat="hide"]')) { e.stopPropagation(); if (isPhone()) closeChatSheet() } }, true);
 function openPhoneGame(id) {
   const fresh = MG.hidden;
   openGame = id; gameDetail = null; boxSide = "away"; mgBodyKey = "";
   const g = Object.values(cache).flat().find(x => x.gameID === id);
   mgTab = g && g.gameState === "pre" ? "game" : "feed"; mgFeed = "all";
-  if (fresh) { history.pushState({ mg: id }, ""); mgPushed = true } else history.replaceState({ mg: id }, "");
+  if (fresh) { history.pushState({ mg: id }, ""); mgPushed = true; mgScrollY = scrollY; if (!isPhone()) scrollTo(0, 0) } else history.replaceState({ mg: id }, "");
   MG.hidden = false; document.documentElement.classList.add("mg-open");
   closeChatSheet(true);
   drawGame(); loadGame(id);
   $("#mgbody").scrollTop = 0;
+  if (!isPhone()) openChatSheet(); // desktop: the chat sits beside the feed the whole time
 }
 function closePhoneGame(fromHistory) {
   if (MG.hidden) return;
@@ -1044,6 +1045,7 @@ function closePhoneGame(fromHistory) {
   MG.hidden = true; document.documentElement.classList.remove("mg-open");
   closeChatSheet(true);
   openGame = null; gameDetail = null; drawGames();
+  if (!isPhone()) scrollTo(0, mgScrollY); // back to where you were on the scores
 }
 addEventListener("popstate", () => { if (!MG.hidden) closePhoneGame(true) });
 function openChatSheet() {
@@ -1171,7 +1173,8 @@ MG.addEventListener("click", e => {
   if (t.closest("[data-mgchatclose]")) { closeChatSheet(); return }
   if (t.closest('a[href^="#team-"]')) { closePhoneGame(true); return } // following a team link leaves the game
 });
-MQ.addEventListener?.("change", () => { if (!isPhone() && !MG.hidden) { MG.hidden = true; document.documentElement.classList.remove("mg-open"); closeChatSheet(true) } if (openGame) drawGame() });
+// resizing between phone and desktop: desktop keeps the chat open beside the feed; phones tuck it behind the Chat button
+MQ.addEventListener?.("change", () => { if (!MG.hidden) { if (isPhone()) closeChatSheet(true); else openChatSheet() } if (openGame) drawGame() });
 
 // ---------- refresh loop ----------
 let errShown = false;
@@ -1926,7 +1929,7 @@ document.addEventListener("click", async e => {
   const bx = t.closest("[data-box]"); if (bx) { boxSide = bx.dataset.box; drawGame(); return }
   if (t.closest("[data-closegame]")) { openGame = null; gameDetail = null; drawGames(); drawGame(); return }
   const gm = t.closest("[data-game]"); if (gm) {
-    if (isPhone() && !gm.closest("#mg")) { if (gm.dataset.dayOf === "t" && gday !== "t") { gday = "t"; drawDays(); drawFilters() } openPhoneGame(gm.dataset.game); return }
+    if (!gm.closest("#mg")) { if (gm.dataset.dayOf === "t" && gday !== "t") { gday = "t"; drawDays(); drawFilters() } openPhoneGame(gm.dataset.game); return }
     const fromCard = gm.classList.contains("game");
     if (fromCard && openGame === gm.dataset.game) { openGame = null; gameDetail = null; drawGames(); drawGame(); return } // tap again to close
     if (location.hash && location.hash !== "#scores") { location.hash = "scores" }
