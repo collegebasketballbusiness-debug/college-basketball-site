@@ -315,10 +315,13 @@ function drawTicker(changed) {
 
 // ---------- game page ----------
 async function loadGame(id) {
+  // Games that haven't started have no box score or play-by-play yet, so don't wait on them.
+  const sg = Object.values(cache).flat().find(g => g.gameID === id);
+  const started = !sg || sg.gameState !== "pre";
   const [game, box, pbp] = await Promise.all([
     api(`game/${id}`).catch(() => null),
-    api(`game/${id}/boxscore`).catch(() => null),
-    api(`game/${id}/play-by-play`).catch(() => null)
+    started ? api(`game/${id}/boxscore`, 1).catch(() => null) : null,
+    started ? api(`game/${id}/play-by-play`, 1).catch(() => null) : null
   ]);
   if (openGame !== id) return;
   gameDetail = { id, game: game?.contests?.[0] || null, box, pbp };
