@@ -273,6 +273,44 @@ table.box tr.totals td{font-weight:700;border-top:2px solid var(--ink)}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
 
 /* live-site additions */
+/* ---- Teams ---- */
+.tconf{padding-block:18px 6px}
+.tconf h2{font-size:24px;font-weight:900;margin-bottom:10px;color:var(--muted)}
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px}
+.tcard{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;text-decoration:none;color:var(--ink);min-width:0}
+.tcard:hover{border-color:var(--ball)}
+.tcard .mono{width:34px;height:34px;font-size:12px}
+.tcard span{min-width:0;display:flex;flex-direction:column}
+.tcard b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}
+.tcard small{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.tback{margin-top:22px}
+.thead{display:flex;align-items:center;gap:22px;padding:22px 0 18px;border-bottom:4px solid var(--tc);flex-wrap:wrap}
+.thead h1{font-size:clamp(40px,7vw,80px);font-weight:900}
+.thead h1 .rkb{font-size:.5em;vertical-align:middle}
+.thead .mono.lg{width:96px;height:96px}
+.tmeta{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;color:var(--muted);font-size:15px}
+.tmeta b{color:var(--ink)}
+.ttabs{margin:18px 0 6px;width:max-content;max-width:100%}
+.tbody{padding-top:12px}
+.sched td{vertical-align:middle}
+.sched .sdate{font-family:var(--mono);font-size:13px;color:var(--muted);white-space:nowrap}
+.sched .svs{font-family:var(--mono);font-size:12px;color:var(--muted);width:2.5em}
+.sched .sres{white-space:nowrap}
+.sched .sres .in b,.sched .sres .out b{margin-right:4px}
+.sched tr.sel td{background:var(--chip)}
+.sched tr.sbox td{background:var(--raised);padding:14px}
+.muted{color:var(--muted)}
+.live-txt{color:var(--live);display:inline-flex;align-items:center;gap:6px}
+.tsum{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:8px 0 18px}
+.tsum div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.tsum strong{display:block;font-family:var(--display);font-size:38px;font-weight:900;line-height:1}
+.tsum span{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.tstats{min-width:0}
+.pstats{min-width:720px}
+.sortbtn{background:none;border:0;padding:0;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer}
+.sortbtn.on{color:var(--ball)}
+td.srt{color:var(--ink);font-weight:700}
+@media (max-width:700px){.tsum{grid-template-columns:repeat(2,1fr)}.thead .mono.lg{width:64px;height:64px}}
 .ap-others{padding-block:36px 0}
 .ap-others h2{font-size:clamp(26px,3vw,34px);font-weight:900;margin-bottom:12px;color:var(--ink)}
 .ap-others .rk-table{min-width:0;width:100%}
@@ -464,6 +502,7 @@ img{max-width:100%}
       <a href="#news" data-tab="news">News</a>
       <a href="#rankings" data-tab="rankings">Rankings</a>
       <a href="#standings" data-tab="standings">Standings</a>
+      <a href="#teams" data-tab="teams">Teams</a>
       <a href="#discord" data-tab="discord">Discord</a>
     </nav>
     <a class="follow" href="https://www.instagram.com/collegebasketball/" target="_blank" rel="noopener">
@@ -528,6 +567,15 @@ img{max-width:100%}
     <div class="sb-top"><div><div class="eyebrow" id="stupdated"></div><h1>Standings</h1></div></div>
     <div class="fbar" id="sconfs" role="group" aria-label="Pick a conference"></div>
     <div class="tblwrap" style="margin-top:12px"><table class="rk-table"><thead><tr><th class="num">#</th><th>Team</th><th class="num">Conf</th><th class="num">Overall</th><th class="num">Pct</th><th class="num">Streak</th></tr></thead><tbody id="strows"><tr><td colspan="6">Loading…</td></tr></tbody></table></div>
+  </div>
+
+  <div class="view" data-view="teams" hidden>
+    <div id="teamdir-wrap">
+      <div class="sb-top"><div><div class="eyebrow">Division I · 365 teams</div><h1>Teams</h1></div></div>
+      <div class="toolbar" style="justify-content:flex-start"><div class="search" style="max-width:480px"><input id="tq" type="search" placeholder="Search any team or conference" autocomplete="off" aria-label="Search teams"></div></div>
+      <div id="teamdir"></div>
+    </div>
+    <div id="teampage" hidden></div>
   </div>
 
   <div class="view" data-view="rules" hidden>

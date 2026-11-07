@@ -546,7 +546,7 @@ function drawRankings() {
   $("#aprows").innerHTML = apRows.map(x => {
     const m = /^(.*?)\s*\((\d+)\)\s*$/.exec(fix(x.SCHOOL)) || [0, fix(x.SCHOOL), ""];
     const rec = recordOf(m[1]) || (x.RECORD ? fix(x.RECORD) : "–");
-    return `<tr><td class="num rkn">${esc(x.RANK)}</td><td><span class="tm">${mono(m[1], m[1])}<span>${esc(m[1])} ${m[2] ? `<small>(${m[2]})</small>` : ""}</span></span></td><td class="num">${esc(rec)}</td>${extra.map(k => `<td class="num">${esc(x[k])}</td>`).join("")}<td class="num">${esc(x.POINTS)}</td></tr>`;
+    return `<tr class="click" data-teamslug="${esc(logoSlug(m[1]))}"><td class="num rkn">${esc(x.RANK)}</td><td><span class="tm">${mono(m[1], m[1])}<span>${esc(m[1])} ${m[2] ? `<small>(${m[2]})</small>` : ""}</span></span></td><td class="num">${esc(rec)}</td>${extra.map(k => `<td class="num">${esc(x[k])}</td>`).join("")}<td class="num">${esc(x.POINTS)}</td></tr>`;
   }).join("");
 }
 // Teams that got AP votes but missed the Top 25, most votes first
@@ -556,7 +556,7 @@ async function loadApOthers() {
 }
 function drawApOthers() {
   const box = $("#apothers"); if (!apOthers || !apOthers.length) { box.hidden = true; return }
-  $("#otherrows").innerHTML = apOthers.map(x => `<tr><td><span class="tm">${mono(x.school, x.school)}<span>${esc(x.school)}</span></span></td><td class="num">${esc(recordOf(x.school) || "–")}</td><td class="num">${x.votes}</td></tr>`).join("");
+  $("#otherrows").innerHTML = apOthers.map(x => `<tr class="click" data-teamslug="${esc(logoSlug(x.school))}"><td><span class="tm">${mono(x.school, x.school)}<span>${esc(x.school)}</span></span></td><td class="num">${esc(recordOf(x.school) || "–")}</td><td class="num">${x.votes}</td></tr>`).join("");
   box.hidden = false;
 }
 let standings = null, sconf = "", standingsStale = false;
@@ -570,7 +570,7 @@ async function loadStandings() {
     standingsStale = !isNaN(up) && up < seasonStart;
     $("#stupdated").textContent = standingsStale ? "Conference play hasn't started · Overall records are current" : r.updated ? "Updated " + r.updated : "";
     sconf = sconf || (standings.find(c => c.conference === "Big Ten") || standings[0] || {}).conference || "";
-    drawStand();
+    drawStand(); if (teamOpen) drawTeam(); else drawTeamDir();
   } catch { $("#strows").innerHTML = `<tr><td colspan="6">Standings couldn't load. Try again in a minute.</td></tr>` }
 }
 function drawStand() {
@@ -586,7 +586,7 @@ function drawStand() {
   }
   $("#strows").innerHTML = rows.map((x, i) => {
     const stk = String(x["Overall STREAK"] || "").replace(/^Won /, "W").replace(/^Lost /, "L");
-    return `<tr><td class="num">${i + 1}</td><td><span class="tm">${mono(x.School, x.School)}<span>${rankBadge(apRank(x.School))}${esc(fix(x.School))}</span></span></td><td class="num">${esc(x["Conference W"])}-${esc(x["Conference L"])}</td><td class="num">${esc(x["Overall W"])}-${esc(x["Overall L"])}</td><td class="num">${esc(String(x["Overall PCT"] || "").replace(/^0/, ""))}</td><td class="num ${stk[0] === "W" ? "in" : stk[0] === "L" ? "out" : ""}">${esc(stk)}</td></tr>`;
+    return `<tr class="click" data-teamslug="${esc(logoSlug(x.School))}"><td class="num">${i + 1}</td><td><span class="tm">${mono(x.School, x.School)}<span>${rankBadge(apRank(x.School))}${esc(fix(x.School))}</span></span></td><td class="num">${esc(x["Conference W"])}-${esc(x["Conference L"])}</td><td class="num">${esc(x["Overall W"])}-${esc(x["Overall L"])}</td><td class="num">${esc(String(x["Overall PCT"] || "").replace(/^0/, ""))}</td><td class="num ${stk[0] === "W" ? "in" : stk[0] === "L" ? "out" : ""}">${esc(stk)}</td></tr>`;
   }).join("");
 }
 
@@ -607,8 +607,205 @@ function openStory(id) {
   st.innerHTML = `<button class="closebtn" data-closestory>← All news</button><div style="margin-top:18px"><span class="ntag">${n.cat}</span><h2>${esc(n.t)}</h2><p class="nmeta" style="margin:0 0 20px">By @collegebasketball · ${n.time} · ${n.read} read</p><div class="body">${n.body.map(p => `<p>${esc(p)}</p>`).join("")}</div></div>`; scrollTo(0, 0);
 }
 
+
+// ---------- Teams: directory and team pages ----------
+// Each team page shows the season schedule, team stats and player stats. Stats are added up from the box scores
+// of the team's finished games, so they're always in step with the scores on this site.
+let teamQuery = "", teamOpen = null, teamTab = "schedule", playerSort = "ppg";
+const TEAMDATA = {}; // slug -> { games, boxes: {gameId: boxscore}, loading }
+function teamName(slug) {
+  for (const c of standings || []) for (const x of c.standings || []) if (logoSlug(x.School) === slug) return fix(x.School).trim();
+  const T = window.TEAM_SLUGS || {}; const names = Object.keys(T).filter(k => T[k] === slug);
+  return names.sort((a, b) => b.length - a.length)[0] || slug.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+function teamConf(slug) {
+  for (const c of standings || []) for (const x of c.standings || []) if (logoSlug(x.School) === slug) return { conf: c.conference, row: x };
+  return { conf: "", row: null };
+}
+function drawTeamDir() {
+  const box = $("#teamdir");
+  if (!standings) { box.innerHTML = `<p class="empty">Loading teams…</p>`; return }
+  const q = teamQuery.trim().toLowerCase(), P6N = ["ACC", "Big Ten", "Big 12", "SEC", "Big East", "Pac-12"];
+  const groups = [...standings].sort((a, b) => (P6N.includes(b.conference) - P6N.includes(a.conference)) || a.conference.localeCompare(b.conference))
+    .map(c => ({ conf: c.conference, teams: (c.standings || []).map(x => fix(x.School).trim()).filter(n => !q || n.toLowerCase().includes(q) || c.conference.toLowerCase().includes(q)).sort((a, b) => a.localeCompare(b)) }))
+    .filter(g => g.teams.length);
+  box.innerHTML = groups.length ? groups.map(g => `<section class="tconf"><h2>${esc(g.conf)}</h2><div class="tgrid">${g.teams.map(n => {
+    const slug = logoSlug(n), r = rk({ names: { short: n } });
+    return `<a class="tcard" href="#team-${esc(slug)}">${mono(n, slug)}<span><b>${r ? `<span class="rkb">${r}</span>` : ""}${esc(n)}</b><small>${esc(recordOf(n) || "0-0")}</small></span></a>`;
+  }).join("")}</div></section>`).join("") : `<p class="empty">No teams match “${esc(teamQuery)}”.</p>`;
+}
+async function openTeam(slug) {
+  teamOpen = slug; $("#teamdir-wrap").hidden = true; $("#teampage").hidden = false;
+  if (!standings && !loaded.st) { loaded.st = 1; loadStandings() }
+  const T = TEAMDATA[slug] || (TEAMDATA[slug] = { games: null, boxes: {}, err: false });
+  drawTeam();
+  if (!T.games) {
+    try { const r = await api(`team-season/${slug}`, 2); T.games = r.games || []; T.partial = !!r.missingDays }
+    catch { T.err = true }
+    if (teamOpen === slug) drawTeam();
+    // grab the team's official color from one of its games for the page accent
+    const g0 = (T.games || [])[0];
+    if (g0 && !teamColorFor(slug)) api(`game/${g0.id}?info=1`).then(r => { for (const t of r?.contests?.[0]?.teams || []) if (t.seoname && t.color) setColor(t.seoname, t.color); saveColors(); if (teamOpen === slug) drawTeam() }).catch(() => { });
+  }
+  loadTeamBoxes(slug);
+}
+function closeTeam() { teamOpen = null; $("#teamdir-wrap").hidden = false; $("#teampage").hidden = true; drawTeamDir() }
+async function loadTeamBoxes(slug) {
+  const T = TEAMDATA[slug]; if (!T?.games || T.loadingBoxes) return;
+  const todo = T.games.filter(g => g.s === "final" && !T.boxes[g.id]);
+  if (!todo.length) return;
+  T.loadingBoxes = true; let i = 0;
+  async function worker() {
+    while (i < todo.length) {
+      const g = todo[i++];
+      try { T.boxes[g.id] = await api(`game/${g.id}/boxscore?final=1`) } catch { T.boxes[g.id] = null }
+      if (teamOpen === slug && teamTab !== "schedule") drawTeam();
+    }
+  }
+  await Promise.all([worker(), worker(), worker()]);
+  T.loadingBoxes = false;
+  if (teamOpen === slug) drawTeam();
+}
+// Adds up a team's box scores into season totals for the team, its opponents and each player.
+function seasonStats(slug) {
+  const T = TEAMDATA[slug], team = blankTotals(), opp = blankTotals(), players = {};
+  let games = 0;
+  for (const g of T.games || []) {
+    const b = T.boxes[g.id]; if (g.s !== "final" || !b) continue;
+    const me = (b.teams || []).find(t => t.seoname === slug); if (!me) continue;
+    const mine = (b.teamBoxscore || []).find(x => String(x.teamId) === String(me.teamId));
+    const theirs = (b.teamBoxscore || []).find(x => String(x.teamId) !== String(me.teamId));
+    if (!mine) continue;
+    games++; addTotals(team, mine.teamStats); addTotals(opp, theirs?.teamStats);
+    for (const p of mine.playerStats || []) {
+      const name = fix(`${p.firstName || ""} ${p.lastName || ""}`).trim(); if (!name) continue;
+      const P = players[name] || (players[name] = { name, num: p.number, pos: p.position || "", yr: p.year || "", gp: 0, gs: 0, min: 0, ...blankTotals() });
+      const min = parseInt(p.minutesPlayed, 10) || 0;
+      const played = min > 0 || +p.points || +p.totalRebounds || +p.fieldGoalsAttempted;
+      if (!played) continue;
+      P.gp++; if (p.starter) P.gs++; P.min += min; addTotals(P, p); P.num = p.number ?? P.num; P.pos = p.position || P.pos;
+    }
+  }
+  return { games, team, opp, players: Object.values(players) };
+}
+function blankTotals() { return { pts: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, oreb: 0, reb: 0, ast: 0, stl: 0, blk: 0, to: 0, pf: 0 } }
+function addTotals(t, s) {
+  if (!s) return; const n = v => parseInt(v, 10) || 0;
+  t.pts += n(s.points); t.fgm += n(s.fieldGoalsMade); t.fga += n(s.fieldGoalsAttempted); t.tpm += n(s.threePointsMade); t.tpa += n(s.threePointsAttempted);
+  t.ftm += n(s.freeThrowsMade); t.fta += n(s.freeThrowsAttempted); t.oreb += n(s.offensiveRebounds); t.reb += n(s.totalRebounds);
+  t.ast += n(s.assists); t.stl += n(s.steals); t.blk += n(s.blockedShots); t.to += n(s.turnovers); t.pf += n(s.personalFouls);
+}
+const per = (v, g) => g ? (v / g).toFixed(1) : "–";
+const pctOf = (m, a) => a ? (m / a * 100).toFixed(1) : "–";
+const shortDate = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+
+function drawTeam() {
+  const slug = teamOpen, box = $("#teampage"); if (!slug) return;
+  const T = TEAMDATA[slug] || {}, name = teamName(slug), { conf, row } = teamConf(slug), r = rk({ names: { short: name } });
+  const games = T.games || [];
+  let w = 0, l = 0;
+  for (const g of games) if (g.s === "final") { const me = g.h[0] === slug ? g.h : g.a, op = g.h[0] === slug ? g.a : g.h; (+me[2] > +op[2]) ? w++ : l++ }
+  const record = games.length ? `${w}-${l}` : (recordOf(name) || "0-0");
+  const confRec = row && !standingsStale ? `${row["Conference W"]}-${row["Conference L"]} in ${conf}` : "";
+  const tc = teamColorFor(slug);
+  box.style.setProperty("--tc", tc || "var(--ball)");
+  const head = `<button class="closebtn tback" data-teamback>← All teams</button>
+    <div class="thead">${mono(name, slug, null, "lg")}<div><div class="eyebrow">${esc(conf || "Division I")}</div><h1>${r ? `<span class="rkb">#${r}</span> ` : ""}${esc(name)}</h1>
+    <div class="tmeta"><span><b>${esc(record)}</b> overall</span>${confRec ? `<span>${esc(confRec)}</span>` : ""}${r ? `<span>AP No. ${r}</span>` : ""}</div></div></div>
+    <div class="days ttabs" role="tablist">${[["schedule", "Schedule"], ["stats", "Team stats"], ["players", "Players"]].map(([k, t]) => `<button role="tab" data-teamtab="${k}" aria-pressed="${teamTab === k}">${t}</button>`).join("")}</div>`;
+  let body = "";
+  if (T.err) body = `<p class="empty">The schedule couldn't load. Try again in a minute.</p>`;
+  else if (!T.games) body = `<p class="empty">Loading the season schedule… The first visit to a team can take a few seconds.</p>`;
+  else if (teamTab === "schedule") body = scheduleHTML(slug, games, T);
+  else {
+    const finals = games.filter(g => g.s === "final").length, have = finals ? Object.keys(T.boxes).filter(id => games.some(g => g.id === id)).length : 0;
+    const progress = finals && have < finals ? `<p class="note">Adding up ${have} of ${finals} games…</p>` : "";
+    if (!finals) body = `<p class="empty">Season stats appear after ${esc(name)}'s first game.</p>`;
+    else body = progress + (teamTab === "stats" ? teamStatsHTML(slug) : playersHTML(slug));
+  }
+  box.innerHTML = head + `<div class="tbody">${body}</div>`;
+}
+function scheduleHTML(slug, games, T) {
+  if (!games.length) return `<p class="empty">No games found yet for this season.</p>`;
+  const rows = games.map(g => {
+    const home = g.h[0] === slug, me = home ? g.h : g.a, op = home ? g.a : g.h;
+    const opName = op[1] || teamName(op[0]), opRank = op[3] || rk({ names: { short: opName } });
+    let res;
+    if (g.s === "final") { const won = +me[2] > +op[2]; res = `<span class="${won ? "in" : "out"}"><b>${won ? "W" : "L"}</b> ${esc(me[2])}–${esc(op[2])}${/OT/i.test(g.f) ? ` <small>${esc(g.f.replace(/^FINAL\s*/i, "").replace(/[()]/g, ""))}</small>` : ""}</span>` }
+    else if (g.s === "live") res = `<span class="live-txt"><span class="dot"></span>${esc(me[2])}–${esc(op[2])} · ${esc(g.p)} ${esc(g.c)}</span>`;
+    else res = `<span class="muted">${g.t ? new Date(g.t * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "TBA"}${g.n ? " · " + esc(g.n) : ""}</span>`;
+    const open = T.openBox === g.id;
+    return `<tr class="${g.s !== "pre" ? "click" : ""} ${open ? "sel" : ""}" ${g.s !== "pre" ? `data-teambox="${g.id}"` : ""}><td class="sdate">${shortDate(g.d)}</td><td class="svs">${home ? "vs" : "at"}</td><td><span class="tm">${mono(opName, op[0])}<span>${opRank ? `<span class="rkb">${opRank}</span>` : ""}${esc(opName)}</span></span></td><td class="num sres">${res}</td></tr>
+      ${open ? `<tr class="sbox"><td colspan="4">${gameBoxHTML(slug, g, T)}</td></tr>` : ""}`;
+  }).join("");
+  return `${T.partial ? `<p class="note">Some dates couldn't load. The full schedule will fill in shortly.</p>` : ""}<div class="tblwrap"><table class="rk-table sched"><thead><tr><th>Date</th><th></th><th>Opponent</th><th class="num">Result</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function gameBoxHTML(slug, g, T) {
+  const b = T.boxes[g.id];
+  if (b === undefined) return `<p class="note">Loading box score…</p>`;
+  if (!b) return `<p class="note">No box score for this game.</p>`;
+  const me = (b.teams || []).find(t => t.seoname === slug), sideId = T.boxSide?.[g.id] || me?.teamId;
+  const teams = b.teams || [], tb = (b.teamBoxscore || []).find(x => String(x.teamId) === String(sideId));
+  const ps = tb?.playerStats || [];
+  const row = p => `<tr><td><span class="pn">${esc(p.number)}</span> ${esc(fix(`${p.firstName} ${p.lastName}`))} <span class="pp">${esc(p.position || "")}</span></td><td class="num">${esc(p.minutesPlayed ?? "")}</td><td class="num"><b>${esc(p.points)}</b></td><td class="num">${esc(p.totalRebounds)}</td><td class="num">${esc(p.assists)}</td><td class="num">${esc(p.fieldGoalsMade)}-${esc(p.fieldGoalsAttempted)}</td><td class="num">${esc(p.threePointsMade)}-${esc(p.threePointsAttempted)}</td><td class="num">${esc(p.freeThrowsMade)}-${esc(p.freeThrowsAttempted)}</td></tr>`;
+  return `<div class="boxhead"><span class="note">${esc(shortDate(g.d))}</span><div class="days" role="group" aria-label="Team">${teams.map(t => `<button data-teamboxside="${esc(t.teamId)}" data-game-id="${g.id}" aria-pressed="${String(t.teamId) === String(sideId)}">${esc(fix(t.nameShort))}</button>`).join("")}</div></div>
+    <div class="tblwrap"><table class="box"><thead><tr><th>Player</th><th class="num">Min</th><th class="num">Pts</th><th class="num">Reb</th><th class="num">Ast</th><th class="num">FG</th><th class="num">3PT</th><th class="num">FT</th></tr></thead><tbody>${ps.map(row).join("")}</tbody></table></div>`;
+}
+function teamStatsHTML(slug) {
+  const { games, team: t, opp: o } = seasonStats(slug);
+  const rows = [
+    ["Points per game", per(t.pts, games), per(o.pts, games)],
+    ["Field goal %", pctOf(t.fgm, t.fga), pctOf(o.fgm, o.fga)],
+    ["Field goals made–attempted", `${per(t.fgm, games)}–${per(t.fga, games)}`, `${per(o.fgm, games)}–${per(o.fga, games)}`],
+    ["3-point %", pctOf(t.tpm, t.tpa), pctOf(o.tpm, o.tpa)],
+    ["3-pointers made–attempted", `${per(t.tpm, games)}–${per(t.tpa, games)}`, `${per(o.tpm, games)}–${per(o.tpa, games)}`],
+    ["Free throw %", pctOf(t.ftm, t.fta), pctOf(o.ftm, o.fta)],
+    ["Rebounds per game", per(t.reb, games), per(o.reb, games)],
+    ["Offensive rebounds", per(t.oreb, games), per(o.oreb, games)],
+    ["Assists per game", per(t.ast, games), per(o.ast, games)],
+    ["Steals per game", per(t.stl, games), per(o.stl, games)],
+    ["Blocks per game", per(t.blk, games), per(o.blk, games)],
+    ["Turnovers per game", per(t.to, games), per(o.to, games)],
+    ["Fouls per game", per(t.pf, games), per(o.pf, games)],
+  ];
+  const margin = games ? ((t.pts - o.pts) / games).toFixed(1) : "–";
+  return `<div class="tsum"><div><strong>${per(t.pts, games)}</strong><span>Points per game</span></div><div><strong>${per(o.pts, games)}</strong><span>Allowed per game</span></div><div><strong>${margin > 0 ? "+" : ""}${margin}</strong><span>Average margin</span></div><div><strong>${games}</strong><span>Games played</span></div></div>
+    <div class="tblwrap"><table class="rk-table tstats"><thead><tr><th>Per game</th><th class="num">${esc(teamName(slug))}</th><th class="num">Opponents</th></tr></thead><tbody>${rows.map(([k, a, b]) => `<tr><td>${k}</td><td class="num"><b>${a}</b></td><td class="num">${b}</td></tr>`).join("")}</tbody></table></div>`;
+}
+function playersHTML(slug) {
+  const { players } = seasonStats(slug);
+  const cols = [
+    ["gp", "GP", p => p.gp], ["gs", "GS", p => p.gs], ["mpg", "Min", p => p.min / p.gp], ["ppg", "Pts", p => p.pts / p.gp],
+    ["rpg", "Reb", p => p.reb / p.gp], ["apg", "Ast", p => p.ast / p.gp], ["spg", "Stl", p => p.stl / p.gp], ["bpg", "Blk", p => p.blk / p.gp],
+    ["tpg", "TO", p => p.to / p.gp], ["fg", "FG%", p => p.fga ? p.fgm / p.fga : -1], ["tp", "3P%", p => p.tpa ? p.tpm / p.tpa : -1], ["ft", "FT%", p => p.fta ? p.ftm / p.fta : -1]
+  ];
+  const col = cols.find(c => c[0] === playerSort) || cols[3];
+  const list = players.filter(p => p.gp).sort((a, b) => col[2](b) - col[2](a));
+  if (!list.length) return `<p class="empty">No player stats yet.</p>`;
+  const fmt = (k, p) => ({ gp: p.gp, gs: p.gs, fg: pctOf(p.fgm, p.fga), tp: pctOf(p.tpm, p.tpa), ft: pctOf(p.ftm, p.fta) }[k] ?? (cols.find(c => c[0] === k)[2](p)).toFixed(1));
+  return `<p class="note">Per-game averages. Tap a column to sort.</p><div class="tblwrap"><table class="box pstats"><thead><tr><th>Player</th>${cols.map(([k, t]) => `<th class="num"><button class="sortbtn ${k === col[0] ? "on" : ""}" data-psort="${k}">${t}</button></th>`).join("")}</tr></thead><tbody>
+    ${list.map(p => `<tr><td><span class="pn">${esc(p.num ?? "")}</span> ${esc(p.name)} <span class="pp">${esc(p.pos)}</span></td>${cols.map(([k]) => `<td class="num ${k === col[0] ? "srt" : ""}">${fmt(k, p)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+document.addEventListener("click", async e => {
+  const t = e.target;
+  const row = t.closest("[data-teamslug]"); if (row) { location.hash = "team-" + row.dataset.teamslug; return }
+  if (t.closest("[data-teamback]")) { location.hash = "teams"; return }
+  const tab = t.closest("[data-teamtab]"); if (tab) { teamTab = tab.dataset.teamtab; drawTeam(); return }
+  const ps = t.closest("[data-psort]"); if (ps) { playerSort = ps.dataset.psort; drawTeam(); return }
+  const side = t.closest("[data-teamboxside]"); if (side) { const T = TEAMDATA[teamOpen]; (T.boxSide || (T.boxSide = {}))[side.dataset.gameId] = side.dataset.teamboxside; drawTeam(); return }
+  const bx = t.closest("[data-teambox]"); if (bx) {
+    const T = TEAMDATA[teamOpen], id = bx.dataset.teambox;
+    T.openBox = T.openBox === id ? null : id; drawTeam();
+    if (T.openBox && T.boxes[id] === undefined) {
+      const g = T.games.find(x => x.id === id);
+      try { T.boxes[id] = await api(`game/${id}/boxscore${g?.s === "final" ? "?final=1" : ""}`) } catch { T.boxes[id] = null }
+      drawTeam();
+    }
+  }
+});
+
 // ---------- tabs ----------
-const VIEWS = ["scores", "news", "rankings", "standings", "discord", "rules"];
+const VIEWS = ["scores", "news", "rankings", "standings", "teams", "discord", "rules"];
 const loaded = {};
 function show(v) {
   if (!VIEWS.includes(v)) v = "scores";
@@ -616,10 +813,14 @@ function show(v) {
   document.querySelectorAll("[data-tab]").forEach(a => a.dataset.tab === v ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
   if (v === "rankings" && !loaded.ao) { loaded.ao = 1; loadApOthers() }
   if (v === "rankings" && !loaded.rk) { loaded.rk = 1; loadRankings() }
-  if (v === "standings" && !loaded.st) { loaded.st = 1; loadStandings() }
+  if ((v === "standings" || v === "teams") && !loaded.st) { loaded.st = 1; loadStandings() }
   scrollTo(0, 0);
 }
-const route = () => show((location.hash || "#scores").slice(1));
+const route = () => {
+  const h = (location.hash || "#scores").slice(1), m = /^team-([a-z0-9-]{1,60})$/.exec(h);
+  if (m) { show("teams"); openTeam(m[1]); document.querySelector('[data-tab="teams"]')?.setAttribute("aria-current", "page") }
+  else { show(h); if (h === "teams") closeTeam() }
+};
 addEventListener("hashchange", route);
 
 // Switching filters closes whatever game is open.
@@ -660,6 +861,7 @@ document.addEventListener("click", async e => {
   const s = t.closest("[data-story]"); if (s) { openStory(s.dataset.story); return }
   if (t.closest("[data-closestory]")) drawNews();
 });
+$("#tq").addEventListener("input", e => { teamQuery = e.target.value; drawTeamDir() });
 $("#q").addEventListener("input", e => {
   query = e.target.value;
   // close the open game if it no longer matches the search
