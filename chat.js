@@ -30,7 +30,7 @@ async function client() {
   if (sb) return sb;
   await loadLib();
   sb = window.supabase.createClient(CFG.url, CFG.anonKey, { auth: { persistSession: true, autoRefreshToken: true } });
-  sb.auth.onAuthStateChange((_e, session) => { setTimeout(() => loadMe(session?.user).then(async () => { if (me?.is_admin && gameId) await loadReports(gameId); render() }), 0) });
+  sb.auth.onAuthStateChange((_e, session) => { setTimeout(() => loadMe(session?.user).then(async () => { if (me?.is_admin && gameId) await loadReports(gameId); render(); window.dispatchEvent(new CustomEvent("cbb-auth")) }), 0) });
   const { data } = await sb.auth.getSession();
   await loadMe(data.session?.user);
   return sb;
@@ -178,11 +178,12 @@ function openModal(mode) {
   modal.querySelector("input")?.focus();
 }
 function closeModal() { if (modal) modal.hidden = true }
+let modalWhy = "";
 function drawModal(mode, note = "") {
   const card = modal.querySelector(".modal-card"), signup = mode === "signup";
   card.innerHTML = `<button class="modal-x" data-auth="close" aria-label="Close">×</button>
     <img class="modal-logo" src="logo.png" alt="" width="44" height="44">
-    <h2 id="auth-title">${signup ? "Join the chat" : "Log in"}</h2>
+    <h2 id="auth-title">${signup ? "Create your account" : "Log in"}</h2>${modalWhy ? `<p class="auth-why">${esc(modalWhy)}</p>` : ""}
     <div class="modal-tabs" role="tablist"><button role="tab" aria-selected="${!signup}" data-auth="tab-login">Log in</button><button role="tab" aria-selected="${signup}" data-auth="tab-signup">Create account</button></div>
     <form class="auth-form" data-auth="${signup ? "signup" : "login"}" novalidate>
       ${signup ? `<div><label for="au-name">Username</label><input id="au-name" autocomplete="username" maxlength="20" required placeholder="3–20 letters, numbers or _"><small class="hint" id="au-name-hint"></small></div>` : ""}
@@ -243,7 +244,7 @@ document.addEventListener("click", e => {
     mount?.querySelector("#chat-input")?.focus({ preventScroll: true });
   }
   else if (act === "hide") { open = false; try { sessionStorage.setItem("cbb-chat-open", "0") } catch { } render() }
-  else if (act === "login" || act === "signup") openModal(act);
+  else if (act === "login" || act === "signup") { modalWhy = ""; openModal(act) }
   else if (act === "logout") sb?.auth.signOut();
   else if (act === "report") report(+a.dataset.id);
   else if (act === "delete") remove(+a.dataset.id);
@@ -262,5 +263,13 @@ document.addEventListener("input", e => {
   }
 });
 
-window.CBBChat = { show, close };
+// Shared with the rest of the site (Pick'em uses the same accounts as the chat).
+window.CBBChat = {
+  show, close, on: ON,
+  client,                                   // the Supabase connection (loads the library the first time)
+  me: () => me,                             // the logged-in user, or null
+  auth: (mode, why) => { if (!ON) return; modalWhy = why || ""; openModal(mode || "login") },
+  // true if this browser has a saved login, without loading anything
+  hasSession: () => { try { return Object.keys(localStorage).some(k => /^sb-.*-auth-token$/.test(k)) } catch { return false } },
+};
 })();

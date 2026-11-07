@@ -227,13 +227,27 @@ const isLive = g => g.gameState === "live";
 const clockSecs = c => { const m = /^(\d+):(\d+)/.exec(String(c || "")); return m ? +m[1] * 60 + +m[2] : 9999 };
 const rk = t => +(t.rank || apRank(t.names.short) || 0);
 const BUZZ = {}; const buzzAsked = new Set();
+// The team that's ahead is unranked against a ranked team (or ranked 10+ spots lower).
+function underdogLeads(g) {
+  const a = +g.away.score || 0, h = +g.home.score || 0, ra = rk(g.away), rh = rk(g.home);
+  const leader = a > h ? "away" : h > a ? "home" : "";
+  if (!leader) return false;
+  const lr = leader === "away" ? ra : rh, tr = leader === "away" ? rh : ra;
+  return !!tr && (!lr || lr - tr >= 10);
+}
+// Upset Watch: an underdog is leading in the second half or overtime
+const upsetWatch = g => g.gameState === "live" && /2nd|OT/i.test(String(g.currentPeriod || "")) && underdogLeads(g);
+// Crunch time: within 5 points in the last 5 minutes, or in overtime
+function crunch(g) {
+  if (g.gameState !== "live") return false;
+  const per = String(g.currentPeriod || ""), m = Math.abs((+g.away.score || 0) - (+g.home.score || 0));
+  return m <= 5 && (/OT/i.test(per) || (/2nd/i.test(per) && clockSecs(g.contestClock) <= 300));
+}
 function badges(g) {
   const out = [], a = +g.away.score || 0, h = +g.home.score || 0, margin = Math.abs(a - h);
   const per = String(g.currentPeriod || ""), fm = String(g.finalMessage || "");
   const ot = /OT/i.test(per) || /OT/i.test(fm);
-  const ra = rk(g.away), rh = rk(g.home);
-  const leader = a > h ? "away" : h > a ? "home" : "";
-  const upset = leader && (() => { const lr = leader === "away" ? ra : rh, tr = leader === "away" ? rh : ra; return tr && (!lr || lr - tr >= 10) })();
+  const upset = underdogLeads(g);
   if (g.gameState === "live") {
     const late = (/2nd|OT/i.test(per)) && clockSecs(g.contestClock) <= 300;
     if (upset && (late || /2nd|OT/i.test(per))) out.push(["upset", "Upset Alert"]);
@@ -342,11 +356,34 @@ function drawGames() {
   if (!all) { setCards([`<div class="empty">Loading games…</div>`]); return }
   const live = (cache.t || []).filter(isLive).length;
   $("#livecount").innerHTML = live ? `<span class="dot"></span>${live} game${live === 1 ? "" : "s"} live now` : `No games live right now`;
-  const list = filtered(all);
+  let list = filtered(all);
+  // Crunch Time: close games in the last five minutes jump to the top
+  const hot = list.filter(crunch);
+  list = [...hot, ...list.filter(g => !crunch(g))];
+  drawCrunchHead(hot); drawUpsetStrip();
   setCards(list.length ? list.map(g => {
-    const st = status(g);
-    return `<button class="game ${openGame === g.gameID ? "sel" : ""} ${favGame(g) ? "fav" : ""}" data-game="${g.gameID}">${favGame(g) ? `<span class="favmark" title="One of your teams">${STAR(true)}</span>` : ""}<div class="gstat ${st.cls}"><span class="l">${st.cls ? '<span class="dot"></span>' : ""}${esc(st.txt)}</span>${tvHTML(g.network)}</div>${trow(g, "away")}${trow(g, "home")}${badgeHTML(badges(g))}</button>`;
+    const st = status(g), sa = logoSlug(g.away.names.short, g.away.names.seo), sh = logoSlug(g.home.names.short, g.home.names.seo);
+    const cls = ["game", openGame === g.gameID ? "sel" : "", favGame(g) ? "fav" : "", crunch(g) ? "crunch" : "", upsetWatch(g) ? "upsetw" : ""].filter(Boolean).join(" ");
+    return `<button class="${cls}" data-game="${g.gameID}" style="--ca:${teamColorFor(sa) || "#2A2A2E"};--ch:${teamColorFor(sh) || "#2A2A2E"}">${favGame(g) ? `<span class="favmark" title="One of your teams">${STAR(true)}</span>` : ""}${crunch(g) ? `<span class="crunchtag">Crunch time</span>` : ""}<div class="gstat ${st.cls}"><span class="l">${st.cls ? '<span class="dot"></span>' : ""}${esc(st.txt)}</span>${tvHTML(g.network)}</div>${trow(g, "away")}${trow(g, "home")}${badgeHTML(badges(g))}${socialHTML(g)}</button>`;
   }) : [`<div class="empty">${all.length ? "No games match this filter." : "No Division I games scheduled for this day."}</div>`]);
+}
+function drawCrunchHead(hot) {
+  const el = $("#crunchhead"); if (!el) return;
+  el.hidden = !hot.length;
+  if (hot.length) el.innerHTML = `<span class="ch-fire" aria-hidden="true">🔥</span><b>Crunch time</b><span>${hot.length} game${hot.length === 1 ? "" : "s"} within 5 in the final 5:00${hot.some(g => /OT/i.test(String(g.currentPeriod))) ? " or overtime" : ""}. They're first below.</span>`;
+}
+function drawUpsetStrip() {
+  const el = $("#upsetstrip"); if (!el) return;
+  const list = (cache.t || []).filter(upsetWatch).sort((a, b) => Math.min(rk(a.home) || 99, rk(a.away) || 99) - Math.min(rk(b.home) || 99, rk(b.away) || 99)).slice(0, 3);
+  el.hidden = !list.length;
+  el.innerHTML = list.map(g => {
+    const st = status(g), dog = (+g.away.score || 0) > (+g.home.score || 0) ? g.away : g.home, fav = dog === g.away ? g.home : g.away;
+    const nm = t => `${rk(t) ? `<span class="rkb">${rk(t)}</span>` : ""}${esc(fix(t.names.short))}`;
+    return `<div class="uw" role="button" tabindex="0" data-game="${g.gameID}" data-day-of="t" title="Open this game">
+      <span class="uw-tag"><span class="uw-siren" aria-hidden="true">🚨</span>Upset watch</span>
+      <span class="uw-score"><b>${nm(dog)} ${esc(dog.score)}</b><span>,</span> ${nm(fav)} ${esc(fav.score)}</span>
+      <span class="uw-st">${esc(st.txt)}</span>${tvHTML(g.network)}<span class="uw-go">Open →</span></div>`;
+  }).join("");
 }
 function flashChanges(list) {
   const changed = new Set();
@@ -356,6 +393,185 @@ function flashChanges(list) {
     lastScores[g.gameID] = key;
   }
   return changed;
+}
+
+// ---------- Pick'em and chat activity (Supabase) ----------
+// Totals come from two public database functions (see picks-setup.sql); your own picks need your account.
+const PICKCT = {}, MYPICK = {}, CHATACT = {};
+let socialOn = !!(window.CHAT_CONFIG?.url && (window.CHAT_CONFIG?.anonKey || "").length > 20), socialAt = 0, pendingPick = null;
+async function rpc(fn, body) {
+  const c = window.CHAT_CONFIG;
+  const r = await fetch(`${c.url}/rest/v1/rpc/${fn}`, { method: "POST", headers: { apikey: c.anonKey, "content-type": "application/json" }, body: JSON.stringify(body) });
+  if (r.status === 404) { socialOn = false; throw new Error("not set up") } // picks-setup.sql hasn't been run yet
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+async function loadSocial(force) {
+  if (!socialOn || (!force && Date.now() - socialAt < 55e3)) return;
+  socialAt = Date.now();
+  const ids = [...new Set([...(cache.t || []), ...(cache[gday] || [])].map(g => g.gameID))].slice(0, 400);
+  if (!ids.length) return;
+  try {
+    const [pc, ca] = await Promise.all([rpc("pick_counts", { ids }), rpc("chat_activity", { ids, mins: 30 })]);
+    for (const id of ids) { delete PICKCT[id]; delete CHATACT[id] }
+    for (const x of pc || []) PICKCT[x.game_id] = { home: +x.home || 0, away: +x.away || 0 };
+    for (const x of ca || []) CHATACT[x.game_id] = { people: +x.people || 0, msgs: +x.msgs || 0 };
+    await loadMyPicks(ids);
+    drawGames(); if (openGame) drawGame();
+  } catch { }
+}
+async function loadMyPicks(ids) {
+  const chat = window.CBBChat; if (!chat?.on || !chat.hasSession()) return;
+  try {
+    const sb = await chat.client(); if (!chat.me()) return;
+    const { data } = await sb.from("picks").select("game_id, side").in("game_id", ids || Object.keys(PICKCT));
+    for (const x of data || []) MYPICK[x.game_id] = x.side;
+  } catch { }
+}
+window.addEventListener("cbb-auth", async () => {
+  if (!window.CBBChat?.me()) { for (const k in MYPICK) delete MYPICK[k]; if (openGame) drawGame(); return }
+  await loadMyPicks([...new Set([...(cache.t || []), ...(cache[gday] || [])].map(g => g.gameID))]);
+  if (pendingPick) { const p = pendingPick; pendingPick = null; makePick(p.id, p.side) } else if (openGame) drawGame();
+});
+const pickLocked = g => g.gameState !== "pre" || (+g.startTimeEpoch && Date.now() >= +g.startTimeEpoch * 1000);
+async function makePick(id, side) {
+  const chat = window.CBBChat, g = Object.values(cache).flat().find(x => x.gameID === id);
+  if (!g || pickLocked(g) || !chat?.on) return;
+  if (!chat.me()) {
+    pendingPick = { id, side };
+    chat.auth(chat.hasSession() ? "login" : "signup", "Make your picks with a free account. It's the same account as the game chat.");
+    return;
+  }
+  const prev = MYPICK[id], ct = PICKCT[id] || (PICKCT[id] = { home: 0, away: 0 });
+  if (prev === side) return;
+  if (prev) ct[prev] = Math.max(0, ct[prev] - 1);
+  ct[side]++; MYPICK[id] = side; drawGame(); drawGames();
+  try {
+    const sb = await chat.client();
+    const { error } = await sb.from("picks").upsert({ game_id: id, side, locks_at: new Date(+g.startTimeEpoch * 1000).toISOString() }, { onConflict: "game_id,user_id" });
+    if (error) throw error;
+  } catch {
+    ct[side]--; if (prev) { ct[prev]++; MYPICK[id] = prev } else delete MYPICK[id];
+    drawGame(); drawGames();
+    const m = GHEAD.querySelector(".pk-msg"); if (m) m.textContent = "That pick didn't save. Try again.";
+  }
+}
+// The small line at the bottom of a game card: people chatting and the fans' pick
+function socialHTML(g) {
+  const out = [], ca = CHATACT[g.gameID], pc = PICKCT[g.gameID];
+  if (ca && ca.people) out.push(`<span class="soc talk"><i aria-hidden="true">💬</i>${ca.people} talking</span>`);
+  const n = pc ? pc.home + pc.away : 0;
+  if (n) {
+    const side = pc.home >= pc.away ? "home" : "away", pct = Math.round(pc[side] / n * 100);
+    out.push(`<span class="soc pick"><i aria-hidden="true">🗳️</i>${pct}% ${esc(fix(g[side].names.short))}</span>`);
+  }
+  return out.length ? `<div class="socials">${out.join("")}</div>` : "";
+}
+// Pick'em block in the open game
+function pickHTML(g) {
+  if (!socialOn || !window.CBBChat?.on || !+g.startTimeEpoch) return "";
+  const locked = pickLocked(g), mine = MYPICK[g.gameID], ct = PICKCT[g.gameID] || { home: 0, away: 0 }, n = ct.home + ct.away;
+  const pa = n ? Math.round(ct.away / n * 100) : 50, ph = n ? 100 - pa : 50;
+  const nm = t => esc(fix(t.names.short)), sa = logoSlug(g.away.names.short, g.away.names.seo), sh = logoSlug(g.home.names.short, g.home.names.seo);
+  const btn = (sd, t, slug) => `<button class="pk-btn ${mine === sd ? "on" : ""}" data-pick="${sd}" data-pickgame="${g.gameID}" ${locked ? "disabled" : ""} style="--tc:${teamColorFor(slug) || "#555"}">${mono(t.names.short, t.names.seo)}<span>${nm(t)}</span>${mine === sd ? "<em>Your pick</em>" : ""}</button>`;
+  const bar = (n || mine) ? `<div class="pk-bar" style="--ca:${teamColorFor(sa) || "#555"};--ch:${teamColorFor(sh) || "#777"}"><span style="width:${pa}%"><b>${pa}%</b></span><span style="width:${ph}%"><b>${ph}%</b></span></div>` : "";
+  let note;
+  if (g.gameState === "final" && mine) {
+    const won = (+g.home.score > +g.away.score ? "home" : "away") === mine;
+    note = won ? "✅ You called it." : "❌ Not this time.";
+  } else if (locked) note = mine ? `Picks are locked. You picked ${nm(g[mine])}.` : "Picks are locked for this game.";
+  else note = mine ? "You can change your pick until tip-off." : "Tap a team. Picks lock at tip-off.";
+  return `<div class="pk"><div class="pk-head"><b>${locked ? "Fans picked" : "Who wins?"}</b><span>${n} pick${n === 1 ? "" : "s"}</span></div>
+    ${locked && !mine && !n ? "" : `<div class="pk-row">${btn("away", g.away, sa)}${btn("home", g.home, sh)}</div>`}${bar}<p class="pk-msg">${note}</p></div>`;
+}
+
+// ---------- Share cards ----------
+// Makes an Instagram-story-sized picture (1080×1920) of a final score, to share or save.
+function loadImg(src) {
+  return new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src });
+}
+function hexRGB(hex) { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ""); const n = m ? parseInt(m[1], 16) : 0x333333; return [n >> 16, (n >> 8) & 255, n & 255] }
+async function makeShareCard(g) {
+  try { await Promise.all(['900 120px "Big Shoulders Display"', '800 60px "Big Shoulders Display"', '600 40px Barlow', '700 40px Barlow', '500 30px "IBM Plex Mono"'].map(f => document.fonts.load(f))) } catch { }
+  const W = 1080, H = 1920, c = document.createElement("canvas"); c.width = W; c.height = H;
+  const x = c.getContext("2d");
+  const sa = logoSlug(g.away.names.short, g.away.names.seo), sh = logoSlug(g.home.names.short, g.home.names.seo);
+  const ca = teamColorFor(sa) || "#444444", ch = teamColorFor(sh) || "#666666";
+  const a = +g.away.score || 0, h = +g.home.score || 0, awayWon = a > h;
+  const [la, lh, brand] = await Promise.all([loadImg(logoURL(sa)), loadImg(logoURL(sh)), loadImg("logo.png")]);
+  // background: dark, with each team's color glowing from its half
+  x.fillStyle = "#0B0B0C"; x.fillRect(0, 0, W, H);
+  const glow = (col, y) => { const [r, gg, b] = hexRGB(col); const gr = x.createRadialGradient(W / 2, y, 40, W / 2, y, 900); gr.addColorStop(0, `rgba(${r},${gg},${b},.55)`); gr.addColorStop(1, `rgba(${r},${gg},${b},0)`); x.fillStyle = gr; x.fillRect(0, 0, W, H) };
+  glow(ca, 560); glow(ch, 1360);
+  // basketball seams
+  x.strokeStyle = "rgba(255,255,255,.06)"; x.lineWidth = 6;
+  x.beginPath(); x.arc(W / 2, H / 2, 700, 0, Math.PI * 2); x.stroke();
+  // header
+  x.textAlign = "center"; x.fillStyle = "#FF6A13"; x.font = '500 34px "IBM Plex Mono", monospace';
+  const day = new Date((+g.startTimeEpoch || Date.now() / 1000) * 1000).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).toUpperCase();
+  x.fillText(day, W / 2, 170);
+  x.fillStyle = "#F5F5F2"; x.font = '900 150px "Big Shoulders Display", Impact, sans-serif'; x.fillText(String(status(g).txt).toUpperCase(), W / 2, 320);
+  const tags = badges(g).map(b => b[1].toUpperCase()).filter(t => !/BLOWOUT/.test(t)).slice(0, 2);
+  if (tags.length) {
+    x.font = '800 44px "Big Shoulders Display", Impact, sans-serif';
+    const t = tags.join("  ·  "), w = x.measureText(t).width + 60;
+    x.fillStyle = tags.some(t => /UPSET/.test(t)) ? "#FFD23F" : "#FF6A13"; roundRect(x, W / 2 - w / 2, 352, w, 70, 12); x.fill();
+    x.fillStyle = "#0B0B0C"; x.fillText(t, W / 2, 404);
+  }
+  // one team per half: logo, name, score
+  const block = (t, logo, score, won, y) => {
+    x.globalAlpha = won ? 1 : .55;
+    if (logo) { const s = 300, r = Math.min(s / logo.width, s / logo.height) || 1, w = (logo.width || s) * r, hh = (logo.height || s) * r; x.drawImage(logo, 90 + (s - w) / 2, y + (s - hh) / 2, w, hh) }
+    x.textAlign = "left"; x.fillStyle = "#F5F5F2";
+    const rnk = rk(t); let nx = 430;
+    if (rnk) { x.font = '900 70px "Big Shoulders Display", Impact, sans-serif'; x.fillStyle = "#FF6A13"; x.fillText(String(rnk), nx, y + 130); nx += x.measureText(String(rnk)).width + 18; x.fillStyle = "#F5F5F2" }
+    let size = 96; const name = fix(t.names.short).toUpperCase();
+    do { x.font = `900 ${size}px "Big Shoulders Display", Impact, sans-serif`; size -= 4 } while (x.measureText(name).width > W - nx - 70 && size > 40);
+    x.fillText(name, nx, y + 130);
+    x.font = '900 220px "Big Shoulders Display", Impact, sans-serif'; x.fillText(String(score), 430, y + 330);
+    if (won) { x.fillStyle = "#FF6A13"; x.beginPath(); x.moveTo(400, y + 260); x.lineTo(370, y + 240); x.lineTo(370, y + 280); x.fill() }
+    x.globalAlpha = 1;
+  };
+  block(g.away, la, a, awayWon, 520);
+  x.strokeStyle = "rgba(255,255,255,.18)"; x.lineWidth = 3; x.beginPath(); x.moveTo(90, 960); x.lineTo(W - 90, 960); x.stroke();
+  block(g.home, lh, h, !awayWon, 1010);
+  // footer: brand
+  x.fillStyle = "rgba(255,255,255,.08)"; roundRect(x, 90, 1600, W - 180, 170, 28); x.fill();
+  if (brand) {
+    const t = document.createElement("canvas"); t.width = t.height = 120; const tx = t.getContext("2d");
+    tx.drawImage(brand, 0, 0, 120, 120); tx.globalCompositeOperation = "source-in"; tx.fillStyle = "#F5F5F2"; tx.fillRect(0, 0, 120, 120);
+    x.drawImage(t, 130, 1625, 120, 120);
+  }
+  x.textAlign = "left"; x.fillStyle = "#F5F5F2";
+  let fs = 64; do { x.font = `900 ${fs}px "Big Shoulders Display", Impact, sans-serif`; fs -= 2 } while (x.measureText("@COLLEGEBASKETBALL").width > W - 90 - 280 - 30 && fs > 30);
+  x.fillText("@COLLEGEBASKETBALL", 280, 1690);
+  x.fillStyle = "#9C9C98"; x.font = '500 30px "IBM Plex Mono", monospace'; x.fillText(location.host || "college-basketball-site.vercel.app", 282, 1738);
+  return c;
+}
+function roundRect(x, X, Y, w, h, r) { x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r); x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath() }
+let shareModal = null;
+async function shareFinal(id) {
+  const g = Object.values(cache).flat().find(x => x.gameID === id); if (!g) return;
+  if (!shareModal) {
+    shareModal = document.createElement("div"); shareModal.className = "modal sharemodal"; shareModal.hidden = true;
+    document.body.appendChild(shareModal);
+    shareModal.addEventListener("click", e => { if (e.target === shareModal || e.target.closest("[data-shareclose]")) shareModal.hidden = true });
+    document.addEventListener("keydown", e => { if (e.key === "Escape" && shareModal && !shareModal.hidden) shareModal.hidden = true });
+  }
+  shareModal.innerHTML = `<div class="modal-card share-card"><button class="modal-x" data-shareclose aria-label="Close">×</button><h2>Share this final</h2><p class="share-wait">Making your image…</p></div>`;
+  shareModal.hidden = false;
+  const canvas = await makeShareCard(g);
+  const name = `${fix(g.away.names.short)}-${fix(g.home.names.short)}-final`.replace(/[^A-Za-z0-9-]+/g, "-").toLowerCase() + ".png";
+  canvas.toBlob(blob => {
+    const url = URL.createObjectURL(blob), file = new File([blob], name, { type: "image/png" });
+    const canShare = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+    shareModal.querySelector(".modal-card").innerHTML = `<button class="modal-x" data-shareclose aria-label="Close">×</button><h2>Share this final</h2>
+      <img class="share-img" src="${url}" alt="Final score image: ${esc(fix(g.away.names.short))} ${esc(g.away.score)}, ${esc(fix(g.home.names.short))} ${esc(g.home.score)}">
+      <div class="share-actions">${canShare ? `<button class="chat-btn" data-sharego>Share</button>` : ""}<a class="chat-btn ${canShare ? "ghost" : ""}" href="${url}" download="${name}">Save image</a></div>
+      <p class="share-tip">Post it to your story and tag <b>@collegebasketball</b>.</p>`;
+    const go = shareModal.querySelector("[data-sharego]");
+    if (go) go.onclick = () => navigator.share({ files: [file], title: "Final score", text: "via @collegebasketball" }).catch(() => { });
+  }, "image/png");
 }
 
 // ---------- Game of the Night ----------
@@ -380,6 +596,25 @@ function heroScore(g) {
   if (g.network) s += 3;
   return s;
 }
+// A small chart of the lead swinging back and forth: above the line the home team leads, below it the away team.
+function momentumSVG(series, g) {
+  const pts = [{ lead: 0, per: series[0].per }, ...series].slice(-400), n = pts.length, W = 600, H = 64, mid = H / 2;
+  const scale = Math.max(8, ...pts.map(p => Math.abs(p.lead)));
+  const xy = pts.map((p, i) => [(i / (n - 1)) * W, mid - (p.lead / scale) * (mid - 4)]);
+  const line = xy.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join("");
+  const area = `${line}L${W},${mid}L0,${mid}Z`;
+  const cuts = []; for (let i = 1; i < n; i++) if (pts[i].per !== pts[i - 1].per) cuts.push(xy[i][0]);
+  const big = Math.max(...pts.map(p => p.lead)), small = Math.min(...pts.map(p => p.lead));
+  const ab = t => esc((t.names.char6 || fix(t.names.short)).toString().slice(0, 12));
+  return `<div class="momo"><div class="momo-lab"><span class="h">${ab(g.home)}${big > 0 ? ` <i>led by ${big}</i>` : ""}</span><span class="a">${ab(g.away)}${small < 0 ? ` <i>led by ${-small}</i>` : ""}</span></div>
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-label="Lead over the game">
+      <defs><clipPath id="mo-top"><rect x="0" y="0" width="${W}" height="${mid}"/></clipPath><clipPath id="mo-bot"><rect x="0" y="${mid}" width="${W}" height="${mid}"/></clipPath></defs>
+      ${cuts.map(x => `<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="0" y2="${H}" class="mo-cut"/>`).join("")}
+      <line x1="0" x2="${W}" y1="${mid}" y2="${mid}" class="mo-mid"/>
+      <path d="${area}" clip-path="url(#mo-top)" class="mo-h"/><path d="${area}" clip-path="url(#mo-bot)" class="mo-a"/>
+      <path d="${line}" class="mo-line"/>
+    </svg><div class="momo-cap">Momentum</div></div>`;
+}
 let heroId = null, heroLast = "", heroFlash = { a: 0, h: 0 }, heroExtra = { id: null, lines: [], play: "" };
 // While the featured game is live, also pull its scoring by half and the latest play.
 async function loadHeroExtra(id) {
@@ -391,7 +626,14 @@ async function loadHeroExtra(id) {
   if (ct) noteBest(id, ct.teams?.find(t => t.isHome)?.score, ct.teams?.find(t => !t.isHome)?.score);
   const lp = [...plays].reverse().find(p => p.homeScore !== undefined); if (lp) noteBest(id, lp.homeScore, lp.visitorScore);
   for (const list of Object.values(cache)) for (const g of list) if (g.gameID === id) applyBest(g);
-  heroExtra = { id, lines: ct?.linescores || [], play: last ? fix(last.eventDescription || last.homeText || last.visitorText).replace(/\s+/g, " ").trim() : "" };
+  // momentum: the home team's lead after every scoring play
+  const series = []; let prevKey = "";
+  for (const p of pbp?.periods || []) for (const x of p.playbyplayStats || []) {
+    if (x.homeScore === undefined || x.homeScore === "" || x.visitorScore === undefined) continue;
+    const k = x.homeScore + "-" + x.visitorScore; if (k === prevKey) continue; prevKey = k;
+    series.push({ lead: (+x.homeScore || 0) - (+x.visitorScore || 0), per: p.periodDisplay || p.periodNumber || "" });
+  }
+  heroExtra = { id, series, lines: ct?.linescores || [], play: last ? fix(last.eventDescription || last.homeText || last.visitorText).replace(/\s+/g, " ").trim() : "" };
   drawHero();
 }
 function drawHero() {
@@ -416,9 +658,10 @@ function drawHero() {
   const ex = heroExtra.id === g.gameID ? heroExtra : { lines: [], play: "" };
   const halves = isLive && ex.lines.length ? `<div class="hlines">${ex.lines.map(l => `<span><b>${+l.period <= 2 ? (l.period === "1" ? "1st" : "2nd") : "OT" + (+l.period > 3 ? +l.period - 2 : "")}</b> ${esc(l.visit)}–${esc(l.home)}</span>`).join("")}</div>` : "";
   const play = isLive && ex.play ? `<div class="hplay"><span>Last play</span> ${esc(ex.play)}</div>` : "";
+  const momo = isLive && ex.series && ex.series.length >= 4 ? momentumSVG(ex.series, g) : "";
   el.classList.toggle("is-live", isLive);
   el.innerHTML = `<div class="gt"><div class="lbl">Game of the <span>${when}</span>${isLive ? `<em class="livepill"><span class="dot"></span>Live</em>` : ""}</div>${badgeHTML(badges(g))}</div>
-    <div class="gm">${side(g.away, "away")}<div class="mid"><div class="big2">${pre ? "VS" : `<span class="${fin && a < h ? "l" : "w"}" data-hs="a">${a}</span>–<span class="${fin && h < a ? "l" : "w"}" data-hs="h">${h}</span>`}</div><div class="st2 ${st.cls}">${esc(st.txt)}</div>${tvHTML(g.network, 0, 1)}${halves}</div>${side(g.home, "home", 1)}</div>${play}`;
+    <div class="gm">${side(g.away, "away")}<div class="mid"><div class="big2">${pre ? "VS" : `<span class="${fin && a < h ? "l" : "w"}" data-hs="a">${a}</span>–<span class="${fin && h < a ? "l" : "w"}" data-hs="h">${h}</span>`}</div><div class="st2 ${st.cls}">${esc(st.txt)}</div>${tvHTML(g.network, 0, 1)}${halves}</div>${side(g.home, "home", 1)}</div>${momo}${play}`;
   el.hidden = false;
   // flash whichever score just changed (kept for a moment, since the banner can redraw several times)
   const now = `${g.gameID}:${a}-${h}`, before = heroLast; heroLast = now;
@@ -522,7 +765,7 @@ function drawGame() {
   const tHome = teams.find(t => t.isHome) || {}, tAway = teams.find(t => !t.isHome) || {};
   const st = status(sg), pre = sg.gameState === "pre";
   const side = (s, t, r) => `<a class="side tlink ${r ? "r" : ""}" href="#team-${esc(logoSlug(s.names.short, s.names.seo))}" title="Open ${esc(fix(s.names.short))} team page">${mono(s.names.short, s.names.seo, t.color, "lg")}<div><strong>${(s.rank || apRank(s.names.short)) ? `<span style="color:var(--ball)">#${s.rank || apRank(s.names.short)}</span> ` : ""}${esc(fix(s.names.short))}</strong><small>${esc(recordOf(s.names.short, sg, s === sg.home ? "home" : "away") || fix(t.record || "").replace(/[()]/g, ""))}${CONF[confOf(s)] ? " · " + CONF[confOf(s)] : ""}</small></div></a>`;
-  let html = `<div class="gh">${side(sg.away, tAway)}<div class="big">${pre ? "vs" : `${esc(sg.away.score)}–${esc(sg.home.score)}`}<small class="${st.cls}">${esc(st.txt)}</small>${tvHTML(sg.network, 1)}</div>${side(sg.home, tHome, 1)}</div>`;
+  let html = `<div class="gh">${side(sg.away, tAway)}<div class="big">${pre ? "vs" : `${esc(sg.away.score)}–${esc(sg.home.score)}`}<small class="${st.cls}">${esc(st.txt)}</small>${tvHTML(sg.network, 1)}${sg.gameState === "final" ? `<button class="sharebtn" data-share="${sg.gameID}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Share final</button>` : ""}</div>${side(sg.home, tHome, 1)}</div>${pickHTML(sg)}`;
   GHEAD.innerHTML = html; html = "";
   if (!d) { GMAIN.innerHTML = `<div class="boxwrap"><p style="margin:0;color:var(--muted)">Loading game details…</p></div>`; return }
 
@@ -583,7 +826,7 @@ async function refresh() {
     errShown = false; $("#apierr").hidden = true;
     const changed = before ? flashChanges(cache.t) : (flashChanges(cache.t), new Set());
     if (gday === "t") { drawFilters(); drawGames(); }
-    drawTicker(changed); drawHero();
+    drawTicker(changed); drawHero(); loadSocial();
     if (!teamOpen && !$("#teamdir-wrap").closest(".view").hidden) drawTeamDir(); // live tags on the Teams tab
     if (teamOpen && !$("#teampage").hidden && teamTab === "schedule" && (cache.t || []).some(g => (isLive(g) || changed.has(g.gameID)) && [g.home, g.away].some(t => t.names.seo === teamOpen))) drawTeam(); // live scores on a team page
     { const hg = (cache.t || []).find(x => x.gameID === heroId); if (hg && hg.gameState === "live") loadHeroExtra(heroId) }
@@ -1286,6 +1529,13 @@ function openWatch(e) {
   e.preventDefault(); e.stopPropagation(); window.open(w.dataset.watch, "_blank", "noopener");
 }
 window.addEventListener("click", openWatch, true);
+document.addEventListener("click", e => {
+  const pb = e.target.closest && e.target.closest("[data-pick]");
+  if (pb) { e.preventDefault(); makePick(pb.dataset.pickgame, pb.dataset.pick); return }
+  const sh = e.target.closest && e.target.closest("[data-share]");
+  if (sh) { e.preventDefault(); shareFinal(sh.dataset.share) }
+});
+window.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.classList?.contains("uw")) { e.preventDefault(); e.target.click() } });
 // stars, "today" tags and the conference bar on the Teams tab
 function teamDirClick(e) {
   if (!e.target.closest) return;
@@ -1311,7 +1561,7 @@ document.addEventListener("click", async e => {
   const d = t.closest("[data-day]"); if (d) {
     gday = d.dataset.day; openGame = null; gameDetail = null; drawDays(); drawGame();
     if (!cache[gday] || gday !== "t") { $("#games").innerHTML = `<div class="empty">Loading games…</div>`; try { await loadDay(gday) } catch { $("#games").innerHTML = `<div class="empty">Games couldn't load. Try again.</div>`; return } }
-    drawFilters(); drawGames(); return;
+    drawFilters(); drawGames(); loadSocial(true); return;
   }
   const f = t.closest("[data-gf]"); if (f) { gfilt = f.dataset.gf; gconf = ""; closeGame(); drawFilters(); drawGames(); return }
   const cf = t.closest("[data-conf-f]"); if (cf) { gconf = cf.dataset.confF; gfilt = "All"; closeGame(); drawFilters(); drawGames(); return }
