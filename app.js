@@ -6,7 +6,7 @@
 // ---------- setup ----------
 const API = window.API_BASE !== undefined ? window.API_BASE : "/api/ncaa?path=";
 const REFRESH_MS = 15000;
-const LIVE_GAME_MS = 5000; // an open live game checks for new plays this often
+const LIVE_GAME_MS = 4000; // an open live game checks for new plays this often
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const fix = s => { s = String(s ?? ""); try { return /Ã|Â/.test(s) ? decodeURIComponent(escape(s)) : s } catch { return s } };
@@ -727,6 +727,43 @@ function drawTicker(changed) {
 
 // ---------- game page ----------
 let gameSig = "", gameBusy = false;
+// ---- one play at a time ----
+// NCAA's feed often posts several plays at once. Instead of dropping them all in together, new plays are
+// shown one by one, a second or two apart, so the feed feels like it's happening live.
+const RV = { id: null, full: null, shown: 0, timer: null, last: 0 };
+const flatPlays = pbp => (pbp?.periods || []).flatMap(p => p.playbyplayStats || []);
+const playText = x => x.eventDescription || x.homeText || x.visitorText || "";
+function trimPbp(pbp, n) { // the same feed, cut off after the first n plays
+  if (!pbp) return pbp;
+  let left = n;
+  return { ...pbp, periods: (pbp.periods || []).map(p => { const list = p.playbyplayStats || [], k = Math.max(0, Math.min(list.length, left)); left -= k; return { ...p, playbyplayStats: list.slice(0, k) } }).filter((p, i) => i === 0 || p.playbyplayStats.length) };
+}
+function revealPbp(id, pbp, firstLoad) {
+  const total = flatPlays(pbp).length;
+  if (firstLoad || RV.id !== id || !pbp) { clearTimeout(RV.timer); RV.timer = null; Object.assign(RV, { id, full: pbp, shown: total, last: 0 }); return pbp }
+  RV.full = pbp;
+  if (RV.shown > total) RV.shown = total; // a play was removed or corrected
+  if (RV.shown < total && !RV.timer) revealNext(true);
+  return trimPbp(pbp, RV.shown);
+}
+function revealNext(inline) {
+  RV.timer = null;
+  if (openGame !== RV.id || !RV.full) return;
+  const all = flatPlays(RV.full), total = all.length;
+  if (RV.shown >= total) return;
+  if (inline && Date.now() - RV.last < 900) { RV.timer = setTimeout(revealNext, 900); return }
+  // show the next play (substitutions are hidden, so they ride along with the play after them)
+  do RV.shown++; while (RV.shown < total && isSub(playText(all[RV.shown - 1])));
+  RV.last = Date.now();
+  if (!inline && gameDetail?.id === RV.id) { gameDetail.pbp = trimPbp(RV.full, RV.shown); drawGame(); markNewest() }
+  else setTimeout(markNewest, 0);
+  const left = total - RV.shown;
+  // spread what's left over the next few seconds: about 1.5s apart, quicker if a lot piled up
+  if (left > 0) RV.timer = setTimeout(revealNext, Math.max(700, Math.min(1800, 4500 / left)));
+}
+function markNewest() { // a quick slide-in on the play that just arrived
+  for (const sel of ["#mgbody .fp", "#gdetail .play"]) { const el = document.querySelector(sel); if (el) { el.classList.remove("just-in"); void el.offsetWidth; el.classList.add("just-in") } }
+}
 // While a live game is open (and the tab is visible), look for new plays every few seconds.
 setInterval(async () => {
   if (!openGame || document.hidden || gameBusy) return;
@@ -749,7 +786,8 @@ async function loadGame(id) {
   const sig = id + JSON.stringify([game, box, pbp]);
   if (sig === gameSig && gameDetail?.id === id) { loadPlayCounts(id); return }
   gameSig = sig;
-  gameDetail = { id, game: game?.contests?.[0] || null, box, pbp };
+  const firstLoad = gameDetail?.id !== id;
+  gameDetail = { id, game: game?.contests?.[0] || null, box, pbp: revealPbp(id, pbp, firstLoad) };
   const ct = gameDetail.game?.teams || [];
   for (const t of ct) if (t.seoname && t.color) setColor(t.seoname, t.color);
   const lastPlay = (pbp?.periods || []).flatMap(p => p.playbyplayStats || []).at(-1);
