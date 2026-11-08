@@ -8,7 +8,7 @@ const BASE = (process.env.NCAA_API_BASE || "https://ncaa-api.henrygd.me").replac
 // Only these kinds of paths are allowed through, with how long Vercel may cache each (seconds).
 const ROUTES = [
   [/^scoreboard\/basketball-men\/d1(\/\d{4}\/\d{2}\/\d{2})?(\/all-conf)?$/, 10],
-  [/^game\/\d{4,10}(\/(boxscore|play-by-play|team-stats))?$/, 4],
+  [/^game\/\d{4,10}(\/(boxscore|play-by-play|team-stats))?$/, 3],
   [/^game\/\d{4,10}\?info=1$/, 3600],
   [/^game\/\d{4,10}\/boxscore\?final=1$/, 86400],   // finished games don't change
   [/^rankings\/basketball-men\/d1\/associated-press$/, 1800],
