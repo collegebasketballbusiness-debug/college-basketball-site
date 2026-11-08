@@ -13,6 +13,7 @@ let sb = null, libLoading = null;
 let me = null;            // { id, username, is_admin, banned }
 let mount = null, gameId = null, gameLabel = "", channel = null;
 let msgs = [], reportsByMsg = {}, reported = new Set(), open = false, lastSent = 0;
+let replyTo = null;       // the message being answered: { id, username, body }
 try { open = sessionStorage.getItem("cbb-chat-open") === "1" } catch { }
 
 // ---------- library + session ----------
@@ -47,7 +48,7 @@ function show(el, id, label, opts) {
   if (opts && opts.open && !open) { open = true; if (mount === el && gameId === id) render(true) } // the phone chat sheet always shows the full chat
   if (mount === el && gameId === id) return;   // same game: keep everything as is
   leave();
-  mount = el; gameId = id; gameLabel = label; msgs = []; reportsByMsg = {};
+  mount = el; gameId = id; gameLabel = label; msgs = []; reportsByMsg = {}; replyTo = null;
   render();
   client().then(() => { if (gameId === id) { loadMessages(id); subscribe(id) } }).catch(e => setStatus(e.message));
 }
@@ -58,7 +59,8 @@ function leave() { if (channel && sb) { sb.removeChannel(channel); channel = nul
 async function loadMessages(id) {
   // comments on individual plays show up here too, labeled with the play they're about
   const base = cols => sb.from("messages").select(cols).eq("game_id", id).eq("deleted", false).order("created_at", { ascending: false }).limit(KEEP);
-  let { data, error } = await base("id, game_id, user_id, username, body, deleted, created_at, play_key");
+  let { data, error } = await base("id, game_id, user_id, username, body, deleted, created_at, play_key, reply_to");
+  if (error && /reply_to/i.test(error.message || "")) ({ data, error } = await base("id, game_id, user_id, username, body, deleted, created_at, play_key")); // features-setup.sql not run yet
   if (error && /play_key/i.test(error.message || "")) ({ data, error } = await base("id, game_id, user_id, username, body, deleted, created_at")); // database not updated yet
   if (gameId !== id) return;
   if (error) { setStatus("Chat couldn't load. Try again in a minute."); return }
@@ -100,7 +102,7 @@ function render(scrollDown) {
     ? `<div class="chat-join"><button class="chat-btn" data-chat="signup">Create account</button><button class="chat-btn ghost" data-chat="login">Log in</button></div>`
     : me.banned
       ? `<div class="chat-join"><span>You've been removed from the chat.</span></div>`
-      : `<form class="chat-form" data-chat="form"><label class="sr" for="chat-input">Message</label><input id="chat-input" maxlength="${MAX}" autocomplete="off" placeholder="Say something about ${esc(gameLabel)}"><span class="chat-count" aria-live="polite"></span><button class="chat-btn" type="submit">Send</button></form>`;
+      : `<div class="chat-replybar" ${replyTo ? "" : "hidden"}>${replyTo ? `↩ Replying to <b>@${esc(replyTo.username)}</b><button type="button" class="chat-link" data-chat="noreply" aria-label="Cancel reply">×</button>` : ""}</div><div class="chat-at-list" hidden></div><form class="chat-form" data-chat="form"><label class="sr" for="chat-input">Message</label><input id="chat-input" maxlength="${MAX}" autocomplete="off" placeholder="Say something about ${esc(gameLabel)}"><span class="chat-count" aria-live="polite"></span><button class="chat-btn" type="submit">Send</button></form>`;
   mount.innerHTML = `<section class="chat" aria-label="Game chat">
     <div class="chat-head"><div><b>Game chat</b><a href="#rules" class="chat-link">Chat rules</a></div><button class="chat-link" data-chat="hide">Hide chat</button></div>
     <div class="chat-list" role="log" aria-live="polite"></div>
@@ -112,6 +114,7 @@ function render(scrollDown) {
 function msgHTML(m) {
   const mine = me && m.user_id === me.id;
   const tools = [];
+  if (me && !me.banned) tools.push(`<button class="chat-link" data-chat="reply" data-id="${m.id}">Reply</button>`);
   if (me && !mine && !me.banned) tools.push(reported.has(m.id) ? `<span class="chat-done">Reported</span>` : `<button class="chat-link" data-chat="report" data-id="${m.id}">Report</button>`);
   if (me?.is_admin) {
     tools.push(`<button class="chat-link danger" data-chat="delete" data-id="${m.id}">Delete</button>`);
@@ -120,8 +123,47 @@ function msgHTML(m) {
   const flags = me?.is_admin && reportsByMsg[m.id] ? `<span class="chat-flag">${reportsByMsg[m.id]} report${reportsByMsg[m.id] > 1 ? "s" : ""}</span>` : "";
   // a comment left on a play: show which play, and tapping it opens that play's comments
   const ref = m.play_key ? `<button class="chat-ref" data-thread="${esc(m.play_key)}" title="Open this play's comments">↳ on: ${esc((window.CBBPlayLabel && window.CBBPlayLabel(m.game_id || gameId, m.play_key)) || "a play")}</button>` : "";
-  return `<div class="chat-msg ${mine ? "mine" : ""}" data-mid="${m.id}">${ref}<div class="chat-meta"><b>${esc(m.username)}</b><time>${timeOf(m.created_at)}</time>${flags}<span class="chat-tools">${tools.join("")}</span></div><p>${esc(m.body)}</p></div>`;
+  // a reply: show a line from the message it answers (tap to jump to it)
+  let quote = "";
+  if (m.reply_to) {
+    const parent = msgs.find(x => x.id === m.reply_to);
+    quote = parent ? `<button class="chat-quote" data-chat="jump" data-id="${parent.id}">↩ <b>@${esc(parent.username)}</b> ${esc(parent.body.length > 60 ? parent.body.slice(0, 58) + "…" : parent.body)}</button>` : `<span class="chat-quote">↩ replying to an earlier message</span>`;
+  }
+  const atMe = me && !mine && mentions(m.body, me.username);
+  return `<div class="chat-msg ${mine ? "mine" : ""} ${atMe ? "at-me" : ""}" data-mid="${m.id}">${ref}${quote}<div class="chat-meta"><b>${esc(m.username)}</b><time>${timeOf(m.created_at)}</time>${flags}<span class="chat-tools">${tools.join("")}</span></div><p>${withMentions(m.body)}</p></div>`;
 }
+// @mentions: highlighted in messages, and a message that mentions you stands out
+const AT = /(^|[^A-Za-z0-9_@])@([A-Za-z0-9_]{3,20})(?![A-Za-z0-9_])/g;
+const mentions = (body, name) => [...String(body || "").matchAll(AT)].some(x => x[2].toLowerCase() === String(name).toLowerCase());
+const withMentions = body => esc(body).replace(AT, (all, pre, n) => `${pre}<span class="chat-at${me && n.toLowerCase() === me.username.toLowerCase() ? " me" : ""}">@${n}</span>`);
+// usernames to suggest after typing "@": people in this chat, most recent first
+function atSuggest(input) {
+  const box = mount?.querySelector(".chat-at-list"); if (!box) return;
+  const m = /(?:^|\s)@([A-Za-z0-9_]{0,20})$/.exec(input.value.slice(0, input.selectionStart ?? input.value.length));
+  if (!m) { box.hidden = true; return }
+  const q = m[1].toLowerCase(), seen = new Set(), names = [];
+  for (let i = msgs.length - 1; i >= 0 && names.length < 6; i--) {
+    const u = msgs[i].username; if (!u || seen.has(u) || (me && u === me.username)) continue; seen.add(u);
+    if (u.toLowerCase().startsWith(q)) names.push(u);
+  }
+  box.hidden = !names.length;
+  box.innerHTML = names.map(n => `<button type="button" data-chat="at" data-name="${esc(n)}">@${esc(n)}</button>`).join("");
+}
+function insertAt(name) {
+  const input = mount?.querySelector("#chat-input"); if (!input) return;
+  const pos = input.selectionStart ?? input.value.length, before = input.value.slice(0, pos).replace(/@([A-Za-z0-9_]{0,20})$/, `@${name} `);
+  input.value = before + input.value.slice(pos); input.focus(); input.setSelectionRange(before.length, before.length);
+  mount.querySelector(".chat-at-list").hidden = true; countChars(input);
+}
+function startReply(id) {
+  const m = msgs.find(x => x.id === id); if (!m) return;
+  replyTo = { id: m.id, username: m.username, body: m.body };
+  const bar = mount?.querySelector(".chat-replybar");
+  if (bar) { bar.hidden = false; bar.innerHTML = `↩ Replying to <b>@${esc(m.username)}</b><button type="button" class="chat-link" data-chat="noreply" aria-label="Cancel reply">×</button>` }
+  const input = mount?.querySelector("#chat-input");
+  if (input) { if (!mentions(input.value, m.username) && (!me || m.username !== me.username)) input.value = `@${m.username} ` + input.value.replace(/^@[A-Za-z0-9_]+\s+/, ""); input.focus(); input.setSelectionRange(input.value.length, input.value.length); countChars(input) }
+}
+function endReply() { replyTo = null; const bar = mount?.querySelector(".chat-replybar"); if (bar) { bar.hidden = true; bar.innerHTML = "" } }
 function renderList(scrollDown) {
   const list = mount?.querySelector(".chat-list"); if (!list) { render(); return }
   const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
@@ -136,10 +178,13 @@ async function send(input) {
   const wait = SLOW_MS - (Date.now() - lastSent);
   if (wait > 0) { setStatus(`Slow mode: wait ${Math.ceil(wait / 1000)} more second${wait > 1000 ? "s" : ""}.`); return }
   input.disabled = true; setStatus("");
-  const { data, error } = await sb.from("messages").insert({ game_id: gameId, user_id: me.id, username: me.username, body }).select().single();
+  const row = { game_id: gameId, user_id: me.id, username: me.username, body };
+  if (replyTo && msgs.some(m => m.id === replyTo.id)) row.reply_to = replyTo.id;
+  let { data, error } = await sb.from("messages").insert(row).select().single();
+  if (error && row.reply_to && /reply_to/i.test(error.message || "")) { delete row.reply_to; ({ data, error } = await sb.from("messages").insert(row).select().single()) } // database not updated yet
   input.disabled = false; input.focus();
   if (error) { setStatus(friendly(error.message)); return }
-  lastSent = Date.now(); input.value = ""; countChars(input);
+  lastSent = Date.now(); input.value = ""; countChars(input); endReply();
   if (!msgs.some(m => m.id === data.id)) { msgs.push(data); renderList(true) }
 }
 function friendly(m) {
@@ -255,6 +300,10 @@ document.addEventListener("click", e => {
   else if (act === "report") report(+a.dataset.id);
   else if (act === "delete") remove(+a.dataset.id);
   else if (act === "ban") ban(a.dataset.uid, a.dataset.name, a);
+  else if (act === "reply") startReply(+a.dataset.id);
+  else if (act === "noreply") endReply();
+  else if (act === "at") insertAt(a.dataset.name);
+  else if (act === "jump") { const el = mount?.querySelector(`[data-mid="${+a.dataset.id}"]`); if (el) { el.scrollIntoView({ block: "center", behavior: "smooth" }); el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash") } }
 });
 document.addEventListener("submit", e => {
   const f = e.target;
@@ -262,7 +311,7 @@ document.addEventListener("submit", e => {
   else if (f.matches(".auth-form")) { e.preventDefault(); submitAuth(f) }
 });
 document.addEventListener("input", e => {
-  if (e.target.id === "chat-input") countChars(e.target);
+  if (e.target.id === "chat-input") { countChars(e.target); atSuggest(e.target) }
   if (e.target.id === "au-name") {
     const h = document.getElementById("au-name-hint"), v = e.target.value;
     h.textContent = v && !/^[A-Za-z0-9_]{3,20}$/.test(v) ? "Use 3 to 20 letters, numbers or underscores." : "";

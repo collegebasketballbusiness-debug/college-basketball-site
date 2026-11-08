@@ -5,7 +5,7 @@
 
 // ---------- setup ----------
 const API = window.API_BASE !== undefined ? window.API_BASE : "/api/ncaa?path=";
-const REFRESH_MS = 15000;
+const REFRESH_MS = 10000;
 const LIVE_GAME_MS = 4000; // an open live game checks for new plays this often
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -297,7 +297,7 @@ function filtered(list) {
     .filter(g => gfilt === "All" || (gfilt === "AP Top 25" && (rankOf(g.home) || rankOf(g.away))) || (gfilt === "Power 6" && (P6.includes(confOf(g.home)) || P6.includes(confOf(g.away)))))
     .filter(g => !gconf || confOf(g.home) === gconf || confOf(g.away) === gconf)
     .filter(g => !q || (fix(g.home.names.short) + " " + fix(g.away.names.short)).toLowerCase().includes(q))
-    .sort((x, y) => ({ live: 0, pre: 1, final: 2 }[x.gameState] - { live: 0, pre: 1, final: 2 }[y.gameState]) || (+x.startTimeEpoch - +y.startTimeEpoch) || ((rankOf(y.home) || rankOf(y.away) ? 1 : 0) - (rankOf(x.home) || rankOf(x.away) ? 1 : 0)));
+    .sort((x, y) => ((favGame(y) ? 1 : 0) - (favGame(x) ? 1 : 0)) || ({ live: 0, pre: 1, final: 2 }[x.gameState] - { live: 0, pre: 1, final: 2 }[y.gameState]) || (+x.startTimeEpoch - +y.startTimeEpoch) || ((rankOf(y.home) || rankOf(y.away) ? 1 : 0) - (rankOf(x.home) || rankOf(x.away) ? 1 : 0)));
 }
 function trow(g, side) {
   const t = g[side], other = g[side === "home" ? "away" : "home"];
@@ -482,7 +482,7 @@ function pickHTML(g) {
     note = won ? "✅ You called it." : "❌ Not this time.";
   } else if (locked) note = mine ? `Picks are locked. You picked ${nm(g[mine])}.` : "Picks are locked for this game.";
   else note = mine ? "You can change your pick until tip-off." : "Tap a team. Picks lock at tip-off.";
-  return `<div class="pk"><div class="pk-head"><b>${locked ? "Fans picked" : "Who wins?"}</b><span>${n} pick${n === 1 ? "" : "s"}</span></div>
+  return `<div class="pk"><div class="pk-head"><b>${locked ? "Fans picked" : "Who wins?"}</b><span>${n} pick${n === 1 ? "" : "s"}<a class="pk-lb" href="#pickem">🏆 Leaderboard</a></span></div>
     ${locked && !mine && !n ? "" : `<div class="pk-row">${btn("away", g.away, sa)}${btn("home", g.home, sh)}</div>`}${bar}<p class="pk-msg">${note}</p></div>`;
 }
 
@@ -553,26 +553,120 @@ function roundRect(x, X, Y, w, h, r) { x.beginPath(); x.moveTo(X + r, Y); x.arcT
 let shareModal = null;
 async function shareFinal(id) {
   const g = Object.values(cache).flat().find(x => x.gameID === id); if (!g) return;
+  const name = `${fix(g.away.names.short)}-${fix(g.home.names.short)}-final`.replace(/[^A-Za-z0-9-]+/g, "-").toLowerCase() + ".png";
+  openShare("Share this final", () => makeShareCard(g), name, `Final score image: ${fix(g.away.names.short)} ${g.away.score}, ${fix(g.home.names.short)} ${g.home.score}`, "Final score");
+}
+// a share/save sheet for any picture the site makes
+async function openShare(title, make, name, alt, shareTitle) {
   if (!shareModal) {
     shareModal = document.createElement("div"); shareModal.className = "modal sharemodal"; shareModal.hidden = true;
     document.body.appendChild(shareModal);
     shareModal.addEventListener("click", e => { if (e.target === shareModal || e.target.closest("[data-shareclose]")) shareModal.hidden = true });
     document.addEventListener("keydown", e => { if (e.key === "Escape" && shareModal && !shareModal.hidden) shareModal.hidden = true });
   }
-  shareModal.innerHTML = `<div class="modal-card share-card"><button class="modal-x" data-shareclose aria-label="Close">×</button><h2>Share this final</h2><p class="share-wait">Making your image…</p></div>`;
+  shareModal.innerHTML = `<div class="modal-card share-card"><button class="modal-x" data-shareclose aria-label="Close">×</button><h2>${esc(title)}</h2><p class="share-wait">Making your image…</p></div>`;
   shareModal.hidden = false;
-  const canvas = await makeShareCard(g);
-  const name = `${fix(g.away.names.short)}-${fix(g.home.names.short)}-final`.replace(/[^A-Za-z0-9-]+/g, "-").toLowerCase() + ".png";
+  const canvas = await make();
   canvas.toBlob(blob => {
     const url = URL.createObjectURL(blob), file = new File([blob], name, { type: "image/png" });
     const canShare = !!(navigator.canShare && navigator.canShare({ files: [file] }));
-    shareModal.querySelector(".modal-card").innerHTML = `<button class="modal-x" data-shareclose aria-label="Close">×</button><h2>Share this final</h2>
-      <img class="share-img" src="${url}" alt="Final score image: ${esc(fix(g.away.names.short))} ${esc(g.away.score)}, ${esc(fix(g.home.names.short))} ${esc(g.home.score)}">
+    shareModal.querySelector(".modal-card").innerHTML = `<button class="modal-x" data-shareclose aria-label="Close">×</button><h2>${esc(title)}</h2>
+      <img class="share-img" src="${url}" alt="${esc(alt)}">
       <div class="share-actions">${canShare ? `<button class="chat-btn" data-sharego>Share</button>` : ""}<a class="chat-btn ${canShare ? "ghost" : ""}" href="${url}" download="${name}">Save image</a></div>
       <p class="share-tip">Post it to your story and tag <b>@collegebasketball</b>.</p>`;
     const go = shareModal.querySelector("[data-sharego]");
-    if (go) go.onclick = () => navigator.share({ files: [file], title: "Final score", text: "via @collegebasketball" }).catch(() => { });
+    if (go) go.onclick = () => navigator.share({ files: [file], title: shareTitle, text: "via @collegebasketball" }).catch(() => { });
   }, "image/png");
+}
+
+// ---------- share a play ----------
+// A story-sized picture (1080×1920) of one play: the headline, what happened, the score and the clock.
+async function makePlayCard(g, p) {
+  try { await Promise.all(['900 120px "Big Shoulders Display"', '800 60px "Big Shoulders Display"', '600 40px Barlow', '700 40px Barlow', '500 30px "IBM Plex Mono"'].map(f => document.fonts.load(f))) } catch { }
+  const W = 1080, H = 1920, c = document.createElement("canvas"); c.width = W; c.height = H;
+  const x = c.getContext("2d");
+  const sa = logoSlug(g.away.names.short, g.away.names.seo), sh = logoSlug(g.home.names.short, g.home.names.seo);
+  const ca = teamColorFor(sa) || "#444444", ch = teamColorFor(sh) || "#666666";
+  const team = p.side ? g[p.side] : null, tc = p.side === "away" ? ca : p.side === "home" ? ch : "#FF6A13";
+  const [la, lh, lt, brand] = await Promise.all([loadImg(logoURL(sa)), loadImg(logoURL(sh)), team ? loadImg(logoURL(p.side === "away" ? sa : sh)) : null, loadImg("logo.png")]);
+  x.fillStyle = "#0B0B0C"; x.fillRect(0, 0, W, H);
+  const [r, gg, b] = hexRGB(tc); const gr = x.createRadialGradient(W / 2, 640, 60, W / 2, 640, 1000); gr.addColorStop(0, `rgba(${r},${gg},${b},.6)`); gr.addColorStop(1, `rgba(${r},${gg},${b},0)`); x.fillStyle = gr; x.fillRect(0, 0, W, H);
+  x.strokeStyle = "rgba(255,255,255,.06)"; x.lineWidth = 6; x.beginPath(); x.arc(W / 2, 700, 620, 0, Math.PI * 2); x.stroke();
+  // top: game clock
+  x.textAlign = "center"; x.fillStyle = "#FF6A13"; x.font = '500 38px "IBM Plex Mono", monospace';
+  x.fillText(`${p.per || ""} · ${p.clock || ""}`.toUpperCase(), W / 2, 170);
+  // the team that made the play
+  if (lt) { const s = 300, k = Math.min(s / lt.width, s / lt.height) || 1, w = (lt.width || s) * k, hh = (lt.height || s) * k; x.drawImage(lt, (W - w) / 2, 260 + (s - hh) / 2, w, hh) }
+  // headline
+  let head = p.l || "Big play";
+  if (p.n && p.pts > 0) { if ((p.tags || []).includes("Lead change") || (p.tags || []).includes("Takes the lead")) head = `Go-ahead ${p.n}`; else if ((p.tags || []).includes("Ties it")) head = `Game-tying ${p.n}` }
+  head = `${p.e || ""} ${head}`.trim().toUpperCase();
+  let fs = 150; do { x.font = `900 ${fs}px "Big Shoulders Display", Impact, sans-serif`; fs -= 4 } while (x.measureText(head).width > W - 120 && fs > 60);
+  x.fillStyle = "#F5F5F2"; x.fillText(head, W / 2, 760);
+  // what happened (wrapped)
+  x.font = '600 46px Barlow, sans-serif'; x.fillStyle = "#C9C9C4";
+  const words = String(p.desc || "").split(/\s+/), lines = []; let ln = "";
+  for (const w of words) { const t = ln ? ln + " " + w : w; if (x.measureText(t).width > W - 200 && ln) { lines.push(ln); ln = w } else ln = t }
+  if (ln) lines.push(ln);
+  lines.slice(0, 3).forEach((t, i) => x.fillText(t, W / 2, 850 + i * 62));
+  let y = 850 + Math.min(3, lines.length) * 62 + 20;
+  if (p.line) { x.font = '700 40px Barlow, sans-serif'; x.fillStyle = "#FF6A13"; x.fillText(p.line, W / 2, y + 20); y += 70 }
+  const tags = (p.tags || []).filter(t => !/^(Lead change|Takes the lead|Ties it)$/.test(t)).slice(0, 2);
+  if (tags.length) {
+    x.font = '800 44px "Big Shoulders Display", Impact, sans-serif';
+    const t = tags.join("  ·  ").toUpperCase(), w = x.measureText(t).width + 60;
+    x.fillStyle = "#FFD23F"; roundRect(x, W / 2 - w / 2, y + 10, w, 72, 14); x.fill(); x.fillStyle = "#0B0B0C"; x.fillText(t, W / 2, y + 62);
+  }
+  // score bar
+  const sy = 1290; x.fillStyle = "rgba(255,255,255,.07)"; roundRect(x, 90, sy, W - 180, 230, 30); x.fill();
+  const half = (logo, t, score, X, lit) => {
+    if (logo) { const s = 120, k = Math.min(s / logo.width, s / logo.height) || 1, w = (logo.width || s) * k, hh = (logo.height || s) * k; x.drawImage(logo, X + (s - w) / 2, sy + 55 + (s - hh) / 2, w, hh) }
+    x.textAlign = "left"; x.fillStyle = lit ? "#F5F5F2" : "#B5B5B0";
+    x.font = '900 120px "Big Shoulders Display", Impact, sans-serif'; x.fillText(String(score), X + 140, sy + 160);
+    x.font = '700 32px Barlow, sans-serif'; x.fillStyle = "#9C9C98"; x.fillText(fix(t.names.short).slice(0, 18), X, sy + 210);
+  };
+  half(la, g.away, p.v, 130, p.side === "away"); half(lh, g.home, p.h, W / 2 + 40, p.side === "home");
+  x.textAlign = "center"; x.fillStyle = "#6B6B66"; x.font = '900 60px "Big Shoulders Display", Impact, sans-serif'; x.fillText("–", W / 2, sy + 150);
+  // footer
+  x.fillStyle = "rgba(255,255,255,.08)"; roundRect(x, 90, 1600, W - 180, 170, 28); x.fill();
+  if (brand) { const t = document.createElement("canvas"); t.width = t.height = 120; const tx = t.getContext("2d"); tx.drawImage(brand, 0, 0, 120, 120); tx.globalCompositeOperation = "source-in"; tx.fillStyle = "#F5F5F2"; tx.fillRect(0, 0, 120, 120); x.drawImage(t, 130, 1625, 120, 120) }
+  x.textAlign = "left"; x.fillStyle = "#F5F5F2";
+  let f2 = 64; do { x.font = `900 ${f2}px "Big Shoulders Display", Impact, sans-serif`; f2 -= 2 } while (x.measureText("@COLLEGEBASKETBALL").width > W - 90 - 280 - 30 && f2 > 30);
+  x.fillText("@COLLEGEBASKETBALL", 280, 1690);
+  x.fillStyle = "#9C9C98"; x.font = '500 30px "IBM Plex Mono", monospace'; x.fillText(location.host || "college-basketball-site.vercel.app", 282, 1738);
+  return c;
+}
+function sharePlay(key) {
+  const g = Object.values(cache).flat().find(x => x.gameID === openGame), p = PLAYINFO[openGame]?.[key];
+  if (!g || !p) return;
+  const name = `${fix(g.away.names.short)}-${fix(g.home.names.short)}-play`.replace(/[^A-Za-z0-9-]+/g, "-").toLowerCase() + ".png";
+  openShare("Share this play", () => makePlayCard(g, p), name, `${p.l || "Play"}: ${p.desc}`, "Big play");
+}
+
+// ---------- catch me up ----------
+// A short summary at the top of the feed for anyone joining mid-game: the score, the best run,
+// the biggest leads, how back-and-forth it's been, and who's scoring.
+let cmuClosed = {};
+function catchUpHTML(sg, CM, P, nPlays) {
+  if (nPlays < 12 || sg.gameState === "pre") return "";
+  const a = +sg.away.score || 0, h = +sg.home.score || 0, A = fix(sg.away.names.short), Hn = fix(sg.home.names.short);
+  const name = sd => sd === "home" ? Hn : A;
+  const rows = [];
+  if (sg.gameState === "final") rows.push(["🏁", h === a ? `Final: ${A} ${a}, ${Hn} ${h}` : `${h > a ? Hn : A} beat ${h > a ? A : Hn} ${Math.max(a, h)}-${Math.min(a, h)}${/ot/i.test(sg.finalMessage || "") ? ` in ${String(sg.finalMessage).replace(/final\W*/i, "")}` : ""}`]);
+  else {
+    const per = String(sg.currentPeriod || ""), where = /half/i.test(per) ? "at halftime" : `with ${sg.contestClock} left in the ${/ot/i.test(per) ? per : /2/.test(per) ? "2nd half" : "1st half"}`;
+    rows.push(["📍", h === a ? `Tied ${a}-${h} ${where}` : `${h > a ? Hn : A} leads ${h > a ? A : Hn} ${Math.max(a, h)}-${Math.min(a, h)} ${where}`]);
+  }
+  if (CM.run) rows.push(["🏃", `Best run: ${name(CM.run.side)} ${CM.run.pts}-0`]);
+  const leads = [CM.maxA > 0 ? `${A} by ${CM.maxA}` : "", CM.maxH > 0 ? `${Hn} by ${CM.maxH}` : ""].filter(Boolean);
+  if (leads.length) rows.push(["📈", `Biggest lead: ${leads.join(", ")}`]);
+  if (CM.leadCh || CM.ties) rows.push(["🔁", `${CM.leadCh} lead change${CM.leadCh === 1 ? "" : "s"}, ${CM.ties} tie${CM.ties === 1 ? "" : "s"}`]);
+  const top = sd => Object.entries(P).filter(([k, v]) => !k.startsWith("foul:") && v.side === sd && v.pts > 0).sort((x, y) => y[1].pts - x[1].pts)[0];
+  const ta = top("away"), th = top("home");
+  const sc = [ta ? `${shortName(ta[0])} ${ta[1].pts} (${A})` : "", th ? `${shortName(th[0])} ${th[1].pts} (${Hn})` : ""].filter(Boolean);
+  if (sc.length) rows.push(["⭐", `Leading scorers: ${sc.join(", ")}`]);
+  const closed = !!cmuClosed[sg.gameID];
+  return `<div class="cmu ${closed ? "closed" : ""}"><button class="cmu-h" data-cmu="${sg.gameID}" aria-expanded="${!closed}"><span>⚡ ${sg.gameState === "final" ? "Game recap" : "Catch me up"}</span><i>${closed ? "Show" : "Hide"}</i></button>${closed ? "" : `<ul>${rows.map(([e, t]) => `<li><span>${e}</span>${esc(t)}</li>`).join("")}</ul>`}</div>`;
 }
 
 // ---------- Game of the Night ----------
@@ -723,6 +817,37 @@ function drawTicker(changed) {
   track.innerHTML = html;
   if (sig !== tickerSig) track.style.animationDuration = Math.max(30, items.length * reps * 4) + "s";
   tickerSig = sig; tickerContent = content;
+}
+
+// ---------- win probability ----------
+// A simple, standard model: the current margin plus a small expected edge (home court, AP rank), measured
+// against how much a college game usually swings in the time that's left (about 11 points over 40 minutes).
+function secsLeft(g) {
+  if (g.gameState === "pre") return 2400;
+  const per = String(g.currentPeriod || ""), c = clockSecs(g.contestClock), clk = c === 9999 ? 0 : c;
+  if (/half/i.test(per)) return 1200;
+  if (/ot/i.test(per) || /2nd|^2$/i.test(per)) return /end/i.test(per) ? 0 : clk;
+  return 1200 + (/end/i.test(per) ? 0 : clk);
+}
+const normCdf = z => { const t = 1 / (1 + .2316419 * Math.abs(z)), d = .3989423 * Math.exp(-z * z / 2), p = d * t * (.3193815 + t * (-.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274)))); return z > 0 ? 1 - p : p };
+function winProb(g) {
+  const a = +g.away.score || 0, h = +g.home.score || 0;
+  if (g.gameState === "final") return h > a ? 1 : 0;
+  const str = t => { const r = rk(t); return r ? 8 - r * .2 : 0 };
+  const edge = 2.5 + str(g.home) - str(g.away), left = secsLeft(g), f = left / 2400;
+  if (left <= 0) return h > a ? .99 : h < a ? .01 : normCdf(edge / 11 * .4);
+  // (+1.5: late-game fouling and long threes keep a little extra uncertainty in the final minutes)
+  const p = normCdf((h - a + edge * f) / (11 * Math.sqrt(f) + 1.5));
+  return Math.min(.995, Math.max(.005, p));
+}
+function wpHTML(g) {
+  if (g.gameState === "final") return "";
+  const ph = winProb(g), pa = 1 - ph, pct = v => v >= .995 ? ">99" : v <= .005 ? "<1" : String(Math.round(v * 100));
+  const sa = logoSlug(g.away.names.short, g.away.names.seo), sh = logoSlug(g.home.names.short, g.home.names.seo);
+  const ca = teamColorFor(sa) || "#8A8A86", ch = teamColorFor(sh) || "#F5F5F2";
+  const nmA = fix(g.away.names.char6 || g.away.names.short), nmH = fix(g.home.names.char6 || g.home.names.short);
+  return `<div class="wp-row"><span class="wp-t"><b>${pct(pa)}%</b> ${esc(nmA)}</span><span class="wp-lbl">${g.gameState === "pre" ? "Pregame odds" : "Win probability"}</span><span class="wp-t r">${esc(nmH)} <b>${pct(ph)}%</b></span></div>
+    <div class="wp-bar" role="img" aria-label="${esc(nmA)} ${pct(pa)} percent, ${esc(nmH)} ${pct(ph)} percent"><i style="width:${(pa * 100).toFixed(1)}%;background:${ca}"></i><i style="width:${(ph * 100).toFixed(1)}%;background:${ch}"></i></div>`;
 }
 
 // ---------- game page ----------
@@ -1156,7 +1281,7 @@ function drawPhoneGame(sg) {
   const on = $("#mgstrip .mg-mini.on"); if (on && MG.dataset.stripFor !== sg.gameID) { MG.dataset.stripFor = sg.gameID; on.scrollIntoView({ inline: "center", block: "nearest" }) }
   // score header
   const tm = (t, side, score, lose) => `<a class="mg-tm ${side}" href="#team-${esc(logoSlug(t.names.short, t.names.seo))}">${mono(t.names.short, t.names.seo)}<span class="mg-sc ${lose ? "lose" : ""}">${pre ? "" : esc(score)}</span><span class="mg-nm">${rk(t) ? `<em>${rk(t)}</em> ` : ""}${esc(fix(t.names.short))}</span></a>`;
-  $("#mgscore").innerHTML = `${tm(sg.away, "a", a, fin && a < h)}<div class="mg-mid"><span class="mg-st ${live ? "lv" : ""}">${live ? "<i></i>" : ""}${esc(st.txt)}</span>${tvHTML(sg.network)}${badgeHTML(badges(sg).slice(0, 1))}</div>${tm(sg.home, "h", h, fin && h < a)}`;
+  $("#mgscore").innerHTML = `${tm(sg.away, "a", a, fin && a < h)}<div class="mg-mid"><span class="mg-st ${live ? "lv" : ""}">${live ? "<i></i>" : ""}${esc(st.txt)}</span>${tvHTML(sg.network)}${badgeHTML(badges(sg).slice(0, 1))}</div>${tm(sg.home, "h", h, fin && h < a)}${(w => w ? `<div class="mg-wp">${w}</div>` : "")(wpHTML(sg))}`;
   // tabs
   const tabs = [["feed", "Feed"], ["game", "Game"], ["away", short(sg.away)], ["home", short(sg.home)]];
   $("#mgtabs").innerHTML = tabs.map(([k, l]) => `<button role="tab" aria-selected="${mgTab === k}" data-mgtab="${k}">${esc(l)}</button>`).join("");
@@ -1170,6 +1295,7 @@ function drawPhoneGame(sg) {
     const all = (d.pbp?.periods || []).flatMap(p => (p.playbyplayStats || []).map(x => ({ ...x, per: p.periodDisplay || "" })));
     let ph = 0, pv = 0, lastPer = null, runSide = "", runPts = 0; const items = [], P = {}; // P: per player {pts, fgm, fga, streak}
     let ftCtx = "", lastBall = null; // ftCtx: "Technical"/"Flagrant" while those free throws are being shot
+    const CM = { maxH: 0, maxA: 0, leadCh: 0, ties: 0, run: null }; // for the "Catch me up" card
     const other = sd => sd === "home" ? "away" : sd === "away" ? "home" : "";
     const ballTag = sd => ["poss", `▶ ${fix(sg[sd].names.short)} ball`];
     // which team a play names, for team plays the feed doesn't tag ("Jump ball won by Duke", "Duke timeout")
@@ -1199,6 +1325,7 @@ function drawPhoneGame(sg) {
       const who = playerOf(desc);
       if (who && isShot(desc)) {
         const st = (P[who] ||= { pts: 0, fgm: 0, fga: 0, streak: 0 }), ft = /free throw/i.test(desc), miss = /miss/i.test(desc);
+        if (side) st.side = side;
         if (!miss) st.pts += pts || (ft ? 1 : /3pt|three/i.test(desc) ? 3 : 2);
         if (!ft) {
           st.fga++; if (!miss) st.fgm++;
@@ -1234,12 +1361,16 @@ function drawPhoneGame(sg) {
         }
         const key = playKey(x, x.per); items.push({ key, desc, line, per: x.per, clock: x.clock || "", h: nh, v: nv, side: sd, pts, tags, type })
       }
+      CM.maxH = Math.max(CM.maxH, nh - nv); CM.maxA = Math.max(CM.maxA, nv - nh);
+      if (tags.some(t => t[0] === "lead")) CM.leadCh++; if (tags.some(t => t[0] === "tie")) CM.ties++;
+      if (pts > 0 && runPts >= 6 && (!CM.run || runPts >= CM.run.pts)) CM.run = { side: runSide, pts: runPts, per: x.per, clock: x.clock || "" };
       ph = nh; pv = nv;
     }
+    const cmu = catchUpHTML(sg, CM, P, items.filter(i => !i.divider).length);
     const shown = (mgFeed === "scoring" ? items.filter(i => i.pts > 0 || i.divider) : items).reverse().slice(0, 250);
     const perLbl = p => String(p).replace(/1st Half|1st/i, "H1").replace(/2nd Half|2nd/i, "H2").replace(/Overtime/i, "OT");
-    for (const i of shown) if (!i.divider) notePlay(sg.gameID, i.key, { desc: i.desc, per: perLbl(i.per), clock: i.clock, h: i.h, v: i.v });
-    body = `<div class="mg-feedbar"><button data-mgfeed="all" aria-pressed="${mgFeed === "all"}">All plays</button><button data-mgfeed="scoring" aria-pressed="${mgFeed === "scoring"}">Scoring</button></div>` +
+    for (const i of shown) if (!i.divider) notePlay(sg.gameID, i.key, { desc: i.desc, per: perLbl(i.per), clock: i.clock, h: i.h, v: i.v, side: i.side, pts: i.pts, e: i.type.e, l: i.type.l, n: i.type.n, tags: i.tags.map(t => t[1]), line: i.line });
+    body = cmu + `<div class="mg-feedbar"><button data-mgfeed="all" aria-pressed="${mgFeed === "all"}">All plays</button><button data-mgfeed="scoring" aria-pressed="${mgFeed === "scoring"}">Scoring</button></div>` +
       (shown.some(i => !i.divider) ? shown.map(i => {
         if (i.divider) return `<div class="fp-div"><span>${esc(i.label)}</span><b>${esc(short(sg.away))} ${i.v} – ${i.h} ${esc(short(sg.home))}</b></div>`;
         const t = i.side ? sg[i.side] : null, ty = i.type;
@@ -1253,7 +1384,7 @@ function drawPhoneGame(sg) {
           <div class="fp-av">${t ? mono(t.names.short, t.names.seo) : `<span class="fp-dot">${ty.e}</span>`}${i.pts > 0 ? `<span class="fp-pts">+${i.pts}</span>` : ""}</div>
           <div class="fp-main"><div class="fp-meta">${mono(sg.away.names.short, sg.away.names.seo)}${sc(i.v, "away")}<i>–</i>${sc(i.h, "home")}${mono(sg.home.names.short, sg.home.names.seo)}<span>${esc(perLbl(i.per))} ${esc(i.clock)}</span></div>
           ${head ? `<div class="fp-head"><span class="fp-emo">${ty.e}</span>${esc(head)}</div><div class="fp-sub">${esc(i.desc)}</div>` : `<div class="fp-desc">${esc(i.desc)}</div>`}
-          ${i.line ? `<div class="fp-line">${esc(i.line)}</div>` : ""}${(tg => tg.length ? `<div class="fp-tags">${tg.map(([k, l]) => `<span class="fpt-${k}">${esc(l)}</span>`).join("")}</div>` : "")(i.tags.filter(x => !(/^(Go-ahead|Game-tying)/.test(head) && (x[0] === "lead" || x[0] === "tie"))))}${playBar(sg.gameID, i.key)}</div></div>`;
+          <button class="fp-share" data-shareplay="${i.key}" aria-label="Share this play" title="Share this play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>${i.line ? `<div class="fp-line">${esc(i.line)}</div>` : ""}${(tg => tg.length ? `<div class="fp-tags">${tg.map(([k, l]) => `<span class="fpt-${k}">${esc(l)}</span>`).join("")}</div>` : "")(i.tags.filter(x => !(/^(Go-ahead|Game-tying)/.test(head) && (x[0] === "lead" || x[0] === "tie"))))}${playBar(sg.gameID, i.key)}</div></div>`;
       }).join("") : `<p class="mg-empty">${pre ? "The feed starts at tip-off. Check the Game tab to make your pick." : "No play-by-play for this game."}</p>`);
   } else if (mgTab === "game") {
     const ls = c?.linescores || [];
@@ -1896,6 +2027,7 @@ function toggleFav(slug) {
   FAVS = isFav(slug) ? FAVS.filter(x => x !== slug) : [...FAVS, slug];
   try { localStorage.setItem("cbb_favs", JSON.stringify(FAVS)) } catch { }
   drawTeamDir(); if (teamOpen) drawTeam(); drawGames();
+  window.dispatchEvent(new CustomEvent("cbb-favs", { detail: FAVS.slice() })); // game alerts follow the same teams
 }
 const STAR = on => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.8 6.1 6.6.6-5 4.4 1.5 6.5L12 17l-5.9 3.4 1.5-6.5-5-4.4 6.6-.6z" ${on ? 'fill="currentColor"' : 'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"'}/></svg>`;
 const favBtn = (slug, name, cls = "") => `<span class="favbtn ${cls} ${isFav(slug) ? "on" : ""}" role="button" tabindex="0" data-fav="${esc(slug)}" aria-pressed="${isFav(slug)}" title="${isFav(slug) ? "Unfollow" : "Follow"} ${esc(name)}">${STAR(isFav(slug))}</span>`;
@@ -2168,7 +2300,7 @@ document.addEventListener("click", async e => {
 });
 
 // ---------- tabs ----------
-const VIEWS = ["scores", "news", "rankings", "standings", "stats", "teams", "discord", "contact", "rules", "admin", "unsubscribe"];
+const VIEWS = ["scores", "news", "rankings", "standings", "stats", "teams", "discord", "contact", "rules", "admin", "unsubscribe", "pickem"];
 const loaded = {};
 function show(v) {
   if (!VIEWS.includes(v)) v = "scores";
@@ -2177,6 +2309,7 @@ function show(v) {
   if (v === "news") drawNews(); // coming back to News always starts on the list of stories
   if (v === "discord") loadDiscord();
   if (v === "admin") drawAdmin();
+  if (v === "pickem" && window.CBBMore) window.CBBMore.drawPickem();
   if (v === "stats") loadStatCats();
   if (v === "teams" || v.startsWith("team-")) loadSeason().catch(() => { }); // get schedules ready before a team is tapped
   if (v === "rankings" && !loaded.ao) { loaded.ao = 1; loadApOthers() }
@@ -2188,11 +2321,19 @@ const route = () => {
   if (typeof MG !== "undefined" && !MG.hidden) closePhoneGame(true);
   const un = /^unsubscribe-([0-9a-f-]{36})$/i.exec((location.hash || "").slice(1));
   if (un) { show("unsubscribe"); unsubscribe(un[1]); return }
+  const gl = /^game-(\d{4,12})$/.exec((location.hash || "").slice(1));
+  if (gl) { history.replaceState(null, "", "#scores"); show("scores"); openWhenLoaded(gl[1]); return }
   const h = (location.hash || "#scores").slice(1), m = /^team-([a-z0-9-]{1,60})$/.exec(h);
   if (m) { show("teams"); openTeam(m[1]); document.querySelector('[data-tab="teams"]')?.setAttribute("aria-current", "page") }
   else { show(h); if (h === "teams") closeTeam() }
 };
 addEventListener("hashchange", route);
+// open a game from a link (an alert) as soon as today's scores have loaded
+function openWhenLoaded(id, tries = 0) {
+  const g = Object.values(cache).flat().find(x => x.gameID === id);
+  if (g) { if (gday !== "t" && (cache.t || []).some(x => x.gameID === id)) { gday = "t"; drawDays(); drawFilters(); drawGames() } openPhoneGame(id); return }
+  if (tries < 40) setTimeout(() => openWhenLoaded(id, tries + 1), 300);
+}
 
 // Switching filters closes whatever game is open.
 function closeGame() { if (!openGame) return; openGame = null; gameDetail = null; drawGame() }
@@ -2252,7 +2393,11 @@ document.addEventListener("click", e => {
   const pb = e.target.closest && e.target.closest("[data-pick]");
   if (pb) { e.preventDefault(); makePick(pb.dataset.pickgame, pb.dataset.pick); return }
   const sh = e.target.closest && e.target.closest("[data-share]");
-  if (sh) { e.preventDefault(); shareFinal(sh.dataset.share) }
+  if (sh) { e.preventDefault(); shareFinal(sh.dataset.share); return }
+  const sp = e.target.closest && e.target.closest("[data-shareplay]");
+  if (sp) { e.preventDefault(); e.stopPropagation(); sharePlay(sp.dataset.shareplay); return }
+  const cm = e.target.closest && e.target.closest("[data-cmu]");
+  if (cm) { e.preventDefault(); cmuClosed[cm.dataset.cmu] = !cmuClosed[cm.dataset.cmu]; mgBodyKey = ""; drawGame(); return }
 });
 window.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.classList?.contains("uw")) { e.preventDefault(); e.target.click() } });
 // stars, "today" tags and the conference bar on the Teams tab
@@ -2325,4 +2470,6 @@ loadRecords(); setInterval(loadRecords, 3600000);
 refresh();
 setInterval(() => { if (!document.hidden) refresh() }, REFRESH_MS);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh() });
+// a few helpers shared with more.js (team picker, alerts)
+window.CBBApp = { favs: () => FAVS.slice(), toggleFav, mono, logoSlug };
 })();

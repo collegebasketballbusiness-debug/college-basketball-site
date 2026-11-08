@@ -7,7 +7,7 @@ const BASE = (process.env.NCAA_API_BASE || "https://ncaa-api.henrygd.me").replac
 
 // Only these kinds of paths are allowed through, with how long Vercel may cache each (seconds).
 const ROUTES = [
-  [/^scoreboard\/basketball-men\/d1(\/\d{4}\/\d{2}\/\d{2})?(\/all-conf)?$/, 10],
+  [/^scoreboard\/basketball-men\/d1(\/\d{4}\/\d{2}\/\d{2})?(\/all-conf)?$/, 5],
   [/^game\/\d{4,10}(\/(boxscore|play-by-play|team-stats))?$/, 3],
   [/^game\/\d{4,10}\?info=1$/, 3600],
   [/^game\/\d{4,10}\/boxscore\?final=1$/, 86400],   // finished games don't change
@@ -55,10 +55,42 @@ async function directGame(path) {
   throw new Error("pbp empty");
 }
 
+// The day's scoreboard straight from NCAA.com, in the same shape the free API returns (it reads the same
+// source but keeps it for 45-60 seconds). Live scores on the main page now move within seconds.
+async function directScoreboard(path) {
+  const m = /^scoreboard\/basketball-men\/d1\/(\d{4})\/(\d{2})\/(\d{2})(?:\/all-conf)?$/.exec(path);
+  if (!m) return null;
+  const contestDate = `${m[1]}/${m[2]}/${m[3]}`, seasonYear = +m[2] < 8 ? +m[1] - 1 : +m[1];
+  const d = await sdata("7287cda610a9326931931080cb3a604828febe6fe3c9016a7e4a36db99efdb7c", { sportCode: "MBB", division: 1, seasonYear, contestDate });
+  if (!Array.isArray(d.contests) || !d.contests.length) throw new Error("scoreboard empty"); // no games: let the free API answer
+  const state = s => ({ F: "final", P: "pre", I: "live" })[s] || "pre";
+  const team = t => ({
+    score: t.score?.toString() || "",
+    names: { char6: t.name6Char || "", short: t.nameShort || "", seo: t.seoname || "", full: "" },
+    winner: !!t.isWinner, seed: t.seed?.toString() || "", description: "", rank: t.teamRank?.toString() || "",
+    conferences: [{ conferenceName: "", conferenceSeo: t.conferenceSeo || "" }],
+  });
+  const games = d.contests.map(c => {
+    const T = c.teams || [], h = T.find(t => t.isHome), a = T.find(t => !t.isHome);
+    if (!h || !a) return null;
+    let startTime = c.startTime || "";
+    if (startTime && c.startDate) { const dt = new Date(`${c.startDate} ${startTime}`); if (!Number.isNaN(dt.getTime())) startTime = `${dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })} ET` }
+    const game = {
+      gameID: c.contestId?.toString() || "", away: team(a), finalMessage: c.finalMessage || "",
+      title: `${a.nameShort || ""} ${h.nameShort || ""}`, url: c.url || "", network: c.broadcasterName || "", home: team(h),
+      liveVideoEnabled: (c.liveVideos || []).length > 0, startTime, startTimeEpoch: c.startTimeEpoch?.toString() || "",
+      gameState: state(c.gameState || ""), startDate: c.startDate || "", currentPeriod: c.currentPeriod || "",
+      contestClock: c.contestClock || "0:00", bracketId: c.bracketId || "", bracketRound: c.roundNumber || "",
+    };
+    return { game };
+  }).filter(Boolean);
+  return { updated_at: new Date().toISOString().replace("T", " ").slice(0, 19), games };
+}
+
 // Fetch from the free API, waiting and retrying when it turns away bursts (status 428/429).
 async function upstreamFetch(path, headers) {
   try {
-    const d = await directGame(path);
+    const d = (await directScoreboard(path)) || (await directGame(path));
     if (d) return new Response(JSON.stringify(d), { status: 200, headers: { "x-source": "ncaa" } });
   } catch { /* use the free API below */ }
   let r;
