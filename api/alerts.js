@@ -15,6 +15,7 @@
 import webpush from "web-push";
 
 const CONTACT = "mailto:collegebasketballbusiness@gmail.com";
+const SITE = "https://collegebasketball.news"; // where tapping an alert takes people
 const json = (res, code, body) => { res.setHeader("content-type", "application/json; charset=utf-8"); res.setHeader("cache-control", "no-store"); res.status(code).send(JSON.stringify(body)) };
 
 function etParts(d = new Date()) {
@@ -121,7 +122,7 @@ export default async function handler(req, res) {
   for (let i = 0; i < jobs.length; i += 50) {
     await Promise.all(jobs.slice(i, i + 50).map(async ([s, a]) => {
       if (gone.has(s.endpoint)) return;
-      const payload = JSON.stringify({ title: a.title, body: a.body, url: `${origin}/#game-${a.g.gameID}`, tag: `${a.g.gameID}-${a.kind}` });
+      const payload = JSON.stringify({ title: a.title, body: a.body, url: `${SITE}/#game-${a.g.gameID}`, tag: `${a.g.gameID}-${a.kind}` });
       try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 600, urgency: "high" }); sent++ }
       catch (e) { if (e.statusCode === 404 || e.statusCode === 410) gone.add(s.endpoint) } // that phone turned alerts off
     }));
