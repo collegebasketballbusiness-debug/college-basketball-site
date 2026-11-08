@@ -546,7 +546,7 @@ async function makeShareCard(g) {
   x.textAlign = "left"; x.fillStyle = "#F5F5F2";
   let fs = 64; do { x.font = `900 ${fs}px "Big Shoulders Display", Impact, sans-serif`; fs -= 2 } while (x.measureText("@COLLEGEBASKETBALL").width > W - 90 - 280 - 30 && fs > 30);
   x.fillText("@COLLEGEBASKETBALL", 280, 1690);
-  x.fillStyle = "#9C9C98"; x.font = '500 30px "IBM Plex Mono", monospace'; x.fillText(location.host || "college-basketball-site.vercel.app", 282, 1738);
+  x.fillStyle = "#9C9C98"; x.font = '500 30px "IBM Plex Mono", monospace'; x.fillText(location.host || "collegebasketball.news", 282, 1738);
   return c;
 }
 function roundRect(x, X, Y, w, h, r) { x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r); x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath() }
@@ -633,7 +633,7 @@ async function makePlayCard(g, p) {
   x.textAlign = "left"; x.fillStyle = "#F5F5F2";
   let f2 = 64; do { x.font = `900 ${f2}px "Big Shoulders Display", Impact, sans-serif`; f2 -= 2 } while (x.measureText("@COLLEGEBASKETBALL").width > W - 90 - 280 - 30 && f2 > 30);
   x.fillText("@COLLEGEBASKETBALL", 280, 1690);
-  x.fillStyle = "#9C9C98"; x.font = '500 30px "IBM Plex Mono", monospace'; x.fillText(location.host || "college-basketball-site.vercel.app", 282, 1738);
+  x.fillStyle = "#9C9C98"; x.font = '500 30px "IBM Plex Mono", monospace'; x.fillText(location.host || "collegebasketball.news", 282, 1738);
   return c;
 }
 function sharePlay(key) {

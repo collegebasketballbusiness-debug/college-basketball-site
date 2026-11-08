@@ -6,5 +6,18 @@
     "api/alerts.js": {
       "maxDuration": 60
     }
-  }
+  },
+  "redirects": [
+    {
+      "source": "/((?!api/).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "college-basketball-site.vercel.app"
+        }
+      ],
+      "destination": "https://collegebasketball.news/$1",
+      "permanent": true
+    }
+  ]
 }

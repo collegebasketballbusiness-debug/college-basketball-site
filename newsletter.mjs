@@ -7,7 +7,7 @@
 import fs from "fs";
 import vm from "vm";
 
-const SITE = "https://college-basketball-site.vercel.app";
+const SITE = "https://collegebasketball.news";
 const FROM = "collegebasketballbusiness@gmail.com";
 const BASE = (process.env.NCAA_API_BASE || "https://ncaa-api.henrygd.me").replace(/\/$/, "");
 const env = k => (process.env[k] || "").trim();
