@@ -895,10 +895,16 @@ const isSub = d => /^\s*subbing|substitution|enters the game|leaves the game|\bs
 // A short, punchy headline for each play (like "💦 Three" or "🧱 Missed layup") plus a style for its card.
 function playType(desc) {
   const d = String(desc || ""), miss = /miss/i.test(d);
+  if (/media|tv time ?out|official'?s? time ?out/i.test(d)) return { e: "📺", l: "Media timeout", k: "pause" };
   if (/time ?out/i.test(d)) return { e: "⏸️", l: "Timeout", k: "pause" };
-  if (/jump ?ball/i.test(d)) return { e: "🏀", l: "Jump ball", k: "pause" };
-  if (/technical/i.test(d)) return { e: "🟥", l: "Technical foul", k: "foul" };
-  if (/flagrant/i.test(d)) return { e: "🟥", l: "Flagrant foul", k: "foul" };
+  if (/review|replay/i.test(d)) return { e: "🎥", l: "Under review", k: "pause" };
+  if (/jump ?ball|held ball|possession arrow|alternating possession/i.test(d)) return { e: "🤾", l: "Jump ball", k: "jump" };
+  if (/flagrant/i.test(d) && !/free throw/i.test(d)) { const n = (/flagrant\s*(?:foul\s*)?(?:type\s*)?(1|2|i{1,2})\b/i.exec(d) || [])[1]; return { e: "🟥", l: n ? `Flagrant ${/^i+$/i.test(n) ? n.length : n}` : "Flagrant foul", k: "flag" } }
+  if (/technical/i.test(d) && !/free throw/i.test(d)) return { e: "⚠️", l: "Technical foul", k: "tech" };
+  if (/dead ?ball|team rebound/i.test(d)) return { e: "📤", l: "Out of bounds", k: "oob" };
+  if (/shot clock/i.test(d)) return { e: "⏱️", l: "Shot clock violation", k: "to" };
+  if (/out of bounds|stepped out/i.test(d)) return { e: "📤", l: "Out of bounds", k: "to" };
+  if (/lane violation|kicked ball|3[- ]second|three[- ]second|5[- ]second|five[- ]second|10[- ]second|ten[- ]second|backcourt/i.test(d)) return { e: "🚩", l: "Violation", k: "to" };
   if (/offensive foul|charge/i.test(d)) return { e: "🟨", l: "Offensive foul", k: "foul" };
   if (/foul/i.test(d)) return { e: "🟨", l: "Foul", k: "foul" };
   if (/travel/i.test(d)) return { e: "🚶", l: "Travel", k: "to" };
@@ -1163,6 +1169,13 @@ function drawPhoneGame(sg) {
     // every play, oldest first, so scoring, lead changes and ties can be worked out
     const all = (d.pbp?.periods || []).flatMap(p => (p.playbyplayStats || []).map(x => ({ ...x, per: p.periodDisplay || "" })));
     let ph = 0, pv = 0, lastPer = null, runSide = "", runPts = 0; const items = [], P = {}; // P: per player {pts, fgm, fga, streak}
+    let ftCtx = "", lastBall = null; // ftCtx: "Technical"/"Flagrant" while those free throws are being shot
+    const other = sd => sd === "home" ? "away" : sd === "away" ? "home" : "";
+    const ballTag = sd => ["poss", `▶ ${fix(sg[sd].names.short)} ball`];
+    // which team a play names, for team plays the feed doesn't tag ("Jump ball won by Duke", "Duke timeout")
+    const nameRx = t => [t.names.short, t.names.full, t.names.char6, t.names.seo && t.names.seo.replace(/-/g, " ")].filter(Boolean).map(n => fix(n).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\.\s*$/, "\\.?")).join("|");
+    const rxA = new RegExp(`\\b(?:${nameRx(sg.away)})\\b`, "i"), rxH = new RegExp(`\\b(?:${nameRx(sg.home)})\\b`, "i");
+    const teamIn = t => { const m = /\b(?:won|gained|to|by|for|on)\s+(.+)$/i.exec(t), part = m ? m[1] : t; const a = rxA.test(part), h = rxH.test(part); return a && !h ? "away" : h && !a ? "home" : (rxA.test(t) && !rxH.test(t) ? "away" : rxH.test(t) && !rxA.test(t) ? "home" : "") };
     for (const x of all) {
       // a divider between halves (and before overtime) with the score at that moment
       if (lastPer !== null && x.per !== lastPer) items.push({ divider: true, label: /ot|overtime/i.test(x.per) ? (/ot|overtime/i.test(lastPer) ? "End of overtime" : "End of regulation") : "Halftime", h: ph, v: pv });
@@ -1198,7 +1211,29 @@ function drawPhoneGame(sg) {
         const st = (P["foul:" + who] ||= { n: 0 }); st.n++;
         line = `${shortName(who)} · ${st.n} foul${st.n === 1 ? "" : "s"}`;
       }
-      if (desc && !isSub(desc)) { const key = playKey(x, x.per); items.push({ key, desc, line, per: x.per, clock: x.clock || "", h: nh, v: nv, side, pts, tags, type: playType(desc) }) }
+      if (desc && !isSub(desc)) {
+        let type = playType(desc), sd = side || teamIn(desc);
+        const prev = items.length ? items[items.length - 1] : null;
+        // whose ball: after turnovers, steals, out of bounds and jump balls
+        let ball = "";
+        if (type.k === "to" || /offensive foul|charge/i.test(desc)) ball = other(sd);
+        else if (type.k === "def" && /steal/i.test(desc)) ball = sd;
+        else if (type.k === "jump") ball = /lost by|lost to/i.test(desc) ? other(sd) : sd;
+        else if (type.k === "oob") {
+          // a dead-ball rebound after a missed first free throw just means another free throw is coming
+          if (prev && prev.type.n === "free throw" && /miss/i.test(prev.desc)) type = { e: "🔁", l: "Dead ball", k: "pause" };
+          else ball = sd;
+        }
+        // technical and flagrant free throws
+        if (type.k === "tech" || type.k === "flag") ftCtx = type.k === "tech" ? "Technical" : "Flagrant";
+        else if (type.n === "free throw" && ftCtx) type = { ...type, l: `${/miss/i.test(desc) ? "Missed " : ""}${ftCtx.toLowerCase() === "technical" ? "Technical" : "Flagrant"} free throw` };
+        else if (type.n !== "free throw" && type.k !== "pause") ftCtx = "";
+        // (a steal right after the turnover it caused doesn't repeat the same "ball" tag)
+        if (ball && sg[ball] && !(lastBall && lastBall.ball === ball && (lastBall.i === items.length - 1 || (lastBall.clock === (x.clock || "") && lastBall.per === x.per)))) {
+          tags.push(ballTag(ball)); lastBall = { ball, clock: x.clock || "", per: x.per, i: items.length };
+        }
+        const key = playKey(x, x.per); items.push({ key, desc, line, per: x.per, clock: x.clock || "", h: nh, v: nv, side: sd, pts, tags, type })
+      }
       ph = nh; pv = nv;
     }
     const shown = (mgFeed === "scoring" ? items.filter(i => i.pts > 0 || i.divider) : items).reverse().slice(0, 250);
