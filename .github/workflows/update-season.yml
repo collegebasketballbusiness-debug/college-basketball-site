@@ -21,6 +21,11 @@ jobs:
       - name: Build stats.json
         run: node build-stats.mjs
         continue-on-error: true
+      - name: Grade Pick'em picks
+        run: node record-results.mjs
+        continue-on-error: true
+        env:
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
       - name: Save them to the repo
         run: |
           git config user.name "season-bot"
