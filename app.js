@@ -701,14 +701,15 @@ function momentumSVG(series, g) {
   const cuts = []; for (let i = 1; i < n; i++) if (pts[i].per !== pts[i - 1].per) cuts.push(xy[i][0]);
   const big = Math.max(...pts.map(p => p.lead)), small = Math.min(...pts.map(p => p.lead));
   const ab = t => esc((t.names.char6 || fix(t.names.short)).toString().slice(0, 12));
-  return `<div class="momo"><div class="momo-lab"><span class="h">${ab(g.home)}${big > 0 ? ` <i>led by ${big}</i>` : ""}</span><span class="a">${ab(g.away)}${small < 0 ? ` <i>led by ${-small}</i>` : ""}</span></div>
+  // labels sit above (home) and below (away) the chart, never on top of the line
+  return `<div class="momo"><div class="momo-row top"><span class="h">${ab(g.home)}${big > 0 ? ` <i>led by ${big}</i>` : ""}</span></div>
     <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-label="Lead over the game">
       <defs><clipPath id="mo-top"><rect x="0" y="0" width="${W}" height="${mid}"/></clipPath><clipPath id="mo-bot"><rect x="0" y="${mid}" width="${W}" height="${mid}"/></clipPath></defs>
       ${cuts.map(x => `<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="0" y2="${H}" class="mo-cut"/>`).join("")}
       <line x1="0" x2="${W}" y1="${mid}" y2="${mid}" class="mo-mid"/>
       <path d="${area}" clip-path="url(#mo-top)" class="mo-h"/><path d="${area}" clip-path="url(#mo-bot)" class="mo-a"/>
       <path d="${line}" class="mo-line"/>
-    </svg><div class="momo-cap">Momentum</div></div>`;
+    </svg><div class="momo-row bot"><span class="a">${ab(g.away)}${small < 0 ? ` <i>led by ${-small}</i>` : ""}</span><span class="momo-cap">Momentum</span></div></div>`;
 }
 let heroId = null, heroLast = "", heroFlash = { a: 0, h: 0 }, heroExtra = { id: null, lines: [], play: "" };
 // While the featured game is live, also pull its scoring by half and the latest play.
