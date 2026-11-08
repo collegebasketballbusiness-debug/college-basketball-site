@@ -5,7 +5,8 @@
 
 // ---------- setup ----------
 const API = window.API_BASE !== undefined ? window.API_BASE : "/api/ncaa?path=";
-const REFRESH_MS = 20000;
+const REFRESH_MS = 15000;
+const LIVE_GAME_MS = 5000; // an open live game checks for new plays this often
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const fix = s => { s = String(s ?? ""); try { return /Ã|Â/.test(s) ? decodeURIComponent(escape(s)) : s } catch { return s } };
@@ -725,6 +726,15 @@ function drawTicker(changed) {
 }
 
 // ---------- game page ----------
+let gameSig = "", gameBusy = false;
+// While a live game is open (and the tab is visible), look for new plays every few seconds.
+setInterval(async () => {
+  if (!openGame || document.hidden || gameBusy) return;
+  const g = (cache.t || []).find(x => x.gameID === openGame);
+  if (!g || !isLive(g)) return;
+  gameBusy = true;
+  try { await loadGame(openGame) } catch { } finally { gameBusy = false }
+}, LIVE_GAME_MS);
 async function loadGame(id) {
   // Games that haven't started have no box score or play-by-play yet, so don't wait on them.
   const sg = Object.values(cache).flat().find(g => g.gameID === id);
@@ -735,6 +745,10 @@ async function loadGame(id) {
     started ? api(`game/${id}/play-by-play`, 1).catch(() => null) : null
   ]);
   if (openGame !== id) return;
+  // Nothing new since the last check: keep the screen as it is (no redraw, no flicker).
+  const sig = id + JSON.stringify([game, box, pbp]);
+  if (sig === gameSig && gameDetail?.id === id) { loadPlayCounts(id); return }
+  gameSig = sig;
   gameDetail = { id, game: game?.contests?.[0] || null, box, pbp };
   const ct = gameDetail.game?.teams || [];
   for (const t of ct) if (t.seoname && t.color) setColor(t.seoname, t.color);
