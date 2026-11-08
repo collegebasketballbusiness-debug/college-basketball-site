@@ -20,8 +20,47 @@ const ROUTES = [
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// Live game data straight from NCAA.com's own data feed. The free API keeps game data for 45 seconds
+// (and asks for 60), which made live play-by-play arrive in once-a-minute batches. Going direct gets each
+// play within seconds. If NCAA.com ever changes this feed, we fall back to the free API automatically.
+const SDATA = "https://sdataprod.ncaa.com/";
+const HASH = {
+  game: "93a02c7193c89d85bcdda8c1784925d9b64657f73ef584382e2297af555acd4b",
+  pbp: ["57f922d56d60d88326b62202b3d88e8cd3cfb6687931bc0b5b3dfab089b84faa", "6b1232714a3598954c5bacabc0f81570e16d6ee017c9a6b93b601a3d40dafb98"],
+  box: "4a7fa26398db33de3ff51402a90eb5f25acef001cca28d239fe5361315d1419a",
+};
+async function sdata(hash, variables, meta) {
+  const q = `${SDATA}?${meta ? `meta=${meta}&` : ""}extensions=${encodeURIComponent(JSON.stringify({ persistedQuery: { version: 1, sha256Hash: hash } }))}&variables=${encodeURIComponent(JSON.stringify(variables))}`;
+  const r = await fetch(q, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(6000) });
+  if (!r.ok) throw new Error("ncaa " + r.status);
+  const j = await r.json();
+  if (!j || !j.data) throw new Error("ncaa empty");
+  return j.data;
+}
+async function directGame(path) {
+  const m = /^game\/(\d{4,10})(?:\/(play-by-play|boxscore))?(?:\?final=1)?$/.exec(path);
+  if (!m) return null;
+  const id = m[1];
+  if (!m[2]) return await sdata(HASH.game, { id, week: null, staticTestEnv: null }, "GetGamecenterGameById_web");
+  if (m[2] === "boxscore") {
+    const d = await sdata(HASH.box, { contestId: id, staticTestEnv: null });
+    if (Object.keys(d.boxscore?.teamBoxscore?.[0]?.teamStats || {}).length < 2) throw new Error("box empty");
+    return d.boxscore;
+  }
+  for (const h of HASH.pbp) {
+    const d = await sdata(h, { contestId: id, staticTestEnv: null });
+    const first = d.playbyplay?.periods?.[0]?.playbyplayStats?.[0];
+    if (d.playbyplay && (!first || Object.keys(first).length >= 2)) return d.playbyplay;
+  }
+  throw new Error("pbp empty");
+}
+
 // Fetch from the free API, waiting and retrying when it turns away bursts (status 428/429).
 async function upstreamFetch(path, headers) {
+  try {
+    const d = await directGame(path);
+    if (d) return new Response(JSON.stringify(d), { status: 200, headers: { "x-source": "ncaa" } });
+  } catch { /* use the free API below */ }
   let r;
   for (let attempt = 0; attempt < 4; attempt++) {
     r = await fetch(`${BASE}/${path.replace(/[?&](final|info)=1$/, "")}`, { headers });
@@ -233,6 +272,7 @@ export default async function handler(req, res) {
   try {
     const upstream = await upstreamFetch(path, apiHeaders());
     const body = await upstream.text();
+    res.setHeader("x-source", upstream.headers.get("x-source") || "free-api");
     res.setHeader("content-type", path.startsWith("logo/") ? "image/svg+xml" : "application/json; charset=utf-8");
     res.setHeader("cache-control", upstream.ok ? `public, s-maxage=${route[1]}, stale-while-revalidate=${route[1] * 3}` : "no-store");
     res.status(upstream.status).send(body);
