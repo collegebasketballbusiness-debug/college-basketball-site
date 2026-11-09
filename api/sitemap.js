@@ -1,4 +1,4 @@
-// sitemap.xml: tells search engines about the home page, every team page and every game recap.
+// sitemap.xml: tells search engines about the home page, every team page, every game recap and previews for the coming week.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -22,8 +22,13 @@ export default async function handler(req, res) {
     const slug = s => String(s).toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     try {
       const games = JSON.parse(await siteFile("season.json")).games || [];
-      for (const g of games) if (g.s === "final" && g.id && g.a && g.h)
-        urls.push(`<url><loc>${SITE}/game/${g.id}/${slug(g.a[1])}-vs-${slug(g.h[1])}</loc>${g.d ? `<lastmod>${g.d}</lastmod>` : ""}<changefreq>monthly</changefreq><priority>0.6</priority></url>`);
+      const soon = Date.now() + 7 * 864e5;
+      for (const g of games) {
+        if (!g.id || !g.a || !g.h) continue;
+        const loc = `${SITE}/game/${g.id}/${slug(g.a[1])}-vs-${slug(g.h[1])}`;
+        if (g.s === "final") urls.push(`<url><loc>${loc}</loc>${g.d ? `<lastmod>${g.d}</lastmod>` : ""}<changefreq>monthly</changefreq><priority>0.6</priority></url>`);
+        else if (+g.t && +g.t * 1000 > Date.now() - 864e5 && +g.t * 1000 < soon) urls.push(`<url><loc>${loc}</loc><changefreq>hourly</changefreq><priority>0.7</priority></url>`); // previews for the coming week
+      }
     } catch { /* team pages still go out */ }
     xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>\n`;
   }

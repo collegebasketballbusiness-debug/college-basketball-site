@@ -220,8 +220,8 @@ const CSS = `:root{--bg:#0B0B0C;--surface:#151517;--raised:#1C1C1F;--ink:#F5F5F2
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.6}
 a{color:inherit}.wrap{max-width:860px;margin:0 auto;padding:0 16px}
 .top{background:var(--surface);border-bottom:3px solid var(--ball)}.top .wrap{display:flex;align-items:center;justify-content:space-between;gap:12px;height:62px}
-.brand{display:flex;align-items:center;gap:10px;white-space:nowrap;text-decoration:none;font:900 22px var(--display);text-transform:uppercase;letter-spacing:.01em}.brand img{width:36px;height:36px}
-.live{background:var(--ball);color:#0B0B0C;text-decoration:none;font:800 14px var(--body);padding:8px 14px;border-radius:999px;white-space:nowrap}
+.brand{display:flex;align-items:center;gap:10px;white-space:nowrap;min-width:0;overflow:hidden;text-decoration:none;font:900 22px var(--display);text-transform:uppercase;letter-spacing:.01em}.brand img{width:36px;height:36px;flex:none}.brand span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.live{flex:none;background:var(--ball);color:#0B0B0C;text-decoration:none;font:800 14px var(--body);padding:8px 14px;border-radius:999px;white-space:nowrap}
 .eyebrow{font:500 12px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ball);margin:28px 0 8px}
 h1{font:900 clamp(34px,6vw,54px)/.98 var(--display);text-transform:uppercase;letter-spacing:.01em;margin:0 0 12px;text-wrap:balance}
 .dek{color:var(--muted);font-size:18px;margin:0 0 22px}
@@ -247,6 +247,14 @@ th{font:500 11px var(--mono);letter-spacing:.08em;color:var(--muted);text-transf
 .cta{margin:36px 0;padding:22px;border-radius:14px;background:linear-gradient(135deg,#1f140c,#151517);border:1px solid #4a2a14;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
 .cta b{font:900 24px var(--display);text-transform:uppercase}.cta p{margin:2px 0 0;color:var(--muted);font-size:15px}.cta .btns{display:flex;gap:8px;flex-wrap:wrap}
 .btn{display:inline-block;text-decoration:none;font:800 14px var(--body);padding:10px 16px;border-radius:999px;border:1.5px solid var(--line)}.btn.p{background:var(--ball);border-color:var(--ball);color:#0B0B0C}
+.muted{color:var(--muted);font-size:14px}.muted a{color:var(--ball)}
+.livebar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;background:#2a0f0f;border:1px solid #6b1d1d;border-radius:12px;padding:12px 14px;margin:0 0 16px}.livebar span{font:800 13px var(--body);color:#FF4D4D;text-transform:uppercase;display:flex;align-items:center;gap:6px}.livebar i{width:8px;height:8px;border-radius:50%;background:#FF4D4D}.livebar .btn{margin-left:auto}
+.facts{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:10px}.facts li{display:flex;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line)}.facts li:last-child{border:0}.facts span{color:var(--muted);width:80px;flex:none}.facts b{min-width:0;overflow-wrap:anywhere}.facts a{color:var(--ball)}
+.picks .pl{display:flex;justify-content:space-between;gap:12px;font-size:15px;margin-bottom:6px}.picks .bar{display:flex;height:12px;border-radius:999px;overflow:hidden;background:#2c2c31}.picks .bar span:first-child{background:#6b6b70}.picks .bar span:last-child{background:var(--ball)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}.pv h3{margin-top:0}.pv h3 small{color:var(--muted);font:500 13px var(--mono)}
+.form,.lead{list-style:none;margin:0;padding:0}.form li,.lead li{padding:8px 0;border-bottom:1px solid var(--line);font-size:15px}.form a{text-decoration:none}.form .w{color:var(--good);font-weight:800}.form .l{color:#FF7A6B;font-weight:800}
+.lead li span{display:block;color:var(--muted);font-size:14px}.lead small{color:var(--muted)}
+@media (max-width:600px){.two{grid-template-columns:1fr}}
 .note{color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding:16px 0 40px;margin-top:30px}
 @media (max-width:420px){.brand{font-size:18px}.brand img{width:30px;height:30px}.live{font-size:13px;padding:7px 11px}}
 @media (max-width:600px){.sb{padding:14px 10px;gap:6px}.sb .t{flex-direction:column;text-align:center;gap:6px}.sb .t.r{flex-direction:column;text-align:center}.sb .t img{width:42px;height:42px}.sb .t b{font-size:17px}.sb .s{font-size:34px}.key li{grid-template-columns:62px 1fr auto}}`;
@@ -260,7 +268,7 @@ function page({ title, desc, url, robots, body, ld }) {
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Barlow:wght@400;600;700;800&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>${CSS}</style>${ld ? `<script type="application/ld+json">${JSON.stringify(ld).replace(/</g, "\\u003c")}</script>` : ""}
 <script defer src="/_vercel/insights/script.js"></script></head><body>
-<header class="top"><div class="wrap"><a class="brand" href="/#scores"><img src="/logo.png" alt="" width="36" height="36">College Basketball</a><a class="live" href="/#scores">Live scores →</a></div></header>
+<header class="top"><div class="wrap"><a class="brand" href="/#scores"><img src="/logo.png" alt="" width="36" height="36"><span>College Basketball</span></a><a class="live" href="/#scores">Live scores →</a></div></header>
 <main class="wrap">${body}</main></body></html>`;
 }
 
@@ -297,6 +305,92 @@ function waitHTML(id, msg, url) {
 
 export const recapSlug = (row) => row ? `${slugify(row.a[1])}-vs-${slugify(row.h[1])}` : "";
 
+// ---------- previews (before tip-off and while live) ----------
+const CHAT = { url: "https://dpehfxkozkvceetwkbba.supabase.co", key: "sb_publishable_C_uc2r3fbhFvUtUwc9JvbA_hVEf0Fmc" }; // public key, same one the site uses
+async function pickSplit(id) {
+  const r = await fetch(`${CHAT.url}/rest/v1/rpc/pick_counts`, { method: "POST", headers: { apikey: CHAT.key, authorization: `Bearer ${CHAT.key}`, "content-type": "application/json" }, body: JSON.stringify({ ids: [id] }), signal: AbortSignal.timeout(5000) });
+  if (!r.ok) return null;
+  const j = await r.json(); return Array.isArray(j) && j[0] ? { home: +j[0].home || 0, away: +j[0].away || 0 } : null;
+}
+function teamSeason(rows, slug, beforeT) {
+  const games = Object.values(rows).filter(g => g.a?.[0] === slug || g.h?.[0] === slug).sort((x, y) => (+x.t || 0) - (+y.t || 0) || String(x.d).localeCompare(String(y.d)));
+  const done = games.filter(g => g.s === "final" && (!beforeT || (+g.t || 0) < beforeT));
+  let w = 0, l = 0; const form = [];
+  for (const g of done) {
+    const home = g.h[0] === slug, me = home ? g.h : g.a, op = home ? g.a : g.h, won = +me[2] > +op[2];
+    won ? w++ : l++;
+    form.push({ id: g.id, won, me: me[2], op: op[2], opName: fix(op[1]), opSlug: op[0], home, d: g.d });
+  }
+  return { w, l, form: form.slice(-5).reverse(), recentIds: done.slice(-5).map(g => g.id) };
+}
+async function leaders(origin, slug, ids) {
+  const boxes = await Promise.all(ids.map(id => safe(relay(origin, `game/${id}/boxscore?final=1`))));
+  const P = {}; let gp = 0;
+  for (const b of boxes) {
+    const me = (b?.teams || []).find(t => t.seoname === slug); if (!me) continue;
+    const tb = (b.teamBoxscore || []).find(x => String(x.teamId) === String(me.teamId)); if (!tb) continue;
+    gp++;
+    for (const x of tb.playerStats || []) {
+      const name = fix(`${x.firstName || ""} ${x.lastName || ""}`).replace(/\s+/g, " ").trim(); if (!name) continue;
+      const p = P[name] ||= { name, pos: x.position || "", gp: 0, pts: 0, reb: 0, ast: 0 };
+      p.gp++; p.pts += +x.points || 0; p.reb += +x.totalRebounds || 0; p.ast += +x.assists || 0;
+    }
+  }
+  return { gp, list: Object.values(P).filter(p => p.gp >= Math.max(1, Math.ceil(gp / 2))).sort((a, b) => b.pts / b.gp - a.pts / a.gp).slice(0, 3) };
+}
+function tipText(row, sbg) {
+  const t = +row?.t || +sbg?.startTimeEpoch || 0;
+  if (!t) return { date: row?.d ? new Date(row.d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" }) : "", time: "TBA" };
+  const dt = new Date(t * 1000), z = "America/New_York";
+  return { date: dt.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: z }), time: dt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: z }) + " ET", iso: dt.toISOString() };
+}
+async function previewPage(origin, id, row, sbg, c, url, live) {
+  const rows = await seasonRows();
+  const teams = c?.teams || [];
+  const mk = (sd, rowT, sbT) => { const t = teams.find(x => !!x.isHome === (sd === "home")) || {}; return {
+    slug: t.seoname || rowT?.[0] || sbT?.names?.seo || "", name: fix(t.nameShort || rowT?.[1] || sbT?.names?.short || "TBA"),
+    rank: +(sbT?.rank || rowT?.[3] || 0) || 0, score: sbT?.score ?? rowT?.[2] ?? "" } };
+  const A = mk("away", row?.a, sbg?.away), H = mk("home", row?.h, sbg?.home);
+  const tip = tipText(row, sbg), beforeT = +row?.t || 0;
+  const sA = teamSeason(rows, A.slug, beforeT), sH = teamSeason(rows, H.slug, beforeT);
+  const [lA, lH, picks] = await Promise.all([leaders(origin, A.slug, sA.recentIds), leaders(origin, H.slug, sH.recentIds), safe(pickSplit(id))]);
+  const h2h = Object.values(rows).filter(g => g.s === "final" && g.id !== id && [g.a[0], g.h[0]].includes(A.slug) && [g.a[0], g.h[0]].includes(H.slug));
+  const rn = t => (t.rank ? `No. ${t.rank} ` : "") + t.name;
+  const venue = c?.location?.venue ? fix(c.location.venue) : "", city = [c?.location?.city, c?.location?.stateUsps].filter(Boolean).map(fix).join(", ");
+  const net = sbg?.network || row?.n || "";
+  const rec = s => `${s.w}-${s.l}`;
+  const title = `${rn(A)} vs. ${rn(H)} Preview: Tip Time, TV & Key Players`;
+  const tm = (t, s, right) => `<a class="t${right ? " r" : ""}" href="/team/${esc(t.slug)}"><img src="${logo(t.slug)}" alt="" width="52" height="52" onerror="this.style.visibility='hidden'"><span><b>${t.rank ? `<em>${t.rank}</em>` : ""}${esc(t.name)}</b><small>${rec(s)}</small></span></a>`;
+  const formHTML = (t, s) => `<div class="pv"><h3><img src="${logo(t.slug)}" alt="" width="22" height="22" onerror="this.remove()"><a href="/team/${esc(t.slug)}">${esc(t.name)}</a> <small>${rec(s)}</small></h3>${s.form.length ? `<ul class="form">${s.form.map(f => `<li><a href="/game/${esc(f.id)}"><span class="${f.won ? "w" : "l"}">${f.won ? "W" : "L"}</span> ${esc(f.me)}–${esc(f.op)} ${f.home ? "vs" : "at"} ${esc(f.opName)}</a></li>`).join("")}</ul>` : `<p class="muted">First game of the season.</p>`}</div>`;
+  const leadHTML = (t, L) => `<div class="pv"><h3>${esc(t.name)}</h3>${L.list.length ? `<ul class="lead">${L.list.map(p => `<li><b>${esc(p.name)}</b> <small>${esc(p.pos)}</small><span>${(p.pts / p.gp).toFixed(1)} pts · ${(p.reb / p.gp).toFixed(1)} reb · ${(p.ast / p.gp).toFixed(1)} ast</span></li>`).join("")}</ul><p class="muted">Averages over their last ${L.gp} game${L.gp === 1 ? "" : "s"}.</p>` : `<p class="muted">No stats yet this season.</p>`}</div>`;
+  const tot = picks ? picks.home + picks.away : 0;
+  const pickHTML = tot >= 3 ? `<h2>Fan picks</h2><div class="picks"><div class="pl"><span>${esc(A.name)} <b>${Math.round(picks.away / tot * 100)}%</b></span><span><b>${Math.round(picks.home / tot * 100)}%</b> ${esc(H.name)}</span></div><div class="bar"><span style="width:${Math.round(picks.away / tot * 100)}%"></span><span style="width:${Math.round(picks.home / tot * 100)}%"></span></div><p class="muted">${tot} fans have picked this game in Pick'em. <a href="/#game-${esc(id)}">Make your pick →</a></p></div>` : `<h2>Fan picks</h2><p class="muted">Nobody has picked this one yet. <a href="/#game-${esc(id)}">Be the first in Pick'em →</a></p>`;
+  const story = [];
+  story.push(`${rn(A)} (${rec(sA)}) takes on ${rn(H)} (${rec(sH)})${tip.date ? ` on ${tip.date}` : ""}${tip.time !== "TBA" ? ` at ${tip.time}` : ""}${venue ? ` at ${venue}${city ? ` in ${city}` : ""}` : ""}.${net ? ` The game is on ${net}.` : ""}`);
+  if (A.rank && H.rank) story.push(`It's a matchup of two ranked teams: No. ${A.rank} ${A.name} and No. ${H.rank} ${H.name}.`);
+  const hot = (t, s) => { const f = s.form; let k = 0; while (k < f.length && f[k].won === f[0]?.won) k++; return f.length && k >= 3 ? `${t.name} has ${f[0].won ? "won" : "lost"} ${k} straight.` : "" };
+  const streaks = [hot(A, sA), hot(H, sH)].filter(Boolean); if (streaks.length) story.push(streaks.join(" "));
+  const top = (t, L) => L.list[0] ? `${L.list[0].name} leads ${t.name} at ${(L.list[0].pts / L.list[0].gp).toFixed(1)} points per game` : "";
+  const tops = [top(A, lA), top(H, lH)].filter(Boolean); if (tops.length) story.push(tops.join("; ") + ".");
+  if (h2h.length) story.push(`They already met this season: ${h2h.map(g => `${fix(+g.a[2] > +g.h[2] ? g.a[1] : g.h[1])} won ${Math.max(+g.a[2], +g.h[2])}–${Math.min(+g.a[2], +g.h[2])}`).join("; ")}.`);
+  const liveBar = live ? `<div class="livebar"><span><i></i>Live now</span><b>${esc(A.name)} ${esc(A.score)} – ${esc(H.score)} ${esc(H.name)}</b><a class="btn p" href="/#game-${esc(id)}">Follow live →</a></div>` : "";
+  const body = `<p class="eyebrow">Preview${tip.date ? ` · ${esc(tip.date)}` : ""}</p><h1>${esc(rn(A))} vs. ${esc(rn(H))}</h1>
+<p class="dek">${esc(tip.time)}${net ? ` · ${esc(net)}` : ""}${venue ? ` · ${esc(venue)}` : ""}</p>${liveBar}
+<div class="sb">${tm(A, sA)}<div class="s">VS<small>${esc(tip.time)}</small></div>${tm(H, sH, 1)}</div>
+<article class="story">${story.map(p => `<p>${esc(p)}</p>`).join("")}</article>
+<h2>How to follow</h2><ul class="facts"><li><span>Tip-off</span><b>${esc(tip.date)}${tip.time !== "TBA" ? `, ${esc(tip.time)}` : ""}</b></li><li><span>TV</span><b>${esc(net || "TBA")}</b></li>${venue ? `<li><span>Arena</span><b>${esc(venue)}${city ? `, ${esc(city)}` : ""}</b></li>` : ""}<li><span>Live</span><b><a href="/#game-${esc(id)}">Play-by-play, win odds &amp; fan chat</a></b></li></ul>
+${pickHTML}
+<h2>Key players</h2><div class="two">${leadHTML(A, lA)}${leadHTML(H, lH)}</div>
+<h2>Recent results</h2><div class="two">${formHTML(A, sA)}${formHTML(H, sH)}</div>
+<div class="cta"><div><b>Watch it with us</b><p>Live play-by-play, win odds and fan chat for this game, right when it tips.</p></div><div class="btns"><a class="btn p" href="/#game-${esc(id)}">Open the game</a><a class="btn" href="/cal/${esc(A.slug)}.ics">📅 ${esc(A.name)} schedule</a><a class="btn" href="/cal/${esc(H.slug)}.ics">📅 ${esc(H.name)} schedule</a></div></div>
+<p class="note">This preview updates automatically and turns into the full recap once the game is final. Not affiliated with the NCAA or any school.</p>`;
+  const desc = `${rn(A)} (${rec(sA)}) vs. ${rn(H)} (${rec(sH)})${tip.date ? `, ${tip.date}` : ""}${tip.time !== "TBA" ? ` at ${tip.time}` : ""}${net ? ` on ${net}` : ""}. Preview with key players, recent form and fan picks.`;
+  const ld = { "@context": "https://schema.org", "@type": "SportsEvent", name: `${A.name} vs. ${H.name}`, sport: "Basketball", startDate: tip.iso, eventStatus: "https://schema.org/EventScheduled", url,
+    location: venue ? { "@type": "Place", name: venue, address: city || undefined } : undefined,
+    homeTeam: { "@type": "SportsTeam", name: H.name, url: `${SITE}/team/${H.slug}` }, awayTeam: { "@type": "SportsTeam", name: A.name, url: `${SITE}/team/${A.slug}` } };
+  return page({ title: `${title} | College Basketball`, desc, url, body, ld });
+}
+
 export default async function handler(req, res) {
   const id = String(req.query.id || "");
   const origin = `https://${req.headers?.host || "collegebasketball.news"}`;
@@ -305,21 +399,25 @@ export default async function handler(req, res) {
   const rows = await seasonRows().catch(() => ({}));
   const row = rows[id] || null;
   const url = `${SITE}/game/${id}${row ? "/" + recapSlug(row) : ""}`;
-  // is it over? the season file says so, or that day's scoreboard does
+  // where does the game stand? the season file, that day's scoreboard, or the game itself
   let sbg = null;
   if (row?.d) {
     const [y, m, d] = row.d.split("-");
     const sb = await safe(relay(origin, `scoreboard/basketball-men/d1/${y}/${m}/${d}/all-conf`));
     sbg = (sb?.games || []).map(x => x.game).find(g => String(g.gameID) === id) || null;
   }
-  const [info, box, pbp] = await Promise.all([safe(relay(origin, `game/${id}?info=1`)), safe(relay(origin, `game/${id}/boxscore?final=1`)), safe(relay(origin, `game/${id}/play-by-play`))]);
+  const info = await safe(relay(origin, `game/${id}?info=1`));
   const c = info?.contests?.[0] || null;
-  const final = row?.s === "final" || sbg?.gameState === "final" || /^F$|final/i.test(String(c?.gameState || c?.statusCodeDisplay || ""));
   if (!c && !row) return send(404, waitHTML(id, "Game not found", url), "public, s-maxage=600");
-  if (!final) {
-    const pre = (sbg?.gameState || row?.s) === "pre";
-    return send(200, waitHTML(id, pre ? "This game hasn't tipped off yet" : "This game is still going", url), "public, s-maxage=60");
-  }
+  const state = sbg?.gameState || (row?.s === "final" ? "final" : "") || (/^F$|final/i.test(String(c?.gameState || "")) ? "final" : /^I$|live/i.test(String(c?.gameState || "")) ? "live" : row?.s || "pre");
+  try {
+    if (state !== "final") {
+      const html = await previewPage(origin, id, row, sbg, c, url, state === "live");
+      return send(200, html, `public, s-maxage=${state === "live" ? 60 : 900}, stale-while-revalidate=600`);
+    }
+  } catch (e) { return send(200, waitHTML(id, state === "live" ? "This game is still going" : "This game hasn't tipped off yet", url), "public, s-maxage=60") }
+  // final: only now ask for the final box score (it's kept for a day once fetched)
+  const [box, pbp] = await Promise.all([safe(relay(origin, `game/${id}/boxscore?final=1`)), safe(relay(origin, `game/${id}/play-by-play`))]);
   if (!box?.teamBoxscore?.length) return send(200, waitHTML(id, "The recap is on its way", url), "public, s-maxage=120");
   const r = build(id, row, sbg, c, box, pbp);
   send(200, recapHTML(r, url), "public, s-maxage=86400, stale-while-revalidate=604800");
