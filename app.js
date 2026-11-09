@@ -636,6 +636,107 @@ async function makePlayCard(g, p) {
   x.fillStyle = "#9C9C98"; x.font = '500 30px "IBM Plex Mono", monospace'; x.fillText(location.host || "collegebasketball.news", 282, 1738);
   return c;
 }
+// ---------- share the game ----------
+// A story-sized picture (1080×1920) of where the game stands: score, win probability, the momentum line
+// and the "Catch me up" notes.
+async function makeGameCard(g) {
+  try { await Promise.all(['900 120px "Big Shoulders Display"', '800 60px "Big Shoulders Display"', '600 40px Barlow', '700 40px Barlow', '500 30px "IBM Plex Mono"'].map(f => document.fonts.load(f))) } catch { }
+  const W = 1080, H = 1920, c = document.createElement("canvas"); c.width = W; c.height = H;
+  const x = c.getContext("2d");
+  const a = +g.away.score || 0, h = +g.home.score || 0, live = g.gameState === "live", fin = g.gameState === "final";
+  const sa = logoSlug(g.away.names.short, g.away.names.seo), sh = logoSlug(g.home.names.short, g.home.names.seo);
+  const ca = teamColorFor(sa) || "#8A8A86", ch = teamColorFor(sh) || "#D8D8D4";
+  const [la, lh, brand] = await Promise.all([loadImg(logoURL(sa)), loadImg(logoURL(sh)), loadImg("logo.png")]);
+  const story = GAMESTORY[g.gameID] || {};
+  let series = story.series;
+  if (!series || !series.length) series = (gameDetail?.id === g.gameID ? (gameDetail.pbp?.periods || []) : []).flatMap((p, pi) => (p.playbyplayStats || []).map(x => ({ lead: (+x.homeScore || 0) - (+x.visitorScore || 0), per: pi + 1 })));
+  const font = (w, sz, f = '"Big Shoulders Display", Impact, sans-serif') => { x.font = `${w} ${sz}px ${f}` };
+  const fit = (t, w, sz, max, f) => { do { font(w, sz, f); sz -= 2 } while (x.measureText(t).width > max && sz > 16) };
+  // background: a glow in the leader's color
+  x.fillStyle = "#0B0B0C"; x.fillRect(0, 0, W, H);
+  const lc = h > a ? ch : a > h ? ca : "#FF6A13", [r, gg, b] = hexRGB(lc);
+  const gr = x.createRadialGradient(W / 2, 420, 40, W / 2, 420, 900); gr.addColorStop(0, `rgba(${r},${gg},${b},.42)`); gr.addColorStop(1, `rgba(${r},${gg},${b},0)`); x.fillStyle = gr; x.fillRect(0, 0, W, H);
+  // top row: LIVE / FINAL, upset watch, clock
+  x.textAlign = "center";
+  const pills = [];
+  pills.push(live ? ["● LIVE", "#E11D2E", "#fff"] : fin ? ["FINAL" + (/ot/i.test(g.finalMessage || "") ? " / " + String(g.finalMessage).replace(/final\W*/i, "").toUpperCase() : ""), "#F5F5F2", "#0B0B0C"] : ["UP NEXT", "#F5F5F2", "#0B0B0C"]);
+  if (upsetWatch(g)) pills.push(["🚨 UPSET WATCH", "#FFD23F", "#0B0B0C"]);
+  else if (fin && underdogLeads(g)) pills.push(["🚨 UPSET", "#FFD23F", "#0B0B0C"]);
+  else if (live && crunch(g)) pills.push(["⏱️ CRUNCH TIME", "#FF6A13", "#0B0B0C"]);
+  font(800, 44); const pw = pills.map(([t]) => x.measureText(t).width + 56), tot = pw.reduce((s, v) => s + v, 0) + (pills.length - 1) * 18;
+  let px = (W - tot) / 2;
+  pills.forEach(([t, bg, fg], i) => { x.fillStyle = bg; roundRect(x, px, 110, pw[i], 76, 38); x.fill(); x.fillStyle = fg; x.fillText(t, px + pw[i] / 2, 163); px += pw[i] + 18 });
+  if (live) { x.fillStyle = "#FF6A13"; font(500, 40, '"IBM Plex Mono", monospace'); x.fillText(`${String(g.currentPeriod || "").toUpperCase()}${/half/i.test(g.currentPeriod || "") ? "" : " · " + clockTxt(g.contestClock)}`, W / 2, 260) }
+  // teams and score
+  const team = (logo, t, score, X, lit) => {
+    if (logo) { const s = 190, k = Math.min(s / logo.width, s / logo.height) || 1, w = logo.width * k, hh = logo.height * k; x.drawImage(logo, X - w / 2, 300 + (s - hh) / 2, w, hh) }
+    const rank = rk(t); x.fillStyle = "#F5F5F2"; x.textAlign = "center";
+    const nm = fix(t.names.short).toUpperCase(); fit(nm, 800, 56, 440);
+    if (rank) { const rw = x.measureText(nm).width; font(800, 40); x.fillStyle = "#FF6A13"; x.fillText(String(rank), X - rw / 2 - 30, 560); fit(nm, 800, 56, 440); x.fillStyle = "#F5F5F2" }
+    x.fillText(nm, X + (rank ? 12 : 0), 560);
+    font(900, 200); x.fillStyle = lit ? "#FFFFFF" : "#8E8E8A"; x.fillText(String(score), X, 760);
+  };
+  team(la, g.away, a, 280, !fin || a > h); team(lh, g.home, h, 800, !fin || h > a);
+  x.fillStyle = "#4A4A47"; font(900, 110); x.fillText("–", W / 2, 725);
+  // win probability
+  let y = 820;
+  if (!fin) {
+    const ph = winProb(g), pa = 1 - ph, pct = v => v >= .995 ? ">99%" : v <= .005 ? "<1%" : Math.round(v * 100) + "%";
+    x.fillStyle = "#9C9C98"; font(500, 30, '"IBM Plex Mono", monospace'); x.fillText(g.gameState === "pre" ? "PREGAME ODDS" : "WIN PROBABILITY", W / 2, y + 30);
+    x.textAlign = "left"; x.fillStyle = "#fff"; font(900, 72); x.fillText(pct(pa), 90, y + 50);
+    x.textAlign = "right"; x.fillText(pct(ph), W - 90, y + 50);
+    const bx = 90, bw = W - 180, by = y + 80, bh = 34, wa = Math.max(4, bw * pa - 3);
+    x.fillStyle = "#222"; roundRect(x, bx, by, bw, bh, 17); x.fill();
+    x.save(); roundRect(x, bx, by, bw, bh, 17); x.clip();
+    x.fillStyle = ca; x.fillRect(bx, by, wa, bh); x.fillStyle = ch; x.fillRect(bx + wa + 6, by, bw - wa - 6, bh); x.restore();
+    x.textAlign = "center"; y = by + bh + 70;
+  } else y += 20;
+  // momentum line (above the middle: home team leading; below: away team)
+  if (series.length >= 4) {
+    const pts = [{ lead: 0, per: series[0].per }, ...series], n = pts.length, cx = 90, cw = W - 180, chh = 260, cy = y + 60, mid = cy + chh / 2;
+    const scale = Math.max(8, ...pts.map(p => Math.abs(p.lead)));
+    const xy = pts.map((p, i) => [cx + (i / (n - 1)) * cw, mid - (p.lead / scale) * (chh / 2 - 8)]);
+    const big = Math.max(...pts.map(p => p.lead)), small = Math.min(...pts.map(p => p.lead));
+    const ab = t => fix(t.names.char6 || t.names.short).toUpperCase();
+    x.textAlign = "left"; font(500, 30, '"IBM Plex Mono", monospace');
+    x.fillStyle = "#F5F5F2"; x.fillText(ab(g.home) + (big > 0 ? "" : ""), cx, y + 38); if (big > 0) { const w0 = x.measureText(ab(g.home) + " ").width; x.fillStyle = "#9C9C98"; x.fillText(`LED BY ${big}`, cx + w0, y + 38) }
+    x.textAlign = "right"; x.fillStyle = "#9C9C98"; x.fillText("MOMENTUM", cx + cw, y + 38);
+    x.strokeStyle = "rgba(255,255,255,.12)"; x.lineWidth = 2; x.setLineDash([8, 8]);
+    for (let i = 1; i < n; i++) if (pts[i].per !== pts[i - 1].per) { x.beginPath(); x.moveTo(xy[i][0], cy); x.lineTo(xy[i][0], cy + chh); x.stroke() }
+    x.setLineDash([]); x.strokeStyle = "rgba(255,255,255,.25)"; x.beginPath(); x.moveTo(cx, mid); x.lineTo(cx + cw, mid); x.stroke();
+    const path = () => { x.beginPath(); xy.forEach(([X, Y], i) => i ? x.lineTo(X, Y) : x.moveTo(X, Y)) };
+    const area = (top, col) => { x.save(); x.beginPath(); x.rect(cx, top ? cy : mid, cw, chh / 2); x.clip(); path(); x.lineTo(cx + cw, mid); x.lineTo(cx, mid); x.closePath(); const [r1, g1, b1] = hexRGB(col); x.fillStyle = `rgba(${r1},${g1},${b1},.75)`; x.fill(); x.restore() };
+    area(true, ch); area(false, ca);
+    path(); x.strokeStyle = "#F5F5F2"; x.lineWidth = 4; x.lineJoin = "round"; x.stroke();
+    x.textAlign = "left"; x.fillStyle = "#F5F5F2"; font(500, 30, '"IBM Plex Mono", monospace'); x.fillText(ab(g.away), cx, cy + chh + 50);
+    if (small < 0) { const w0 = x.measureText(ab(g.away) + " ").width; x.fillStyle = "#9C9C98"; x.fillText(`LED BY ${-small}`, cx + w0, cy + chh + 50) }
+    y = cy + chh + 90;
+  }
+  // catch me up notes
+  const rows = story.CM ? catchUpRows(g, story.CM, story.P || {}).slice(1).filter(r => r[0] !== "📈").map(([e, t]) => [e, t.replace(/ \([^)]*\)/g, "")]).slice(0, 3) : [];
+  if (rows.length) {
+    const top = y + 10, rowH = 60, boxH = 36 + rows.length * rowH;
+    x.fillStyle = "rgba(255,255,255,.06)"; roundRect(x, 90, top, W - 180, boxH, 28); x.fill();
+    rows.forEach(([e, t], i) => {
+      x.textAlign = "left"; font(600, 36, "Barlow, sans-serif"); x.fillStyle = "#E3E3DF";
+      x.fillText(e, 130, top + 64 + i * rowH); fit(t, 600, 36, W - 90 - 200 - 40, "Barlow, sans-serif"); x.fillText(t, 200, top + 64 + i * rowH);
+    });
+    y = top + boxH;
+  }
+  // footer (leaves the bottom clear for a link sticker)
+  const fy = Math.max(y + 36, 1640);
+  x.fillStyle = "rgba(255,255,255,.08)"; roundRect(x, 90, fy, W - 180, 160, 28); x.fill();
+  if (brand) { const t = document.createElement("canvas"); t.width = t.height = 110; const tx = t.getContext("2d"); tx.drawImage(brand, 0, 0, 110, 110); tx.globalCompositeOperation = "source-in"; tx.fillStyle = "#F5F5F2"; tx.fillRect(0, 0, 110, 110); x.drawImage(t, 130, fy + 25, 110, 110) }
+  x.textAlign = "left"; x.fillStyle = "#F5F5F2"; fit(live ? "LIVE CHAT + PLAY-BY-PLAY" : "@COLLEGEBASKETBALL", 900, 60, W - 180 - 200 - 40);
+  x.fillText(live ? "LIVE CHAT + PLAY-BY-PLAY" : "@COLLEGEBASKETBALL", 280, fy + 85);
+  x.fillStyle = "#9C9C98"; font(500, 30, '"IBM Plex Mono", monospace'); x.fillText(location.host || "collegebasketball.news", 282, fy + 130);
+  return c;
+}
+function shareGame(id) {
+  const g = Object.values(cache).flat().find(x => x.gameID === id); if (!g) return;
+  const name = `${fix(g.away.names.short)}-${fix(g.home.names.short)}-${g.gameState === "final" ? "final" : "live"}`.replace(/[^A-Za-z0-9-]+/g, "-").toLowerCase() + ".png";
+  openShare("Share this game", () => makeGameCard(g), name, `${fix(g.away.names.short)} ${g.away.score}, ${fix(g.home.names.short)} ${g.home.score}: win probability and momentum`, "Live game");
+}
 function sharePlay(key) {
   const g = Object.values(cache).flat().find(x => x.gameID === openGame), p = PLAYINFO[openGame]?.[key];
   if (!g || !p) return;
@@ -647,14 +748,21 @@ function sharePlay(key) {
 // A short summary at the top of the feed for anyone joining mid-game: the score, the best run,
 // the biggest leads, how back-and-forth it's been, and who's scoring.
 let cmuClosed = {};
+const GAMESTORY = {};
+const clockTxt = c => String(c || "").replace(/^0(\d)/, "$1");
 function catchUpHTML(sg, CM, P, nPlays) {
   if (nPlays < 12 || sg.gameState === "pre") return "";
+  const rows = catchUpRows(sg, CM, P);
+  const closed = !!cmuClosed[sg.gameID];
+  return `<div class="cmu ${closed ? "closed" : ""}"><button class="cmu-h" data-cmu="${sg.gameID}" aria-expanded="${!closed}"><span>⚡ ${sg.gameState === "final" ? "Game recap" : "Catch me up"}</span><i>${closed ? "Show" : "Hide"}</i></button>${closed ? "" : `<ul>${rows.map(([e, t]) => `<li><span>${e}</span>${esc(t)}</li>`).join("")}</ul>`}</div>`;
+}
+function catchUpRows(sg, CM, P) {
   const a = +sg.away.score || 0, h = +sg.home.score || 0, A = fix(sg.away.names.short), Hn = fix(sg.home.names.short);
   const name = sd => sd === "home" ? Hn : A;
   const rows = [];
   if (sg.gameState === "final") rows.push(["🏁", h === a ? `Final: ${A} ${a}, ${Hn} ${h}` : `${h > a ? Hn : A} beat ${h > a ? A : Hn} ${Math.max(a, h)}-${Math.min(a, h)}${/ot/i.test(sg.finalMessage || "") ? ` in ${String(sg.finalMessage).replace(/final\W*/i, "")}` : ""}`]);
   else {
-    const per = String(sg.currentPeriod || ""), where = /half/i.test(per) ? "at halftime" : `with ${sg.contestClock} left in the ${/ot/i.test(per) ? per : /2/.test(per) ? "2nd half" : "1st half"}`;
+    const per = String(sg.currentPeriod || ""), where = /half/i.test(per) ? "at halftime" : `with ${clockTxt(sg.contestClock)} left in the ${/ot/i.test(per) ? per : /2/.test(per) ? "2nd half" : "1st half"}`;
     rows.push(["📍", h === a ? `Tied ${a}-${h} ${where}` : `${h > a ? Hn : A} leads ${h > a ? A : Hn} ${Math.max(a, h)}-${Math.min(a, h)} ${where}`]);
   }
   if (CM.run) rows.push(["🏃", `Best run: ${name(CM.run.side)} ${CM.run.pts}-0`]);
@@ -665,8 +773,7 @@ function catchUpHTML(sg, CM, P, nPlays) {
   const ta = top("away"), th = top("home");
   const sc = [ta ? `${shortName(ta[0])} ${ta[1].pts} (${A})` : "", th ? `${shortName(th[0])} ${th[1].pts} (${Hn})` : ""].filter(Boolean);
   if (sc.length) rows.push(["⭐", `Leading scorers: ${sc.join(", ")}`]);
-  const closed = !!cmuClosed[sg.gameID];
-  return `<div class="cmu ${closed ? "closed" : ""}"><button class="cmu-h" data-cmu="${sg.gameID}" aria-expanded="${!closed}"><span>⚡ ${sg.gameState === "final" ? "Game recap" : "Catch me up"}</span><i>${closed ? "Show" : "Hide"}</i></button>${closed ? "" : `<ul>${rows.map(([e, t]) => `<li><span>${e}</span>${esc(t)}</li>`).join("")}</ul>`}</div>`;
+  return rows;
 }
 
 // ---------- Game of the Night ----------
@@ -1282,7 +1389,7 @@ function drawPhoneGame(sg) {
   const on = $("#mgstrip .mg-mini.on"); if (on && MG.dataset.stripFor !== sg.gameID) { MG.dataset.stripFor = sg.gameID; on.scrollIntoView({ inline: "center", block: "nearest" }) }
   // score header
   const tm = (t, side, score, lose) => `<a class="mg-tm ${side}" href="#team-${esc(logoSlug(t.names.short, t.names.seo))}">${mono(t.names.short, t.names.seo)}<span class="mg-sc ${lose ? "lose" : ""}">${pre ? "" : esc(score)}</span><span class="mg-nm">${rk(t) ? `<em>${rk(t)}</em> ` : ""}${esc(fix(t.names.short))}</span></a>`;
-  $("#mgscore").innerHTML = `${tm(sg.away, "a", a, fin && a < h)}<div class="mg-mid"><span class="mg-st ${live ? "lv" : ""}">${live ? "<i></i>" : ""}${esc(st.txt)}</span>${tvHTML(sg.network)}${badgeHTML(badges(sg).slice(0, 1))}</div>${tm(sg.home, "h", h, fin && h < a)}${(w => w ? `<div class="mg-wp">${w}</div>` : "")(wpHTML(sg))}`;
+  $("#mgscore").innerHTML = `${tm(sg.away, "a", a, fin && a < h)}<div class="mg-mid"><span class="mg-st ${live ? "lv" : ""}">${live ? "<i></i>" : ""}${esc(st.txt)}</span>${tvHTML(sg.network)}${badgeHTML(badges(sg).slice(0, 1))}${sg.gameState !== "pre" ? `<button class="mg-sg" data-sharegame="${sg.gameID}" aria-label="Share this game as a story"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Share game</button>` : ""}</div>${tm(sg.home, "h", h, fin && h < a)}${(w => w ? `<div class="mg-wp">${w}</div>` : "")(wpHTML(sg))}`;
   // tabs
   const tabs = [["feed", "Feed"], ["game", "Game"], ["away", short(sg.away)], ["home", short(sg.home)]];
   $("#mgtabs").innerHTML = tabs.map(([k, l]) => `<button role="tab" aria-selected="${mgTab === k}" data-mgtab="${k}">${esc(l)}</button>`).join("");
@@ -1368,6 +1475,7 @@ function drawPhoneGame(sg) {
       ph = nh; pv = nv;
     }
     const cmu = catchUpHTML(sg, CM, P, items.filter(i => !i.divider).length);
+    GAMESTORY[sg.gameID] = { CM, P, series: items.filter(i => !i.divider).map(i => ({ lead: i.h - i.v, per: i.per })) }; // for "Share game"
     const shown = (mgFeed === "scoring" ? items.filter(i => i.pts > 0 || i.divider) : items).reverse().slice(0, 250);
     const perLbl = p => String(p).replace(/1st Half|1st/i, "H1").replace(/2nd Half|2nd/i, "H2").replace(/Overtime/i, "OT");
     for (const i of shown) if (!i.divider) notePlay(sg.gameID, i.key, { desc: i.desc, per: perLbl(i.per), clock: i.clock, h: i.h, v: i.v, side: i.side, pts: i.pts, e: i.type.e, l: i.type.l, n: i.type.n, tags: i.tags.map(t => t[1]), line: i.line });
@@ -2395,6 +2503,8 @@ document.addEventListener("click", e => {
   if (pb) { e.preventDefault(); makePick(pb.dataset.pickgame, pb.dataset.pick); return }
   const sh = e.target.closest && e.target.closest("[data-share]");
   if (sh) { e.preventDefault(); shareFinal(sh.dataset.share); return }
+  const sgb = e.target.closest && e.target.closest("[data-sharegame]");
+  if (sgb) { e.preventDefault(); e.stopPropagation(); shareGame(sgb.dataset.sharegame); return }
   const sp = e.target.closest && e.target.closest("[data-shareplay]");
   if (sp) { e.preventDefault(); e.stopPropagation(); sharePlay(sp.dataset.shareplay); return }
   const cm = e.target.closest && e.target.closest("[data-cmu]");
