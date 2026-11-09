@@ -782,25 +782,59 @@ function catchUpRows(sg, CM, P) {
 }
 
 // ---------- Game of the Night ----------
-// Picks today's headline game in tiers: (1) a ranked team is playing, (2) a Power 6 team or a notable program
-// is playing, (3) anything else. Games still to be played always beat finished ones; within a tier, live games
-// come first (close ones especially), then the next to tip off.
+// Picks today's headline game by how big the matchup is: ranked-vs-ranked games, Power 6 teams playing each other,
+// and classic rivalries come first; a ranked team beating up on a small-conference team counts for much less.
+// Games still to be played always beat finished ones; a live game keeps the spot unless a clearly bigger one is on.
 const NOTABLE = new Set(["memphis", "gonzaga", "san-diego-st", "st-marys-ca", "dayton", "vcu", "wichita-st", "utah-st",
   "new-mexico", "nevada", "boise-st", "unlv", "colorado-st", "fla-atlantic", "drake", "grand-canyon", "mcneese",
   "saint-louis", "loyola-chicago", "davidson", "col-of-charleston", "uab", "north-texas", "liberty", "high-point",
   "princeton", "st-bonaventure", "santa-clara", "san-francisco", "bradley", "belmont", "south-fla", "tulane", "george-mason", "yale", "akron", "lipscomb"]);
-function heroTier(g) {
-  if (rk(g.home) || rk(g.away)) return 3;
-  if ([g.home, g.away].some(t => P6.includes(confOf(t)) || NOTABLE.has(t.names?.seo))) return 2;
-  return 1;
+// classic rivalries (either order)
+const RIVALS = new Set([
+  "duke|north-carolina", "kentucky|louisville", "indiana|purdue", "michigan|michigan-st", "kansas|missouri", "kansas|kansas-st",
+  "iowa|iowa-st", "cincinnati|xavier", "southern-california|ucla", "arizona|arizona-st", "georgetown|syracuse", "villanova|georgetown",
+  "saint-josephs|villanova", "penn|villanova", "la-salle|saint-josephs", "temple|villanova", "syracuse|uconn", "georgetown|uconn",
+  "alabama|auburn", "florida|florida-st", "florida|kentucky", "georgia|georgia-tech", "clemson|south-carolina", "virginia|virginia-tech",
+  "duke|north-carolina-st", "north-carolina|north-carolina-st", "duke|wake-forest", "north-carolina|wake-forest", "illinois|missouri",
+  "marquette|wisconsin", "minnesota|wisconsin", "michigan|ohio-st", "penn-st|pittsburgh", "pittsburgh|west-virginia", "butler|xavier",
+  "creighton|nebraska", "oregon|oregon-st", "washington|washington-st", "california|stanford", "texas|texas-am", "oklahoma|oklahoma-st",
+  "byu|utah", "utah|utah-st", "byu|utah-st", "memphis|tennessee", "mississippi-st|ole-miss", "gonzaga|st-marys-ca", "baylor|tcu",
+  "houston|memphis", "arkansas|missouri", "indiana|kentucky", "kentucky|north-carolina", "duke|kentucky", "kansas|kentucky",
+  "kentucky|michigan-st", "duke|michigan-st", "kansas|michigan-st", "indiana|louisville", "notre-dame|purdue", "indiana|notre-dame",
+  "creighton|marquette", "providence|uconn", "seton-hall|st-johns-ny", "st-johns-ny|villanova", "boston-college|uconn",
+  "miami-fl|florida-st", "lsu|ole-miss", "tennessee|vanderbilt", "kentucky|tennessee", "arizona|ucla", "dayton|xavier"]);
+const teamSlug = t => logoSlug(t.names.short, t.names.seo);
+const isP6 = t => P6.includes(confOf(t));
+const isRivalry = g => { const a = teamSlug(g.away), h = teamSlug(g.home); return RIVALS.has(`${a}|${h}`) || RIVALS.has(`${h}|${a}`) };
+// how big a matchup is, before anything about the score or tip time
+function matchupScore(g) {
+  const A = g.away, H = g.home, ra = rk(A), rh = rk(H), pa = isP6(A), ph = isP6(H);
+  const big = t => isP6(t) || NOTABLE.has(teamSlug(t)) || rk(t);
+  const rankPts = r => r ? (26 - r) * 4 : 0; // No. 1 = 100 … No. 25 = 4
+  let s = 0;
+  if (ra && rh) s += 120 + rankPts(ra) + rankPts(rh) + (ra <= 10 && rh <= 10 ? 40 : 0);
+  else if (ra || rh) { const r = ra || rh, opp = ra ? H : A; s += big(opp) ? 70 + rankPts(r) : 10 + rankPts(r) * 0.4 } // ranked vs a real opponent, or vs a small school
+  if (pa && ph) s += confOf(A) === confOf(H) ? 90 : 100;                 // Power 6 vs Power 6
+  else if (pa || ph) s += big(pa ? A : H) ? 25 : 5;                       // one Power 6 team (vs a notable program, or a cupcake)
+  else if (NOTABLE.has(teamSlug(A)) && NOTABLE.has(teamSlug(H))) s += 60;  // two good mid-majors
+  else if (NOTABLE.has(teamSlug(A)) || NOTABLE.has(teamSlug(H))) s += 15;
+  if (isRivalry(g)) s += 120;
+  if (g.network) s += 5;
+  return s;
 }
+// a ranked team in real danger, or any big game coming down to the wire, earns the spot while it's happening
+function liveDrama(g) {
+  if (g.gameState !== "live") return 0;
+  let s = 20;
+  if (upsetWatch(g)) { const r = rk(g.away) || rk(g.home) || 25; s += 60 + (26 - Math.min(rk(g.away) || 99, rk(g.home) || 99, r)) * 2 }
+  if (crunch(g)) s += 40;
+  else if (Math.abs((+g.home.score || 0) - (+g.away.score || 0)) <= 5) s += 10;
+  return s;
+}
+function heroTier(g) { return matchupScore(g) + liveDrama(g) }
 function heroScore(g) {
-  let s = (g.gameState === "final" ? 0 : 10000) + heroTier(g) * 1000;
-  for (const t of [g.home, g.away]) { const r = rk(t); if (r) s += 30 - r }
-  if (rk(g.home) && rk(g.away)) s += 25;
-  if (g.gameState === "live") { s += 200; const m = Math.abs((+g.home.score || 0) - (+g.away.score || 0)); if (m <= 5) s += 10 }
-  if (g.gameState === "pre") { const hrs = Math.max(0, ((+g.startTimeEpoch || 0) * 1000 - Date.now()) / 36e5); s += Math.max(0, 100 - hrs * 8) } // sooner tip-off ranks higher
-  if (g.network) s += 3;
+  let s = (g.gameState === "final" ? 0 : 10000) + matchupScore(g) + liveDrama(g);
+  if (g.gameState === "pre") { const hrs = Math.max(0, ((+g.startTimeEpoch || 0) * 1000 - Date.now()) / 36e5); s += Math.max(0, 20 - hrs * 2) } // sooner tip-off breaks near-ties
   return s;
 }
 // A small chart of the lead swinging back and forth: above the line the home team leads, below it the away team.
@@ -850,7 +884,7 @@ function drawHero() {
   const live = list.find(g => g.gameID === heroId);
   // keep the same game while it's on, unless a game from a higher tier is live or still to come
   const best = [...list].sort((a, b) => heroScore(b) - heroScore(a))[0];
-  let g = live && live.gameState !== "final" && heroTier(live) >= heroTier(best) ? live : best;
+  let g = live && live.gameState !== "final" && heroTier(live) + 60 >= heroTier(best) ? live : best;
   heroId = g.gameID;
   const st = status(g), pre = g.gameState === "pre", a = +g.away.score || 0, h = +g.home.score || 0;
   const side = (t, sd, r) => { const slug = logoSlug(t.names.short, t.names.seo); return `<div class="tm2 ${r ? "r" : ""}">${mono(t.names.short, t.names.seo, null, "")}<div><div class="tn">${rankBadge(rk(t))}${esc(fix(t.names.short))}</div><div class="tr">${esc([recordOf(t.names.short, g, sd), CONF[confOf(t)]].filter(Boolean).join(" · "))}</div></div></div>` };
