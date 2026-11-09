@@ -11,6 +11,8 @@
 //   SUPABASE_SECRET_KEY   Supabase → Project Settings → API Keys → secret key
 //   VAPID_PUBLIC_KEY      \  the push "ID card" for your site (made once; see the setup steps)
 //   VAPID_PRIVATE_KEY     /
+//   DISCORD_WEBHOOK_URL   (optional) a Discord channel webhook: upsets, crunch time and big finals get posted there,
+//                         plus the weekly Pick'em leaderboard every Sunday night
 
 import webpush from "web-push";
 
@@ -19,9 +21,26 @@ const SITE = "https://collegebasketball.news"; // where tapping an alert takes p
 const json = (res, code, body) => { res.setHeader("content-type", "application/json; charset=utf-8"); res.setHeader("cache-control", "no-store"); res.status(code).send(JSON.stringify(body)) };
 
 function etParts(d = new Date()) {
-  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23" }).formatToParts(d).map(x => [x.type, x.value]));
-  return { path: `${p.year}/${p.month}/${p.day}`, hour: +p.hour };
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", weekday: "short", hourCycle: "h23" }).formatToParts(d).map(x => [x.type, x.value]));
+  return { path: `${p.year}/${p.month}/${p.day}`, hour: +p.hour, minute: +p.minute, weekday: p.weekday };
 }
+
+// ---- Discord ----
+// Which alerts are worth a post in the server: anything involving a ranked team except plain tip-offs
+// (those only post when both teams are ranked).
+function discordWorthy(a) {
+  const g = a.g, ranked = [g.away, g.home].filter(t => rank(t)).length;
+  if (a.kind === "start") return ranked === 2;
+  if (a.kind === "final") return ranked >= 1;
+  return a.upsets || a.close; // upset alerts, upset finals, crunch time and OT in ranked games
+}
+async function discordPost(hook, body) {
+  if (!hook) return false;
+  const r = await fetch(hook, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "College Basketball", allowed_mentions: { parse: [] }, ...body }) }).catch(() => null);
+  return !!(r && r.ok);
+}
+const COLORS = { upset: 0xFFD23F, "upset-final": 0xFFD23F, close: 0xFF6A13, final: 0x2ECC71, start: 0x5865F2 };
+const discordEmbed = (a, site) => ({ embeds: [{ title: a.title, description: `${a.body}\n\n[Live chat + play-by-play →](${site}/#game-${a.g.gameID})`, url: `${site}/#game-${a.g.gameID}`, color: COLORS[a.kind] ?? (a.kind.startsWith("ot") ? 0xE11D2E : 0xFF6A13) }] });
 const secsOf = c => { const m = /^(\d+):(\d+)/.exec(String(c || "")); return m ? +m[1] * 60 + +m[2] : 0 };
 const isOT = p => /ot/i.test(String(p || ""));
 const is2nd = p => /2nd|^2$/i.test(String(p || "")) || isOT(p);
@@ -69,8 +88,23 @@ export default async function handler(req, res) {
   const H = { apikey: secret, "content-type": "application/json", ...(secret.startsWith("eyJ") ? { authorization: `Bearer ${secret}` } : {}) };
   const db = (path, opts = {}) => fetch(`${base}/rest/v1/${path}`, { ...opts, headers: { ...H, ...(opts.headers || {}) } });
 
+  const hook = process.env.DISCORD_WEBHOOK_URL || "";
+  const now = etParts();
+  // Sunday night: post the week's Pick'em leaderboard to Discord (once)
+  if (hook && now.weekday === "Sun" && now.hour === 23 && now.minute >= 30) {
+    const mark = await db("alert_log?on_conflict=game_id,kind", { method: "POST", headers: { prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify([{ game_id: "pickem-" + now.path, kind: "weekly" }]) }).catch(() => null);
+    if (mark && mark.ok && (await mark.json()).length) {
+      const lb = await db("rpc/pick_leaderboard", { method: "POST", body: JSON.stringify({ scope: "week" }) }).then(r => r.ok ? r.json() : []).catch(() => []);
+      if (lb.length) {
+        const medal = p => ["🥇", "🥈", "🥉"][p - 1] || `**${p}.**`;
+        await discordPost(hook, { embeds: [{ title: `🏆 Pick'em: this week's champ is ${lb[0].username}!`, color: 0xFF6A13,
+          description: lb.slice(0, 5).map(r => `${medal(r.place)} **${r.username}** · ${r.wins}-${r.losses}${r.streak >= 3 ? ` · 🔥 ${r.streak} straight` : ""}`).join("\n") + `\n\nNew week starts now. [Make your picks →](${SITE}/#pickem)` }] });
+      }
+    }
+  }
+
   // 1. today's games (and last night's, in the hour after midnight)
-  const now = etParts(), days = [now.path];
+  const days = [now.path];
   if (now.hour < 2) days.push(etParts(new Date(Date.now() - 3 * 3600e3)).path);
   const games = [];
   for (const d of days) {
@@ -103,7 +137,10 @@ export default async function handler(req, res) {
   if (!ins || !ins.ok) return json(res, 500, { error: "alert_log: " + (ins ? ins.status : "unreachable") });
   const fresh = new Set((await ins.json()).map(x => `${x.game_id}|${x.kind}`));
   const toSend = due.filter(a => !a.silent && fresh.has(`${a.g.gameID}|${a.kind}`));
-  if (!toSend.length || !pub || !process.env.VAPID_PRIVATE_KEY) return json(res, 200, { games: games.length, sent: 0, due: toSend.length });
+  // Discord: the big moments, a few seconds apart so they arrive in order
+  let posted = 0;
+  if (hook) for (const a of toSend.filter(discordWorthy).slice(0, 8)) { if (await discordPost(hook, discordEmbed(a, SITE))) posted++; await new Promise(r => setTimeout(r, 400)) }
+  if (!toSend.length || !pub || !process.env.VAPID_PRIVATE_KEY) return json(res, 200, { games: games.length, sent: 0, due: toSend.length, discord: posted });
 
   // 4. send
   webpush.setVapidDetails(CONTACT, pub, process.env.VAPID_PRIVATE_KEY);
@@ -128,5 +165,5 @@ export default async function handler(req, res) {
     }));
   }
   for (const ep of gone) await db(`push_subs?endpoint=eq.${encodeURIComponent(ep)}`, { method: "DELETE" }).catch(() => null);
-  return json(res, 200, { games: games.length, alerts: toSend.length, sent, removed: gone.size });
+  return json(res, 200, { games: games.length, alerts: toSend.length, sent, removed: gone.size, discord: posted });
 }
