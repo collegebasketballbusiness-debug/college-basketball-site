@@ -5,6 +5,12 @@
     },
     "api/alerts.js": {
       "maxDuration": 60
+    },
+    "api/team.js": {
+      "includeFiles": "{index.html,teams.js}"
+    },
+    "api/sitemap.js": {
+      "includeFiles": "teams.js"
     }
   },
   "redirects": [
@@ -18,6 +24,16 @@
       ],
       "destination": "https://collegebasketball.news/$1",
       "permanent": true
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/team/:slug",
+      "destination": "/api/team?slug=:slug"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "/api/sitemap"
     }
   ]
 }

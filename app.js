@@ -1056,7 +1056,7 @@ function drawGame() {
   const c = d?.game, teams = c?.teams || [];
   const tHome = teams.find(t => t.isHome) || {}, tAway = teams.find(t => !t.isHome) || {};
   const st = status(sg), pre = sg.gameState === "pre";
-  const side = (s, t, r) => `<a class="side tlink ${r ? "r" : ""}" href="#team-${esc(logoSlug(s.names.short, s.names.seo))}" title="Open ${esc(fix(s.names.short))} team page">${mono(s.names.short, s.names.seo, t.color, "lg")}<div><strong>${(s.rank || apRank(s.names.short)) ? `<span style="color:var(--ball)">#${s.rank || apRank(s.names.short)}</span> ` : ""}${esc(fix(s.names.short))}</strong><small>${esc(recordOf(s.names.short, sg, s === sg.home ? "home" : "away") || fix(t.record || "").replace(/[()]/g, ""))}${CONF[confOf(s)] ? " · " + CONF[confOf(s)] : ""}</small></div></a>`;
+  const side = (s, t, r) => `<a class="side tlink ${r ? "r" : ""}" href="/team/${esc(logoSlug(s.names.short, s.names.seo))}" title="Open ${esc(fix(s.names.short))} team page">${mono(s.names.short, s.names.seo, t.color, "lg")}<div><strong>${(s.rank || apRank(s.names.short)) ? `<span style="color:var(--ball)">#${s.rank || apRank(s.names.short)}</span> ` : ""}${esc(fix(s.names.short))}</strong><small>${esc(recordOf(s.names.short, sg, s === sg.home ? "home" : "away") || fix(t.record || "").replace(/[()]/g, ""))}${CONF[confOf(s)] ? " · " + CONF[confOf(s)] : ""}</small></div></a>`;
   let html = `<div class="gh">${side(sg.away, tAway)}<div class="big">${pre ? "vs" : `${esc(sg.away.score)}–${esc(sg.home.score)}`}<small class="${st.cls}">${esc(st.txt)}</small>${tvHTML(sg.network, 1)}${sg.gameState === "final" ? `<button class="sharebtn" data-share="${sg.gameID}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Share final</button>` : ""}</div>${side(sg.home, tHome, 1)}</div>${pickHTML(sg)}`;
   GHEAD.innerHTML = html; html = "";
   if (!d) { GMAIN.innerHTML = `<div class="boxwrap"><p style="margin:0;color:var(--muted)">Loading game details…</p></div>`; return }
@@ -1393,7 +1393,7 @@ function drawPhoneGame(sg) {
   }).join("");
   const on = $("#mgstrip .mg-mini.on"); if (on && MG.dataset.stripFor !== sg.gameID) { MG.dataset.stripFor = sg.gameID; on.scrollIntoView({ inline: "center", block: "nearest" }) }
   // score header
-  const tm = (t, side, score, lose) => `<a class="mg-tm ${side}" href="#team-${esc(logoSlug(t.names.short, t.names.seo))}">${mono(t.names.short, t.names.seo)}<span class="mg-sc ${lose ? "lose" : ""}">${pre ? "" : esc(score)}</span><span class="mg-nm">${rk(t) ? `<em>${rk(t)}</em> ` : ""}${esc(fix(t.names.short))}</span></a>`;
+  const tm = (t, side, score, lose) => `<a class="mg-tm ${side}" href="/team/${esc(logoSlug(t.names.short, t.names.seo))}">${mono(t.names.short, t.names.seo)}<span class="mg-sc ${lose ? "lose" : ""}">${pre ? "" : esc(score)}</span><span class="mg-nm">${rk(t) ? `<em>${rk(t)}</em> ` : ""}${esc(fix(t.names.short))}</span></a>`;
   $("#mgscore").innerHTML = `${tm(sg.away, "a", a, fin && a < h)}<div class="mg-mid"><span class="mg-st ${live ? "lv" : ""}">${live ? "<i></i>" : ""}${esc(st.txt)}</span>${tvHTML(sg.network)}${badgeHTML(badges(sg).slice(0, 1))}${sg.gameState !== "pre" ? `<button class="mg-sg" data-sharegame="${sg.gameID}" aria-label="Share this game as a story"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Share game</button>` : ""}</div>${tm(sg.home, "h", h, fin && h < a)}${(w => w ? `<div class="mg-wp">${w}</div>` : "")(wpHTML(sg))}`;
   // tabs
   const tabs = [["feed", "Feed"], ["game", "Game"], ["away", short(sg.away)], ["home", short(sg.home)]];
@@ -1540,7 +1540,7 @@ MG.addEventListener("click", e => {
   const f = t.closest("[data-mgfeed]"); if (f) { mgFeed = f.dataset.mgfeed; drawGame(); return }
   if (t.closest("[data-mgchat]")) { openChatSheet(); return }
   if (t.closest("[data-mgchatclose]")) { closeChatSheet(); return }
-  if (t.closest('a[href^="#team-"]')) { closePhoneGame(true); return } // following a team link leaves the game
+  if (t.closest('a[href^="/team/"]')) { closePhoneGame(true); return } // following a team link leaves the game
 });
 // resizing between phone and desktop: desktop keeps the chat open beside the feed; phones tuck it behind the Chat button
 MQ.addEventListener?.("change", () => { if (!MG.hidden) { if (isPhone()) closeChatSheet(true); else openChatSheet() } if (openGame) drawGame() });
@@ -1950,7 +1950,7 @@ function drawStats() {
   const podCard = (row, i) => {
     const t = teamOf(row), slug = logoSlug(t), tc = teamColorFor(slug) || "#3A3A40";
     const sub = isP ? [t, row.Cl || row.Class, row.Position || row.Pos].filter(Boolean).join(" · ") : (recordOf(t) || "");
-    return `<a class="pod p${i + 1}" href="#team-${esc(slug)}" style="--tc:${tc}">${slug ? `<img class="twm" src="${logoURL(slug)}" alt="" loading="lazy" onerror="this.remove()">` : ""}<span class="place">${["1st", "2nd", "3rd"][i]}</span><span class="who">${mono(t, slug)}<span><b>${esc(nameOf(row))}</b><small>${esc(sub)}</small></span></span><span class="val">${esc(row[sc])}</span><span class="lab">${esc(sc)}</span></a>`;
+    return `<a class="pod p${i + 1}" href="/team/${esc(slug)}" style="--tc:${tc}">${slug ? `<img class="twm" src="${logoURL(slug)}" alt="" loading="lazy" onerror="this.remove()">` : ""}<span class="place">${["1st", "2nd", "3rd"][i]}</span><span class="who">${mono(t, slug)}<span><b>${esc(nameOf(row))}</b><small>${esc(sub)}</small></span></span><span class="val">${esc(row[sc])}</span><span class="lab">${esc(sc)}</span></a>`;
   };
   // 2nd, 1st, 3rd on wide screens so 1st sits in the middle
   $("#stpod").innerHTML = pod.length === 3 ? [podCard(pod[1], 1), podCard(pod[0], 0), podCard(pod[2], 2)].join("") : "";
@@ -1967,7 +1967,7 @@ function drawStats() {
     const t = teamOf(row), slug = logoSlug(t);
     return `<tr class="${isFav(slug) ? "mine" : ""}">${cols.map(c => {
       let v = esc(fix(row[c] ?? ""));
-      if (/^team$|^school$/i.test(c)) v = `<a class="tm" href="#team-${esc(slug)}">${mono(t, slug)}<span>${esc(fix(row[c]))}</span></a>`;
+      if (/^team$|^school$/i.test(c)) v = `<a class="tm" href="/team/${esc(slug)}">${mono(t, slug)}<span>${esc(fix(row[c]))}</span></a>`;
       return `<td class="${c === sc ? "hl" : ""} ${opt.test(c) ? "opt" : ""} ${/^(rank|name|team|school)$/i.test(c) ? "" : "num"}">${v}</td>`;
     }).join("")}</tr>`;
   }).join("") : `<tr><td colspan="${cols.length}">${D.fullLoading ? `Searching everyone in ${esc(shortStat(D.title || ""))}…` : `No one matches “${esc(stQuery)}” in this stat.${/%|percentage/i.test(D.title || "") ? " Percentage stats only list players with enough attempts." : ""}`}</td></tr>`;
@@ -2169,7 +2169,7 @@ function todayTag(x) {
 // Open a game from today on the Scores tab
 function goGame(id) {
   gday = "t"; gfilt = "All"; gconf = ""; query = ""; const qi = $("#q"); if (qi) qi.value = "";
-  location.hash = "scores";
+  go("scores");
   setTimeout(() => {
     drawDays(); drawFilters(); drawGames();
     const card = document.querySelector(`#games .game[data-game="${CSS.escape(id)}"]`);
@@ -2183,7 +2183,7 @@ const winPct = n => { const r = /^(\d+)-(\d+)/.exec(recordOf(n) || ""); if (!r) 
 function teamCard(n, slug, today) {
   const r = rk({ names: { short: n } }), tc = teamColorFor(slug) || "#3A3A40";
   const wm = slug ? `<img class="twm" src="${logoURL(slug)}" alt="" loading="lazy" onerror="this.remove()">` : "";
-  return `<a class="tcard${isFav(slug) ? " fav" : ""}${today && today.g.gameState === "live" ? " islive" : ""}" href="#team-${esc(slug)}" style="--tc:${tc}">${wm}${mono(n, slug)}<span class="tinfo"><b>${r ? `<span class="rkb">${r}</span>` : ""}${esc(n)}</b><small>${esc(recordOf(n) || "0-0")}</small>${todayTag(today)}</span>${favBtn(slug, n)}</a>`;
+  return `<a class="tcard${isFav(slug) ? " fav" : ""}${today && today.g.gameState === "live" ? " islive" : ""}" href="/team/${esc(slug)}" style="--tc:${tc}">${wm}${mono(n, slug)}<span class="tinfo"><b>${r ? `<span class="rkb">${r}</span>` : ""}${esc(n)}</b><small>${esc(recordOf(n) || "0-0")}</small>${todayTag(today)}</span>${favBtn(slug, n)}</a>`;
 }
 function drawTeamDir() {
   const box = $("#teamdir");
@@ -2397,8 +2397,8 @@ function playersHTML(slug) {
 }
 document.addEventListener("click", async e => {
   const t = e.target;
-  const row = t.closest("[data-teamslug]"); if (row) { location.hash = "team-" + row.dataset.teamslug; return }
-  if (t.closest("[data-teamback]")) { location.hash = "teams"; return }
+  const row = t.closest("[data-teamslug]"); if (row) { go("team-" + row.dataset.teamslug); return }
+  if (t.closest("[data-teamback]")) { go("teams"); return }
   const tab = t.closest("[data-teamtab]"); if (tab) { teamTab = tab.dataset.teamtab; drawTeam(); return }
   const ps = t.closest("[data-psort]"); if (ps) { playerSort = ps.dataset.psort; drawTeam(); return }
   const side = t.closest("[data-teamboxside]"); if (side) { const T = TEAMDATA[teamOpen]; (T.boxSide || (T.boxSide = {}))[side.dataset.gameId] = side.dataset.teamboxside; drawTeam(); return }
@@ -2431,17 +2431,49 @@ function show(v) {
   if ((v === "standings" || v === "teams") && !loaded.st) { loaded.st = 1; loadStandings() }
   scrollTo(0, 0);
 }
+// Team pages have real addresses (/team/illinois) so search engines and shared links can find them;
+// everything else lives after the # like before.
+const pathKey = () => { const p = /^\/team\/([a-z0-9-]{1,60})\/?$/.exec(location.pathname); return p ? "team-" + p[1] : null };
+const curKey = () => pathKey() || (location.hash || "#scores").slice(1) || "scores";
+function go(key) { // move around the site without reloading the page
+  if (!/^team-/.test(key) && location.pathname === "/") { if (location.hash.slice(1) !== key) location.hash = key; else route(); return }
+  history.pushState(null, "", /^team-/.test(key) ? "/team/" + key.slice(5) : "/#" + key); route();
+}
+const BASE_TITLE = "College Basketball | The Home of College Basketball";
+function teamTitle(slug) {
+  const names = Object.keys(window.TEAM_SLUGS || {}).filter(n => window.TEAM_SLUGS[n] === slug);
+  const n = names.sort((a, b) => (/\bSt\.$/.test(a) - /\bSt\.$/.test(b)) || a.length - b.length)[0];
+  return n ? fix(n).replace(/ St\.$/, " State") : slug.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+}
+let lastRouted = null;
 const route = () => {
   if (typeof MG !== "undefined" && !MG.hidden) closePhoneGame(true);
-  const un = /^unsubscribe-([0-9a-f-]{36})$/i.exec((location.hash || "").slice(1));
+  const key = curKey(); lastRouted = key;
+  document.title = BASE_TITLE;
+  const un = /^unsubscribe-([0-9a-f-]{36})$/i.exec(key);
   if (un) { show("unsubscribe"); unsubscribe(un[1]); return }
-  const gl = /^game-(\d{4,12})$/.exec((location.hash || "").slice(1));
-  if (gl) { history.replaceState(null, "", "#scores"); show("scores"); openWhenLoaded(gl[1]); return }
-  const h = (location.hash || "#scores").slice(1), m = /^team-([a-z0-9-]{1,60})$/.exec(h);
-  if (m) { show("teams"); openTeam(m[1]); document.querySelector('[data-tab="teams"]')?.setAttribute("aria-current", "page") }
-  else { show(h); if (h === "teams") closeTeam() }
+  const gl = /^game-(\d{4,12})$/.exec(key);
+  if (gl) { history.replaceState(null, "", "/#scores"); lastRouted = "scores"; show("scores"); openWhenLoaded(gl[1]); return }
+  const m = /^team-([a-z0-9-]{1,60})$/.exec(key);
+  if (m) {
+    if (location.pathname !== "/team/" + m[1]) history.replaceState(history.state, "", "/team/" + m[1]); // old #team- links get the clean address
+    document.title = `${teamTitle(m[1])} Basketball: Schedule, Scores & Stats | College Basketball`;
+    show("teams"); openTeam(m[1]); document.querySelector('[data-tab="teams"]')?.setAttribute("aria-current", "page");
+  }
+  else { show(key); if (key === "teams") closeTeam() }
 };
-addEventListener("hashchange", route);
+addEventListener("hashchange", () => { if (curKey() !== lastRouted) route() });
+addEventListener("popstate", () => { if (curKey() !== lastRouted) route() });
+// links inside the site: team links and (while on a team page) the # links move without a reload
+document.addEventListener("click", e => {
+  if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const a = e.target.closest && e.target.closest("a[href]"); if (!a || a.target) return;
+  const h = a.getAttribute("href"); let key = null;
+  if (/^\/team\/[a-z0-9-]{1,60}$/.test(h)) key = "team-" + h.slice(6);
+  else if (h[0] === "#" && h.length > 1 && location.pathname !== "/") key = h.slice(1);
+  if (!key) return;
+  e.preventDefault(); go(key);
+}, true);
 // open a game from a link (an alert) as soon as today's scores have loaded
 function openWhenLoaded(id, tries = 0) {
   const g = Object.values(cache).flat().find(x => x.gameID === id);
@@ -2551,7 +2583,7 @@ document.addEventListener("click", async e => {
     if (!gm.closest("#mg")) { if (gm.dataset.dayOf === "t" && gday !== "t") { gday = "t"; drawDays(); drawFilters() } openPhoneGame(gm.dataset.game); return }
     const fromCard = gm.classList.contains("game");
     if (fromCard && openGame === gm.dataset.game) { openGame = null; gameDetail = null; drawGames(); drawGame(); return } // tap again to close
-    if (location.hash && location.hash !== "#scores") { location.hash = "scores" }
+    if (curKey() !== "scores") go("scores")
     if (gm.dataset.dayOf === "t" && gday !== "t") { gday = "t"; drawDays(); drawFilters() }
     const before = fromCard ? gm.getBoundingClientRect().top : null;
     openGame = gm.dataset.game; boxSide = "away"; gameDetail = null; drawGames(); drawGame(); loadGame(openGame);

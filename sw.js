@@ -9,7 +9,7 @@ self.addEventListener("activate", e => e.waitUntil((async () => {
 self.addEventListener("fetch", e => {
   if (e.request.mode !== "navigate") return; // everything else goes straight to the network
   e.respondWith(fetch(e.request).then(r => {
-    if (r.ok) { const copy = r.clone(); caches.open(SHELL).then(c => c.put("/", copy)) }
+    if (r.ok && new URL(e.request.url).pathname === "/") { const copy = r.clone(); caches.open(SHELL).then(c => c.put("/", copy)) }
     return r;
   }).catch(() => caches.match("/")));
 });
