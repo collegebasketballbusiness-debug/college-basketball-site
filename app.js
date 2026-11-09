@@ -557,7 +557,7 @@ async function shareFinal(id) {
   openShare("Share this final", () => makeShareCard(g), name, `Final score image: ${fix(g.away.names.short)} ${g.away.score}, ${fix(g.home.names.short)} ${g.home.score}`, "Final score");
 }
 // a share/save sheet for any picture the site makes
-async function openShare(title, make, name, alt, shareTitle) {
+async function openShare(title, make, name, alt, shareTitle, link) {
   if (!shareModal) {
     shareModal = document.createElement("div"); shareModal.className = "modal sharemodal"; shareModal.hidden = true;
     document.body.appendChild(shareModal);
@@ -573,9 +573,11 @@ async function openShare(title, make, name, alt, shareTitle) {
     shareModal.querySelector(".modal-card").innerHTML = `<button class="modal-x" data-shareclose aria-label="Close">×</button><h2>${esc(title)}</h2>
       <img class="share-img" src="${url}" alt="${esc(alt)}">
       <div class="share-actions">${canShare ? `<button class="chat-btn" data-sharego>Share</button>` : ""}<a class="chat-btn ${canShare ? "ghost" : ""}" href="${url}" download="${name}">Save image</a></div>
-      <p class="share-tip">Post it to your story and tag <b>@collegebasketball</b>.</p>`;
+      ${link ? `<button class="share-link" data-copylink>🔗 Copy game link</button><p class="share-tip">Post it to your story, then add a <b>Link</b> sticker with the game link and put it under the arrow.</p>` : `<p class="share-tip">Post it to your story and tag <b>@collegebasketball</b>.</p>`}`;
+    const copy = async () => { try { await navigator.clipboard.writeText(link); const b = shareModal.querySelector("[data-copylink]"); if (b) b.textContent = "✅ Link copied, paste it in a link sticker" } catch { const b = shareModal.querySelector("[data-copylink]"); if (b) b.textContent = link } };
+    const cl = shareModal.querySelector("[data-copylink]"); if (cl) cl.onclick = copy;
     const go = shareModal.querySelector("[data-sharego]");
-    if (go) go.onclick = () => navigator.share({ files: [file], title: shareTitle, text: "via @collegebasketball" }).catch(() => { });
+    if (go) go.onclick = () => { if (link) copy(); navigator.share({ files: [file], title: shareTitle, text: "via @collegebasketball" }).catch(() => { }) };
   }, "image/png");
 }
 
@@ -618,7 +620,7 @@ async function makePlayCard(g, p) {
     x.fillStyle = "#FFD23F"; roundRect(x, W / 2 - w / 2, y + 10, w, 72, 14); x.fill(); x.fillStyle = "#0B0B0C"; x.fillText(t, W / 2, y + 62);
   }
   // score bar
-  const sy = 1290; x.fillStyle = "rgba(255,255,255,.07)"; roundRect(x, 90, sy, W - 180, 230, 30); x.fill();
+  const sy = 1220; x.fillStyle = "rgba(255,255,255,.07)"; roundRect(x, 90, sy, W - 180, 230, 30); x.fill();
   const half = (logo, t, score, X, lit) => {
     if (logo) { const s = 120, k = Math.min(s / logo.width, s / logo.height) || 1, w = (logo.width || s) * k, hh = (logo.height || s) * k; x.drawImage(logo, X + (s - w) / 2, sy + 55 + (s - hh) / 2, w, hh) }
     x.textAlign = "left"; x.fillStyle = lit ? "#F5F5F2" : "#B5B5B0";
@@ -627,15 +629,24 @@ async function makePlayCard(g, p) {
   };
   half(la, g.away, p.v, 130, p.side === "away"); half(lh, g.home, p.h, W / 2 + 40, p.side === "home");
   x.textAlign = "center"; x.fillStyle = "#6B6B66"; x.font = '900 60px "Big Shoulders Display", Impact, sans-serif'; x.fillText("–", W / 2, sy + 150);
-  // footer
-  x.fillStyle = "rgba(255,255,255,.08)"; roundRect(x, 90, 1600, W - 180, 170, 28); x.fill();
-  if (brand) { const t = document.createElement("canvas"); t.width = t.height = 120; const tx = t.getContext("2d"); tx.drawImage(brand, 0, 0, 120, 120); tx.globalCompositeOperation = "source-in"; tx.fillStyle = "#F5F5F2"; tx.fillRect(0, 0, 120, 120); x.drawImage(t, 130, 1625, 120, 120) }
-  x.textAlign = "left"; x.fillStyle = "#F5F5F2";
-  let f2 = 64; do { x.font = `900 ${f2}px "Big Shoulders Display", Impact, sans-serif`; f2 -= 2 } while (x.measureText("@COLLEGEBASKETBALL").width > W - 90 - 280 - 30 && f2 > 30);
-  x.fillText("@COLLEGEBASKETBALL", 280, 1690);
-  x.fillStyle = "#9C9C98"; x.font = '500 30px "IBM Plex Mono", monospace'; x.fillText(location.host || "collegebasketball.news", 282, 1738);
+  drawStoryCTA(x, W, brand, g.gameState === "live", 1490);
   return c;
 }
+// ---------- story footer: a call to action + room for Instagram's link sticker ----------
+const SITE_URL = "https://collegebasketball.news";
+function drawStoryCTA(x, W, brand, live, top = 1490) {
+  const font = (w, sz, f = '"Big Shoulders Display", Impact, sans-serif') => { x.font = `${w} ${sz}px ${f}` };
+  x.fillStyle = "#FF6A13"; roundRect(x, 90, top, W - 180, 160, 30); x.fill();
+  x.textAlign = "center"; x.fillStyle = "#0B0B0C";
+  let sz = 76; const big = live ? "TAP THE LINK FOR LIVE CHAT" : "TAP THE LINK FOR MORE"; do { font(900, sz); sz -= 2 } while (x.measureText(big).width > W - 260 && sz > 30);
+  x.fillText(big, W / 2, top + 80);
+  const sub = `${live ? "Play-by-play · win odds · Pick'em" : "Scores · play-by-play · Pick'em"} · ${SITE_URL.replace("https://", "")}`;
+  let s2 = 32; do { font(700, s2, "Barlow, sans-serif"); s2 -= 1 } while (x.measureText(sub).width > W - 240 && s2 > 18);
+  x.fillText(sub, W / 2, top + 130);
+  // arrow pointing at the empty space below, where the link sticker goes
+  const ay = top + 182; x.fillStyle = "#FF6A13"; x.beginPath(); x.moveTo(W / 2 - 34, ay); x.lineTo(W / 2 + 34, ay); x.lineTo(W / 2, ay + 38); x.closePath(); x.fill();
+}
+
 // ---------- share the game ----------
 // A story-sized picture (1080×1920) of where the game stands: score, win probability, the momentum line
 // and the "Catch me up" notes.
@@ -669,17 +680,17 @@ async function makeGameCard(g) {
   if (live) { x.fillStyle = "#FF6A13"; font(500, 40, '"IBM Plex Mono", monospace'); x.fillText(`${String(g.currentPeriod || "").toUpperCase()}${/half/i.test(g.currentPeriod || "") ? "" : " · " + clockTxt(g.contestClock)}`, W / 2, 260) }
   // teams and score
   const team = (logo, t, score, X, lit) => {
-    if (logo) { const s = 190, k = Math.min(s / logo.width, s / logo.height) || 1, w = logo.width * k, hh = logo.height * k; x.drawImage(logo, X - w / 2, 300 + (s - hh) / 2, w, hh) }
+    if (logo) { const s = 190, k = Math.min(s / logo.width, s / logo.height) || 1, w = logo.width * k, hh = logo.height * k; x.drawImage(logo, X - w / 2, 280 + (s - hh) / 2, w, hh) }
     const rank = rk(t); x.fillStyle = "#F5F5F2"; x.textAlign = "center";
     const nm = fix(t.names.short).toUpperCase(); fit(nm, 800, 56, 440);
-    if (rank) { const rw = x.measureText(nm).width; font(800, 40); x.fillStyle = "#FF6A13"; x.fillText(String(rank), X - rw / 2 - 30, 560); fit(nm, 800, 56, 440); x.fillStyle = "#F5F5F2" }
-    x.fillText(nm, X + (rank ? 12 : 0), 560);
-    font(900, 200); x.fillStyle = lit ? "#FFFFFF" : "#8E8E8A"; x.fillText(String(score), X, 760);
+    if (rank) { const rw = x.measureText(nm).width; font(800, 40); x.fillStyle = "#FF6A13"; x.fillText(String(rank), X - rw / 2 - 30, 530); fit(nm, 800, 56, 440); x.fillStyle = "#F5F5F2" }
+    x.fillText(nm, X + (rank ? 12 : 0), 530);
+    font(900, 200); x.fillStyle = lit ? "#FFFFFF" : "#8E8E8A"; x.fillText(String(score), X, 720);
   };
   team(la, g.away, a, 280, !fin || a > h); team(lh, g.home, h, 800, !fin || h > a);
-  x.fillStyle = "#4A4A47"; font(900, 110); x.fillText("–", W / 2, 725);
+  x.fillStyle = "#4A4A47"; font(900, 110); x.fillText("–", W / 2, 685);
   // win probability
-  let y = 820;
+  let y = 770;
   if (!fin) {
     const ph = winProb(g), pa = 1 - ph, pct = v => v >= .995 ? ">99%" : v <= .005 ? "<1%" : Math.round(v * 100) + "%";
     x.fillStyle = "#9C9C98"; font(500, 30, '"IBM Plex Mono", monospace'); x.fillText(g.gameState === "pre" ? "PREGAME ODDS" : "WIN PROBABILITY", W / 2, y + 30);
@@ -693,7 +704,7 @@ async function makeGameCard(g) {
   } else y += 20;
   // momentum line (above the middle: home team leading; below: away team)
   if (series.length >= 4) {
-    const pts = [{ lead: 0, per: series[0].per }, ...series], n = pts.length, cx = 90, cw = W - 180, chh = 260, cy = y + 60, mid = cy + chh / 2;
+    const pts = [{ lead: 0, per: series[0].per }, ...series], n = pts.length, cx = 90, cw = W - 180, chh = 180, cy = y + 60, mid = cy + chh / 2;
     const scale = Math.max(8, ...pts.map(p => Math.abs(p.lead)));
     const xy = pts.map((p, i) => [cx + (i / (n - 1)) * cw, mid - (p.lead / scale) * (chh / 2 - 8)]);
     const big = Math.max(...pts.map(p => p.lead)), small = Math.min(...pts.map(p => p.lead));
@@ -713,7 +724,7 @@ async function makeGameCard(g) {
     y = cy + chh + 90;
   }
   // catch me up notes
-  const rows = story.CM ? catchUpRows(g, story.CM, story.P || {}).slice(1).filter(r => r[0] !== "📈").map(([e, t]) => [e, t.replace(/ \([^)]*\)/g, "")]).slice(0, 3) : [];
+  const rows = story.CM ? catchUpRows(g, story.CM, story.P || {}).slice(1).filter(r => r[0] === "🏃" || r[0] === "⭐").map(([e, t]) => [e, t.replace(/ \([^)]*\)/g, "")]).slice(0, 2) : [];
   if (rows.length) {
     const top = y + 10, rowH = 60, boxH = 36 + rows.length * rowH;
     x.fillStyle = "rgba(255,255,255,.06)"; roundRect(x, 90, top, W - 180, boxH, 28); x.fill();
@@ -723,25 +734,19 @@ async function makeGameCard(g) {
     });
     y = top + boxH;
   }
-  // footer (leaves the bottom clear for a link sticker)
-  const fy = Math.max(y + 36, 1640);
-  x.fillStyle = "rgba(255,255,255,.08)"; roundRect(x, 90, fy, W - 180, 160, 28); x.fill();
-  if (brand) { const t = document.createElement("canvas"); t.width = t.height = 110; const tx = t.getContext("2d"); tx.drawImage(brand, 0, 0, 110, 110); tx.globalCompositeOperation = "source-in"; tx.fillStyle = "#F5F5F2"; tx.fillRect(0, 0, 110, 110); x.drawImage(t, 130, fy + 25, 110, 110) }
-  x.textAlign = "left"; x.fillStyle = "#F5F5F2"; fit(live ? "LIVE CHAT + PLAY-BY-PLAY" : "@COLLEGEBASKETBALL", 900, 60, W - 180 - 200 - 40);
-  x.fillText(live ? "LIVE CHAT + PLAY-BY-PLAY" : "@COLLEGEBASKETBALL", 280, fy + 85);
-  x.fillStyle = "#9C9C98"; font(500, 30, '"IBM Plex Mono", monospace'); x.fillText(location.host || "collegebasketball.news", 282, fy + 130);
+  drawStoryCTA(x, W, brand, live, Math.max(1480, y + 30));
   return c;
 }
 function shareGame(id) {
   const g = Object.values(cache).flat().find(x => x.gameID === id); if (!g) return;
   const name = `${fix(g.away.names.short)}-${fix(g.home.names.short)}-${g.gameState === "final" ? "final" : "live"}`.replace(/[^A-Za-z0-9-]+/g, "-").toLowerCase() + ".png";
-  openShare("Share this game", () => makeGameCard(g), name, `${fix(g.away.names.short)} ${g.away.score}, ${fix(g.home.names.short)} ${g.home.score}: win probability and momentum`, "Live game");
+  openShare("Share this game", () => makeGameCard(g), name, `${fix(g.away.names.short)} ${g.away.score}, ${fix(g.home.names.short)} ${g.home.score}: win probability and momentum`, "Live game", `${SITE_URL}/#game-${g.gameID}`);
 }
 function sharePlay(key) {
   const g = Object.values(cache).flat().find(x => x.gameID === openGame), p = PLAYINFO[openGame]?.[key];
   if (!g || !p) return;
   const name = `${fix(g.away.names.short)}-${fix(g.home.names.short)}-play`.replace(/[^A-Za-z0-9-]+/g, "-").toLowerCase() + ".png";
-  openShare("Share this play", () => makePlayCard(g, p), name, `${p.l || "Play"}: ${p.desc}`, "Big play");
+  openShare("Share this play", () => makePlayCard(g, p), name, `${p.l || "Play"}: ${p.desc}`, "Big play", `${SITE_URL}/#game-${g.gameID}`);
 }
 
 // ---------- catch me up ----------
