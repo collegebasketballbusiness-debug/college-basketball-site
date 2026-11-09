@@ -15,6 +15,9 @@
     "api/recap.js": {
       "includeFiles": "season.json",
       "maxDuration": 30
+    },
+    "api/ics.js": {
+      "includeFiles": "{teams.js,season.json}"
     }
   },
   "redirects": [
@@ -31,6 +34,10 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/cal/:slug",
+      "destination": "/api/ics?slug=:slug"
+    },
     {
       "source": "/team/:slug",
       "destination": "/api/team?slug=:slug"

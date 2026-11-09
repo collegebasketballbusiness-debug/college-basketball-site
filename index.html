@@ -1162,6 +1162,63 @@ html.mg-open .instbar{display:none}
 .chat-replybar b{color:var(--ink)}.chat-replybar .chat-link{font-size:18px;line-height:1;margin-left:auto;padding:0 4px}
 .chat-at-list{display:flex;flex-wrap:wrap;gap:6px;padding:4px 0 8px}
 .chat-at-list button{background:var(--chip);border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:5px 11px;font:700 13px var(--body);cursor:pointer}
+
+/* ===== loading placeholders and screen transitions ===== */
+.sk{display:block;height:12px;border-radius:6px;background:linear-gradient(90deg,#1f1f23 0%,#2a2a2f 40%,#1f1f23 80%);background-size:200% 100%;animation:skel 1.3s ease-in-out infinite}
+.sk-c{width:28px;height:28px;border-radius:50%;flex:none}
+@keyframes skel{from{background-position:100% 0}to{background-position:-100% 0}}
+.game.skel{cursor:default;min-height:118px;gap:14px;align-content:start}.game.skel:hover{transform:none}
+.skel-tm{display:flex;align-items:center;gap:10px}.skel-tm .sk{height:14px}
+.skel-tbl{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:16px}.skel-row{display:flex;align-items:center;gap:16px;padding:14px 16px;border-bottom:1px solid var(--line)}.skel-row:last-child{border:0}
+.view:not([hidden]),#teampage:not([hidden]),#story:not([hidden]){animation:viewin .22s ease-out}
+@keyframes viewin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.sk{animation:none}.view:not([hidden]),#teampage:not([hidden]),#story:not([hidden]){animation:none}}
+
+/* ===== My teams bar ===== */
+.mybar{margin:14px 0 4px}
+.mybar-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.mybar-h span{display:flex;align-items:center;gap:6px;font:500 12px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--upset)}.mybar-h svg{width:14px;height:14px}
+.mybar-row{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x proximity;padding-bottom:4px;scrollbar-width:thin}
+.myc{scroll-snap-align:start;flex:0 0 auto;min-width:230px;max-width:300px;display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--ink);text-decoration:none;text-align:left;font:inherit;cursor:pointer}
+.myc:hover{border-color:var(--ink)}.myc .mono{width:34px;height:34px}
+.myc.live{border-color:color-mix(in srgb,var(--live) 55%,var(--line));background:color-mix(in srgb,var(--live) 8%,var(--surface))}
+.myc-t{display:grid;min-width:0}.myc-n{font:800 15px var(--body);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.myc-l{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;align-items:center;gap:0 6px}.myc-l b{color:var(--ink)}.myc.won .myc-l b{color:var(--good)}.myc.lost .myc-l b{color:var(--bad)}
+.myc-l em{font-style:normal;color:var(--ball);font-weight:700;flex-basis:100%}.myc-l .dot{display:inline-block}
+
+/* ===== calendar menu on team pages ===== */
+.calmenu{position:relative;align-self:center}.calmenu summary{list-style:none;margin-left:0}.calmenu summary::-webkit-details-marker{display:none}
+.calpop{position:absolute;right:0;top:calc(100% + 8px);z-index:30;width:280px;background:var(--raised);border:1px solid var(--line);border-radius:12px;padding:12px;box-shadow:0 12px 40px #0009;display:grid;gap:6px}
+.calpop p{margin:0 0 4px;font-size:13px;color:var(--muted)}
+.calpop a,.calpop button{display:block;text-align:left;background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--ink);font:700 14px var(--body);text-decoration:none;cursor:pointer}
+.calpop a:hover,.calpop button:hover{border-color:var(--ink)}
+@media (max-width:760px){.calmenu[open]{flex:1 1 100%;min-width:0;max-width:100%}.calpop{position:static;width:auto;max-width:100%;margin-top:10px;box-shadow:none}.calpop a,.calpop button{white-space:normal}}
+.pvlink{font:700 12px var(--body);color:var(--ball);text-decoration:none;margin-left:6px}.pvlink:hover{text-decoration:underline}
+
+/* ===== player tracker ===== */
+.pinbtn{background:none;border:0;padding:0 6px 0 0;color:#55555b;font-size:15px;cursor:pointer;line-height:1}.pinbtn.on{color:var(--upset)}.pinbtn:hover{color:var(--ink)}
+.box tr.pinned td{background:color-mix(in srgb,var(--upset) 7%,transparent)}
+.trkbox h4{margin:0 0 6px}
+.trk{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:4px 12px;padding:8px 0;border-top:1px solid var(--line)}
+.trk-n{font-weight:800;white-space:nowrap}.trk-n small{color:var(--muted);font-weight:600}
+.trk-s{font-size:14px;color:var(--muted)}.trk-s b{color:var(--ink);font-size:17px}.trk-f{color:var(--bad);font-weight:700}
+.trk-x{background:none;border:0;color:var(--muted);cursor:pointer;font-size:14px;padding:4px}.trk-x:hover{color:var(--ink)}
+@media (max-width:520px){.trk{grid-template-columns:1fr auto}.trk-s{grid-column:1/-1;grid-row:2}}
+
+/* ===== search ===== */
+.srch{position:fixed;inset:0;z-index:200;background:#000a;backdrop-filter:blur(4px);display:flex;justify-content:center;align-items:flex-start;padding:max(60px,8vh) 12px 12px}
+.srch[hidden]{display:none}
+html.srch-open{overflow:hidden}
+.srch-box{width:100%;max-width:620px;background:var(--raised);border:1px solid var(--line);border-radius:16px;box-shadow:0 20px 60px #000c;overflow:hidden;animation:viewin .16s ease-out}
+.srch-in{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}.srch-in svg{width:20px;height:20px;color:var(--muted);flex:none}
+.srch-in input{flex:1;min-width:0;background:none;border:0;outline:none;font:600 17px var(--body);color:var(--ink)}
+.srch-x{background:var(--chip);border:1px solid var(--line);border-radius:6px;color:var(--muted);font:500 12px var(--mono);padding:4px 8px;cursor:pointer}
+.srch-res{max-height:min(62vh,560px);overflow-y:auto;padding:6px 8px 12px}
+.srch-res h5{margin:12px 8px 4px;font:500 11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.sres{display:flex;align-items:center;gap:12px;width:100%;padding:9px 8px;border-radius:10px;color:var(--ink);text-decoration:none;background:none;border:0;text-align:left;font:inherit;cursor:pointer}
+.sres:hover,.sres:focus-visible{background:var(--chip)}.sres .mono{width:32px;height:32px}.sres span{display:grid;min-width:0}.sres b{font-weight:700}.sres small{color:var(--muted);font-size:13px}
+.sr-empty{color:var(--muted);font-size:14px;padding:14px 8px;margin:0}
+@media (max-width:760px){.srch{padding-top:12px}.srch-res{max-height:70vh}}
 </style>
 </head>
 <body>
@@ -1182,6 +1239,7 @@ html.mg-open .instbar{display:none}
       <a href="#contact" data-tab="contact">Contact</a>
     </nav>
     <div class="navact">
+    <button class="bell" id="searchbtn" type="button" aria-label="Search teams, players and games" title="Search (press /)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20 20-4.2-4.2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     <button class="bell" id="alertsbtn" type="button" aria-label="Game alerts" title="Game alerts"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16v-5a6 6 0 1 0-12 0v5l-2 2h16zM10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg></button>
     <a class="follow" href="https://www.instagram.com/collegebasketball/" target="_blank" rel="noopener">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.4" cy="6.6" r="1.3" fill="currentColor"/></svg>
@@ -1199,6 +1257,7 @@ html.mg-open .instbar{display:none}
   <div class="wrap">
   <div class="view" data-view="scores">
     <section id="scores-sec" style="padding-top:0">
+      <div class="mybar" id="mybar" hidden></div>
       <button class="gotn" id="gotn" hidden></button>
       <div class="upsetstrip" id="upsetstrip" hidden aria-live="polite"></div>
       <div class="sb-top">

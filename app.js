@@ -354,14 +354,14 @@ function setCards(htmlList) {
 }
 function drawGames() {
   const all = cache[gday];
-  if (!all) { setCards([`<div class="empty">Loading games…</div>`]); return }
+  if (!all) { setCards(Array.from({ length: 8 }, () => SKEL_CARD)); drawMyBar(); return }
   const live = (cache.t || []).filter(isLive).length;
   $("#livecount").innerHTML = live ? `<span class="dot"></span>${live} game${live === 1 ? "" : "s"} live now` : `No games live right now`;
   let list = filtered(all);
   // Crunch Time: close games in the last five minutes jump to the top
   const hot = list.filter(crunch);
   list = [...hot, ...list.filter(g => !crunch(g))];
-  drawCrunchHead(hot); drawUpsetStrip();
+  drawCrunchHead(hot); drawUpsetStrip(); drawMyBar();
   setCards(list.length ? list.map(g => {
     const st = status(g), sa = logoSlug(g.away.names.short, g.away.names.seo), sh = logoSlug(g.home.names.short, g.home.names.seo);
     const cls = ["game", openGame === g.gameID ? "sel" : "", favGame(g) ? "fav" : "", crunch(g) ? "crunch" : "", upsetWatch(g) ? "upsetw" : ""].filter(Boolean).join(" ");
@@ -1428,7 +1428,7 @@ function drawPhoneGame(sg) {
   const on = $("#mgstrip .mg-mini.on"); if (on && MG.dataset.stripFor !== sg.gameID) { MG.dataset.stripFor = sg.gameID; on.scrollIntoView({ inline: "center", block: "nearest" }) }
   // score header
   const tm = (t, side, score, lose) => `<a class="mg-tm ${side}" href="/team/${esc(logoSlug(t.names.short, t.names.seo))}">${mono(t.names.short, t.names.seo)}<span class="mg-sc ${lose ? "lose" : ""}">${pre ? "" : esc(score)}</span><span class="mg-nm">${rk(t) ? `<em>${rk(t)}</em> ` : ""}${esc(fix(t.names.short))}</span></a>`;
-  $("#mgscore").innerHTML = `${tm(sg.away, "a", a, fin && a < h)}<div class="mg-mid"><span class="mg-st ${live ? "lv" : ""}">${live ? "<i></i>" : ""}${esc(st.txt)}</span>${tvHTML(sg.network)}${badgeHTML(badges(sg).slice(0, 1))}${sg.gameState === "final" ? `<a class="mg-rc" href="/game/${esc(sg.gameID)}">📝 Recap</a>` : ""}${sg.gameState !== "pre" ? `<button class="mg-sg" data-sharegame="${sg.gameID}" aria-label="Share this game as a story"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Share game</button>` : ""}</div>${tm(sg.home, "h", h, fin && h < a)}${(w => w ? `<div class="mg-wp">${w}</div>` : "")(wpHTML(sg))}`;
+  $("#mgscore").innerHTML = `${tm(sg.away, "a", a, fin && a < h)}<div class="mg-mid"><span class="mg-st ${live ? "lv" : ""}">${live ? "<i></i>" : ""}${esc(st.txt)}</span>${tvHTML(sg.network)}${badgeHTML(badges(sg).slice(0, 1))}${sg.gameState === "final" ? `<a class="mg-rc" href="/game/${esc(sg.gameID)}">📝 Recap</a>` : sg.gameState === "pre" ? `<a class="mg-rc" href="/game/${esc(sg.gameID)}">📋 Preview</a>` : ""}${sg.gameState !== "pre" ? `<button class="mg-sg" data-sharegame="${sg.gameID}" aria-label="Share this game as a story"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Share game</button>` : ""}</div>${tm(sg.home, "h", h, fin && h < a)}${(w => w ? `<div class="mg-wp">${w}</div>` : "")(wpHTML(sg))}`;
   // tabs
   const tabs = [["feed", "Feed"], ["game", "Game"], ["away", short(sg.away)], ["home", short(sg.home)]];
   $("#mgtabs").innerHTML = tabs.map(([k, l]) => `<button role="tab" aria-selected="${mgTab === k}" data-mgtab="${k}">${esc(l)}</button>`).join("");
@@ -1553,12 +1553,13 @@ function drawPhoneGame(sg) {
     const side = mgTab, id = side === "home" ? idHome : idAway, ps = tbFor(id)?.playerStats || [], ts = tbFor(id)?.teamStats;
     if (!ps.length) body = `<p class="mg-empty">${pre ? "The box score goes live at tip-off." : "No box score for this game."}</p>`;
     else {
-      const row = p => `<tr><td><span class="pn">${esc(p.number)}</span>${esc(fix((p.firstName || "").charAt(0) + ". " + p.lastName))} <span class="pp">${esc(p.position || "")}</span></td><td class="num"><b>${esc(p.points)}</b></td><td class="num">${esc(p.totalRebounds)}</td><td class="num">${esc(p.assists)}</td><td class="num">${esc(p.minutesPlayed ?? "")}</td><td class="num">${esc(p.fieldGoalsMade)}-${esc(p.fieldGoalsAttempted)}</td><td class="num">${esc(p.threePointsMade)}-${esc(p.threePointsAttempted)}</td><td class="num">${esc(p.freeThrowsMade)}-${esc(p.freeThrowsAttempted)}</td><td class="num">${esc(p.steals)}</td><td class="num">${esc(p.blockedShots)}</td><td class="num">${esc(p.turnovers)}</td><td class="num">${esc(p.personalFouls ?? "")}</td></tr>`;
+      const row = p => `<tr class="${isPinned(sg.gameID, side, p) ? "pinned" : ""}"><td><button class="pinbtn ${isPinned(sg.gameID, side, p) ? "on" : ""}" data-pin="${esc(side)}|${esc(p.firstName || "")}|${esc(p.lastName || "")}" aria-label="${isPinned(sg.gameID, side, p) ? "Stop tracking" : "Track"} ${esc(fix(`${p.firstName || ""} ${p.lastName || ""}`))}" title="Track this player">★</button><span class="pn">${esc(p.number)}</span>${esc(fix((p.firstName || "").charAt(0) + ". " + p.lastName))} <span class="pp">${esc(p.position || "")}</span></td><td class="num"><b>${esc(p.points)}</b></td><td class="num">${esc(p.totalRebounds)}</td><td class="num">${esc(p.assists)}</td><td class="num">${esc(p.minutesPlayed ?? "")}</td><td class="num">${esc(p.fieldGoalsMade)}-${esc(p.fieldGoalsAttempted)}</td><td class="num">${esc(p.threePointsMade)}-${esc(p.threePointsAttempted)}</td><td class="num">${esc(p.freeThrowsMade)}-${esc(p.freeThrowsAttempted)}</td><td class="num">${esc(p.steals)}</td><td class="num">${esc(p.blockedShots)}</td><td class="num">${esc(p.turnovers)}</td><td class="num">${esc(p.personalFouls ?? "")}</td></tr>`;
       body = `<div class="tblwrap mg-box"><table class="box"><thead><tr><th>${esc(fix(sg[side].names.short))}</th><th class="num">Pts</th><th class="num">Reb</th><th class="num">Ast</th><th class="num">Min</th><th class="num">FG</th><th class="num">3PT</th><th class="num">FT</th><th class="num">Stl</th><th class="num">Blk</th><th class="num">TO</th><th class="num">PF</th></tr></thead><tbody>
         ${[["Starters", ps.filter(p => p.starter)], ["Bench", ps.filter(p => !p.starter)]].filter(x => x[1].length).map(([l, list]) => `<tr class="grp"><td colspan="12">${l}</td></tr>${list.map(row).join("")}`).join("")}
-        ${ts ? `<tr class="totals"><td>Team</td><td class="num">${esc(ts.points)}</td><td class="num">${esc(ts.totalRebounds)}</td><td class="num">${esc(ts.assists)}</td><td class="num"></td><td class="num">${esc(ts.fieldGoalsMade)}-${esc(ts.fieldGoalsAttempted)}</td><td class="num">${esc(ts.threePointsMade)}-${esc(ts.threePointsAttempted)}</td><td class="num">${esc(ts.freeThrowsMade)}-${esc(ts.freeThrowsAttempted)}</td><td class="num">${esc(ts.steals)}</td><td class="num">${esc(ts.blockedShots)}</td><td class="num">${esc(ts.turnovers)}</td><td class="num"></td></tr>` : ""}</tbody></table></div><p class="mg-p mg-hint">Swipe the table sideways for more stats.</p>`;
+        ${ts ? `<tr class="totals"><td>Team</td><td class="num">${esc(ts.points)}</td><td class="num">${esc(ts.totalRebounds)}</td><td class="num">${esc(ts.assists)}</td><td class="num"></td><td class="num">${esc(ts.fieldGoalsMade)}-${esc(ts.fieldGoalsAttempted)}</td><td class="num">${esc(ts.threePointsMade)}-${esc(ts.threePointsAttempted)}</td><td class="num">${esc(ts.freeThrowsMade)}-${esc(ts.freeThrowsAttempted)}</td><td class="num">${esc(ts.steals)}</td><td class="num">${esc(ts.blockedShots)}</td><td class="num">${esc(ts.turnovers)}</td><td class="num"></td></tr>` : ""}</tbody></table></div><p class="mg-p mg-hint">Tap ★ to track a player at the top of every tab. Swipe the table sideways for more stats.</p>`;
     }
   }
+  if (d) body = trackerHTML(sg, tbFor(idAway), tbFor(idHome)) + body;
   // only redraw the body when something changed, so reading the feed isn't interrupted every 20 seconds
   const bodyEl = $("#mgbody"), key = mgTab + "|" + mgFeed + "|" + body;
   if (key !== mgBodyKey) { const keep = bodyEl.scrollTop; bodyEl.innerHTML = body; bodyEl.scrollTop = keep; mgBodyKey = key }
@@ -2354,11 +2355,11 @@ function drawTeam() {
   box.style.setProperty("--tc", tc || "var(--ball)");
   const head = `<button class="closebtn tback" data-teamback>← All teams</button>
     <div class="thead">${mono(name, slug, null, "lg")}<div><div class="eyebrow">${esc(conf || "Division I")}</div><h1>${r ? `<span class="rkb">#${r}</span> ` : ""}${esc(name)}</h1>
-    <div class="tmeta"><span><b>${esc(record)}</b> overall</span>${confRec ? `<span>${esc(confRec)}</span>` : ""}${r ? `<span>AP No. ${r}</span>` : ""}</div></div><button class="followbtn ${isFav(slug) ? "on" : ""}" data-fav="${esc(slug)}" aria-pressed="${isFav(slug)}">${STAR(isFav(slug))}${isFav(slug) ? "Following" : "Follow"}</button></div>
+    <div class="tmeta"><span><b>${esc(record)}</b> overall</span>${confRec ? `<span>${esc(confRec)}</span>` : ""}${r ? `<span>AP No. ${r}</span>` : ""}</div></div><button class="followbtn ${isFav(slug) ? "on" : ""}" data-fav="${esc(slug)}" aria-pressed="${isFav(slug)}">${STAR(isFav(slug))}${isFav(slug) ? "Following" : "Follow"}</button>${calMenu(slug, name)}</div>
     <div class="days ttabs" role="tablist">${[["schedule", "Schedule"], ["stats", "Team stats"], ["players", "Players"]].map(([k, t]) => `<button role="tab" data-teamtab="${k}" aria-pressed="${teamTab === k}">${t}</button>`).join("")}</div>`;
   let body = "";
   if (T.err) body = `<p class="empty">The schedule couldn't load. Try again in a minute.</p>`;
-  else if (!T.games) body = `<p class="empty">Loading the season schedule… The first visit to a team can take a few seconds.</p>`;
+  else if (!T.games) body = `<div class="skel-tbl" aria-label="Loading the schedule">${Array.from({ length: 8 }, () => `<div class="skel-row"><i class="sk" style="width:90px"></i><i class="sk sk-c"></i><i class="sk" style="width:40%"></i><i class="sk" style="width:70px;margin-left:auto"></i></div>`).join("")}</div>`;
   else if (teamTab === "schedule") body = scheduleHTML(slug, games, T);
   else {
     const finals = games.filter(g => g.s === "final").length, have = finals ? Object.keys(T.boxes).filter(id => games.some(g => g.id === id)).length : 0;
@@ -2376,7 +2377,7 @@ function scheduleHTML(slug, games, T) {
     let res;
     if (g.s === "final") { const won = +me[2] > +op[2]; res = `<span class="${won ? "in" : "out"}"><b>${won ? "W" : "L"}</b> ${esc(me[2])}–${esc(op[2])}${/OT/i.test(g.f) ? ` <small>${esc(g.f.replace(/^FINAL\s*/i, "").replace(/[()]/g, ""))}</small>` : ""}</span>` }
     else if (g.s === "live") res = `<span class="live-txt"><span class="dot"></span>${esc(me[2])}–${esc(op[2])} · ${esc(g.p)} ${esc(g.c)}</span>`;
-    else res = `<span class="muted">${g.t ? new Date(g.t * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "TBA"}${g.n ? " · " + esc(g.n) : ""}</span>`;
+    else res = `<span class="muted">${g.t ? new Date(g.t * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "TBA"}${g.n ? " · " + esc(g.n) : ""}</span> <a class="pvlink" href="/game/${esc(g.id)}">Preview</a>`;
     const open = T.openBox === g.id;
     return `<tr class="${g.s !== "pre" ? "click" : ""} ${open ? "sel" : ""}" ${g.s !== "pre" ? `data-teambox="${g.id}"` : ""}><td class="sdate">${shortDate(g.d)}</td><td class="svs">${home ? "vs" : "at"}</td><td><span class="tm">${mono(opName, op[0])}<span>${opRank ? `<span class="rkb">${opRank}</span>` : ""}${esc(opName)}</span></span></td><td class="num sres">${res}</td></tr>
       ${open ? `<tr class="sbox"><td colspan="4">${g.s === "final" ? `<a class="recaplink" href="/game/${esc(g.id)}">📝 Read the full recap →</a>` : ""}${gameBoxHTML(slug, g, T)}</td></tr>` : ""}`;
@@ -2644,6 +2645,179 @@ $("#q").addEventListener("input", e => {
   if (openGame && cache[gday] && !filtered(cache[gday]).some(g => g.gameID === openGame)) closeGame();
   drawGames();
 });
+
+
+// ---------- Loading placeholders ----------
+const SKEL_CARD = `<div class="game skel" aria-hidden="true"><i class="sk" style="width:38%;height:10px"></i><div class="skel-tm"><i class="sk sk-c"></i><i class="sk" style="width:55%"></i></div><div class="skel-tm"><i class="sk sk-c"></i><i class="sk" style="width:48%"></i></div></div>`;
+
+// ---------- My Teams bar ----------
+// The teams you follow, pinned above the scores: the live score, today's tip time, or the next game with a countdown.
+let SEASON_DATA = null, myBarAsked = false;
+function inHours(ms) {
+  const m = Math.max(0, Math.round((ms - Date.now()) / 60000));
+  if (m < 60) return `in ${m}m`;
+  const h = Math.floor(m / 60); if (h < 24) return `in ${h}h ${m % 60}m`;
+  const d = Math.floor(h / 24); return `in ${d}d ${h % 24}h`;
+}
+function myNext(slug) {
+  const today = (cache.t || []).filter(g => teamSlug(g.home) === slug || teamSlug(g.away) === slug);
+  const live = today.find(g => g.gameState === "live"); if (live) return { kind: "live", g: live };
+  const pre = today.find(g => g.gameState === "pre"); if (pre) return { kind: "today", g: pre };
+  const fin = today.find(g => g.gameState === "final");
+  const next = (SEASON_DATA?.games || []).filter(x => (x.a[0] === slug || x.h[0] === slug) && x.s === "pre" && (+x.t || 0) * 1000 > Date.now() && !today.some(g => g.gameID === x.id)).sort((a, b) => a.t - b.t)[0];
+  if (fin) return { kind: "final", g: fin, next };
+  if (next) return { kind: "next", r: next };
+  return null;
+}
+function drawMyBar() {
+  const el = $("#mybar"); if (!el) return;
+  if (!FAVS.length) { el.hidden = true; el.innerHTML = ""; return }
+  if (!SEASON_DATA && !myBarAsked) { myBarAsked = true; loadSeason().then(r => { SEASON_DATA = r; drawMyBar() }).catch(() => { }) }
+  const chips = FAVS.map(slug => {
+    const x = myNext(slug), name = teamName(slug);
+    let line = "", cls = "", attrs = `href="/team/${esc(slug)}"`, tag = "a";
+    if (x && x.g) {
+      const g = x.g, home = teamSlug(g.home) === slug, me = home ? g.home : g.away, op = home ? g.away : g.home, opn = esc(fix(op.names.short)), vs = home ? "vs" : "at";
+      tag = "button"; attrs = `type="button" data-game="${esc(g.gameID)}" data-day-of="t"`;
+      if (x.kind === "live") { cls = "live"; line = `<b>${esc(me.score || 0)}–${esc(op.score || 0)}</b> ${vs} ${opn} · ${esc(status(g).txt)}` }
+      else if (x.kind === "today") { line = `Today ${esc(status(g).txt)} ${vs} ${opn}${g.network ? ` · ${esc(g.network.split(" / ")[0])}` : ""}<em>${+g.startTimeEpoch ? inHours(+g.startTimeEpoch * 1000) : ""}</em>` }
+      else { const won = +me.score > +op.score; cls = won ? "won" : "lost"; line = `<b>${won ? "W" : "L"} ${esc(me.score)}–${esc(op.score)}</b> ${vs} ${opn}${x.next ? `<em>Next: ${esc(nextTxt(x.next, slug))}</em>` : ""}` }
+    } else if (x && x.r) line = `${esc(nextTxt(x.r, slug))}<em>${inHours(x.r.t * 1000)}</em>`;
+    else line = `<span class="muted">No games scheduled</span>`;
+    return `<${tag} class="myc ${cls}" ${attrs}>${mono(name, slug)}<span class="myc-t"><b class="myc-n">${esc(name)}</b><span class="myc-l">${cls === "live" ? `<i class="dot"></i>` : ""}${line}</span></span></${tag}>`;
+  });
+  const html = `<div class="mybar-h"><span>${STAR(true)} My teams</span><button type="button" class="chat-link" data-myteams>Edit</button></div><div class="mybar-row">${chips.join("")}</div>`;
+  if (el.innerHTML !== html) el.innerHTML = html;
+  el.hidden = false;
+}
+function nextTxt(r, slug) {
+  const home = r.h[0] === slug, op = home ? r.a : r.h, dt = new Date(r.t * 1000);
+  const day = dt.toLocaleDateString([], { weekday: "short" }), tm = dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return `${day} ${tm} ${home ? "vs" : "at"} ${fix(op[1] || teamName(op[0]))}${r.n ? ` · ${r.n.split(" / ")[0]}` : ""}`;
+}
+window.addEventListener("cbb-favs", () => drawMyBar());
+setInterval(() => { if (!document.hidden) drawMyBar() }, 60000); // keep the countdowns fresh
+
+// ---------- Calendar ----------
+function calMenu(slug, name) {
+  const feed = `${location.host}/cal/${slug}.ics`;
+  return `<details class="calmenu"><summary class="followbtn">📅 Add to calendar</summary><div class="calpop" role="menu">
+    <p>Every ${esc(name)} game in your calendar with tip time and TV. It updates on its own.</p>
+    <a role="menuitem" href="webcal://${esc(feed)}">Apple Calendar / iPhone</a>
+    <a role="menuitem" href="https://calendar.google.com/calendar/render?cid=${encodeURIComponent("webcal://" + feed)}" target="_blank" rel="noopener">Google Calendar</a>
+    <a role="menuitem" href="https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent("https://" + feed)}&name=${encodeURIComponent(name + " Basketball")}" target="_blank" rel="noopener">Outlook</a>
+    <button type="button" role="menuitem" data-copycal="https://${esc(feed)}">Copy calendar link</button></div></details>`;
+}
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-copycal]"); if (b) { try { await navigator.clipboard.writeText(b.dataset.copycal); b.textContent = "Link copied ✓" } catch { b.textContent = b.dataset.copycal } return }
+  const open = document.querySelector("details.calmenu[open]"); if (open && !e.target.closest("details.calmenu")) open.open = false;
+});
+
+// ---------- Player tracker ----------
+// Tap ★ on a player in a box score to pin his live line to the top of the game screen.
+let PINS = {}; try { PINS = JSON.parse(localStorage.getItem("cbb_pins") || "{}") || {} } catch { PINS = {} }
+const pinKey = (side, p) => `${side}|${p.firstName || ""}|${p.lastName || ""}`;
+const isPinned = (id, side, p) => (PINS[id] || []).includes(pinKey(side, p));
+function togglePin(id, key) {
+  const list = PINS[id] || (PINS[id] = []), i = list.indexOf(key);
+  if (i >= 0) list.splice(i, 1); else list.push(key);
+  if (!list.length) delete PINS[id];
+  const ids = Object.keys(PINS); if (ids.length > 30) delete PINS[ids[0]]; // keep the list short
+  try { localStorage.setItem("cbb_pins", JSON.stringify(PINS)) } catch { }
+}
+function trackerHTML(sg, bA, bH) {
+  const list = PINS[sg.gameID]; if (!list || !list.length) return "";
+  const rows = list.map(key => {
+    const [side, first, last] = key.split("|"), b = side === "home" ? bH : bA;
+    const p = (b?.playerStats || []).find(x => (x.firstName || "") === first && (x.lastName || "") === last);
+    const nm = esc(fix(`${first.charAt(0)}. ${last}`)), tm = esc(fix(sg[side]?.names?.char6 || sg[side]?.names?.short || ""));
+    if (!p) return `<div class="trk"><span class="trk-n">${nm} <small>${tm}</small></span><span class="trk-s muted">No stats yet</span><button class="trk-x" data-pin="${esc(key)}" aria-label="Stop tracking">✕</button></div>`;
+    const fouls = +p.personalFouls || 0;
+    return `<div class="trk"><span class="trk-n">${nm} <small>${tm}</small></span><span class="trk-s"><b>${esc(p.points || 0)}</b> pts · ${esc(p.totalRebounds || 0)} reb · ${esc(p.assists || 0)} ast · ${esc(p.fieldGoalsMade || 0)}-${esc(p.fieldGoalsAttempted || 0)} FG${+p.threePointsMade ? ` · ${esc(p.threePointsMade)} 3PM` : ""} · <span class="${fouls >= 4 ? "trk-f" : ""}">${fouls} PF</span></span><button class="trk-x" data-pin="${esc(key)}" aria-label="Stop tracking">✕</button></div>`;
+  });
+  return `<div class="mg-card trkbox"><h4>📌 Tracking</h4>${rows.join("")}</div>`;
+}
+MG.addEventListener("click", e => {
+  const b = e.target.closest("[data-pin]"); if (!b || !openGame) return;
+  e.stopPropagation(); togglePin(openGame, b.dataset.pin); drawGame();
+}, true);
+
+// ---------- Search ----------
+// One box for teams, players and games. Opens with the 🔍 button or the "/" key.
+const QALIAS = { iu: "indiana", unc: "north carolina", uk: "kentucky", osu: "ohio st", msu: "michigan st", ku: "kansas", ksu: "kansas st", kstate: "kansas st", zags: "gonzaga",
+  cuse: "syracuse", nova: "villanova", usc: "southern california", vt: "virginia tech", uva: "virginia", fsu: "florida st", gt: "georgia tech", isu: "iowa st", ou: "oklahoma",
+  okst: "oklahoma st", psu: "penn st", ttu: "texas tech", wvu: "west virginia", sdsu: "san diego st", bama: "alabama", mizzou: "missouri", pitt: "pittsburgh", ole: "ole miss",
+  tamu: "texas a&m", uw: "washington", asu: "arizona st", ucsb: "uc santa barbara", "st johns": "st john's", ncst: "nc state", wisco: "wisconsin", illini: "illinois", hoosiers: "indiana" };
+const norm = s => fix(String(s)).toLowerCase().replace(/[.'’]/g, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim();
+let SIDX = null;
+async function searchIndex() {
+  if (SIDX) return SIDX;
+  const teams = {};
+  for (const [n, sl] of Object.entries(window.TEAM_SLUGS || {})) { const t = teams[sl] || (teams[sl] = { slug: sl, name: n, hay: "" }); if (n.length < t.name.length) t.name = n; t.hay += " " + norm(n) }
+  const players = [];
+  try {
+    const st = await fetch("/stats.json").then(r => r.json()), seen = new Set();
+    for (const c of st.cats || []) if (c.kind === "individual") for (const r of c.rows || []) { const k = r.Name + "|" + r.Team; if (r.Name && !seen.has(k)) { seen.add(k); players.push({ name: fix(r.Name), team: fix(r.Team), hay: norm(r.Name) + " " + norm(r.Team) }) } }
+  } catch { }
+  try { SEASON_DATA = SEASON_DATA || await loadSeason() } catch { }
+  return (SIDX = { teams: Object.values(teams), players });
+}
+function expandQuery(q) {
+  let n = " " + norm(q) + " ";
+  for (const [k, v] of Object.entries(QALIAS)) n = n.replace(new RegExp(` ${norm(k)} `, "g"), ` ${norm(v)} `);
+  return n.trim().split(" ").filter(Boolean);
+}
+const matchAll = (hay, toks) => toks.every(t => (" " + hay).includes(" " + t));
+function runSearch(q, idx) {
+  const toks = expandQuery(q); if (!toks.length) return { teams: [], players: [], games: [] };
+  const teams = idx.teams.filter(t => matchAll(t.hay, toks)).sort((a, b) => (FAVS.includes(b.slug) - FAVS.includes(a.slug)) || a.name.length - b.name.length).slice(0, 6);
+  const players = idx.players.filter(p => matchAll(p.hay, toks)).slice(0, 5);
+  // games: today's board first, then the season (last 3 days and next 7)
+  const now = Date.now(), games = [], seen = new Set();
+  for (const g of cache.t || []) { const hay = norm(g.away.names.short) + " " + norm(g.home.names.short) + " " + norm(teamName(teamSlug(g.away))) + " " + norm(teamName(teamSlug(g.home))); if (matchAll(hay, toks)) { seen.add(g.gameID); games.push({ today: g }) } }
+  for (const r of SEASON_DATA?.games || []) {
+    if (seen.has(r.id) || !r.t || Math.abs(r.t * 1000 - now) > 7 * 864e5 || (r.t * 1000 < now - 3 * 864e5)) continue;
+    const hay = norm(r.a[1]) + " " + norm(r.h[1]) + " " + norm(teamName(r.a[0])) + " " + norm(teamName(r.h[0]));
+    if (matchAll(hay, toks)) games.push({ r });
+  }
+  games.sort((a, b) => (a.today ? 0 : 1) - (b.today ? 0 : 1) || Math.abs((a.r?.t || 0) * 1000 - now) - Math.abs((b.r?.t || 0) * 1000 - now));
+  return { teams, players, games: games.slice(0, 6) };
+}
+function searchResultsHTML(res, q) {
+  const sec = (title, items) => items.length ? `<h5>${title}</h5>${items.join("")}` : "";
+  const teams = res.teams.map(t => `<a class="sres" href="/team/${esc(t.slug)}">${mono(t.name, t.slug)}<span><b>${esc(fix(t.name))}</b><small>Team page · schedule · stats</small></span></a>`);
+  const games = res.games.map(x => {
+    if (x.today) { const g = x.today; return `<button type="button" class="sres" data-game="${esc(g.gameID)}" data-day-of="t">${mono(g.away.names.short, g.away.names.seo)}<span><b>${esc(fix(g.away.names.short))} ${g.gameState === "pre" ? "at" : esc(g.away.score) + "–" + esc(g.home.score)} ${esc(fix(g.home.names.short))}</b><small>${g.gameState === "live" ? "Live now · " : g.gameState === "final" ? "Final · " : "Today · "}${esc(status(g).txt)}</small></span></button>` }
+    const r = x.r, dt = new Date(r.t * 1000), fin = r.s === "final";
+    return `<a class="sres" href="/game/${esc(r.id)}">${mono(r.a[1], r.a[0])}<span><b>${esc(fix(r.a[1]))} ${fin ? `${esc(r.a[2])}–${esc(r.h[2])}` : "at"} ${esc(fix(r.h[1]))}</b><small>${fin ? "Final · recap" : "Preview"} · ${dt.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}${fin ? "" : " " + dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</small></span></a>`;
+  });
+  const players = res.players.map(p => { const sl = logoSlug(p.team); return `<a class="sres" href="/team/${esc(sl)}">${mono(p.team, sl)}<span><b>${esc(p.name)}</b><small>${esc(p.team)} · national stat leader</small></span></a>` });
+  const html = sec("Teams", teams) + sec("Games", games) + sec("Players", players);
+  return html || `<p class="sr-empty">Nothing found for "${esc(q)}". Try a team name like "Duke" or a matchup like "IU Purdue".</p>`;
+}
+function openSearch() {
+  let ov = $("#srch");
+  if (!ov) {
+    ov = document.createElement("div"); ov.id = "srch"; ov.className = "srch"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-label", "Search");
+    ov.innerHTML = `<div class="srch-box"><div class="srch-in"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20 20-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><input type="search" placeholder="Teams, players or games (try “IU Purdue”)" autocomplete="off" aria-label="Search"><button type="button" class="srch-x" aria-label="Close search">Esc</button></div><div class="srch-res" aria-live="polite"></div></div>`;
+    document.body.appendChild(ov);
+    const inp = ov.querySelector("input"), out = ov.querySelector(".srch-res");
+    const draw = async () => { const q = inp.value.trim(); if (!q) { out.innerHTML = `<p class="sr-empty">Search any Division I team, today's games, or the nation's stat leaders.</p>`; return } const idx = await searchIndex(); if (inp.value.trim() === q) out.innerHTML = searchResultsHTML(runSearch(q, idx), q) };
+    inp.addEventListener("input", draw);
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") { const first = out.querySelector(".sres"); if (first) first.click() } });
+    ov.addEventListener("click", e => { if (e.target === ov || e.target.closest(".srch-x") || e.target.closest(".sres")) closeSearch() });
+    draw();
+  }
+  ov.hidden = false; document.documentElement.classList.add("srch-open");
+  const inp = ov.querySelector("input"); inp.focus(); inp.select();
+  searchIndex();
+}
+function closeSearch() { const ov = $("#srch"); if (ov) ov.hidden = true; document.documentElement.classList.remove("srch-open") }
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && $("#srch") && !$("#srch").hidden) { closeSearch(); return }
+  if (e.key === "/" && !e.metaKey && !e.ctrlKey && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "") && !document.activeElement?.isContentEditable) { e.preventDefault(); openSearch() }
+});
+$("#searchbtn")?.addEventListener("click", openSearch);
 
 // ---------- start ----------
 drawDays(); drawGames(); drawNews(); drawInstagram(); route();
