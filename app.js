@@ -1394,7 +1394,7 @@ function drawPhoneGame(sg) {
   const on = $("#mgstrip .mg-mini.on"); if (on && MG.dataset.stripFor !== sg.gameID) { MG.dataset.stripFor = sg.gameID; on.scrollIntoView({ inline: "center", block: "nearest" }) }
   // score header
   const tm = (t, side, score, lose) => `<a class="mg-tm ${side}" href="/team/${esc(logoSlug(t.names.short, t.names.seo))}">${mono(t.names.short, t.names.seo)}<span class="mg-sc ${lose ? "lose" : ""}">${pre ? "" : esc(score)}</span><span class="mg-nm">${rk(t) ? `<em>${rk(t)}</em> ` : ""}${esc(fix(t.names.short))}</span></a>`;
-  $("#mgscore").innerHTML = `${tm(sg.away, "a", a, fin && a < h)}<div class="mg-mid"><span class="mg-st ${live ? "lv" : ""}">${live ? "<i></i>" : ""}${esc(st.txt)}</span>${tvHTML(sg.network)}${badgeHTML(badges(sg).slice(0, 1))}${sg.gameState !== "pre" ? `<button class="mg-sg" data-sharegame="${sg.gameID}" aria-label="Share this game as a story"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Share game</button>` : ""}</div>${tm(sg.home, "h", h, fin && h < a)}${(w => w ? `<div class="mg-wp">${w}</div>` : "")(wpHTML(sg))}`;
+  $("#mgscore").innerHTML = `${tm(sg.away, "a", a, fin && a < h)}<div class="mg-mid"><span class="mg-st ${live ? "lv" : ""}">${live ? "<i></i>" : ""}${esc(st.txt)}</span>${tvHTML(sg.network)}${badgeHTML(badges(sg).slice(0, 1))}${sg.gameState === "final" ? `<a class="mg-rc" href="/game/${esc(sg.gameID)}">📝 Recap</a>` : ""}${sg.gameState !== "pre" ? `<button class="mg-sg" data-sharegame="${sg.gameID}" aria-label="Share this game as a story"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Share game</button>` : ""}</div>${tm(sg.home, "h", h, fin && h < a)}${(w => w ? `<div class="mg-wp">${w}</div>` : "")(wpHTML(sg))}`;
   // tabs
   const tabs = [["feed", "Feed"], ["game", "Game"], ["away", short(sg.away)], ["home", short(sg.home)]];
   $("#mgtabs").innerHTML = tabs.map(([k, l]) => `<button role="tab" aria-selected="${mgTab === k}" data-mgtab="${k}">${esc(l)}</button>`).join("");
@@ -1845,7 +1845,7 @@ function drawNews() {
 }
 function openStory(id) {
   const n = allNews().find(x => x.id === id); if (!n) return; $("#newslist").hidden = true; const st = $("#story"); st.hidden = false;
-  st.innerHTML = `<button class="closebtn" data-closestory>← All news</button><div style="margin-top:18px"><span class="ntag">${n.cat}</span><h2>${esc(n.t)}</h2><p class="nmeta" style="margin:0 0 20px">${n.auto ? "Auto recap" : "By @collegebasketball"} · ${n.time} · ${n.read} read</p><div class="body">${n.body.map(p => `<p>${esc(p)}</p>`).join("")}</div>${n.auto ? `<p class="autonote">⚡ This recap was written automatically from the official box score and play-by-play. <a href="#scores">See the latest scores →</a></p>` : ""}</div>`; scrollTo(0, 0);
+  st.innerHTML = `<button class="closebtn" data-closestory>← All news</button><div style="margin-top:18px"><span class="ntag">${n.cat}</span><h2>${esc(n.t)}</h2><p class="nmeta" style="margin:0 0 20px">${n.auto ? "Auto recap" : "By @collegebasketball"} · ${n.time} · ${n.read} read</p><div class="body">${n.body.map(p => `<p>${esc(p)}</p>`).join("")}</div>${n.auto ? `<p class="autonote">⚡ This recap was written automatically from the official box score and play-by-play. ${n.gameId ? `<a href="/game/${esc(n.gameId)}">Full recap with box score and game flow →</a>` : `<a href="#scores">See the latest scores →</a>`}</p>` : ""}</div>`; scrollTo(0, 0);
 }
 
 
@@ -2345,7 +2345,7 @@ function scheduleHTML(slug, games, T) {
     else res = `<span class="muted">${g.t ? new Date(g.t * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "TBA"}${g.n ? " · " + esc(g.n) : ""}</span>`;
     const open = T.openBox === g.id;
     return `<tr class="${g.s !== "pre" ? "click" : ""} ${open ? "sel" : ""}" ${g.s !== "pre" ? `data-teambox="${g.id}"` : ""}><td class="sdate">${shortDate(g.d)}</td><td class="svs">${home ? "vs" : "at"}</td><td><span class="tm">${mono(opName, op[0])}<span>${opRank ? `<span class="rkb">${opRank}</span>` : ""}${esc(opName)}</span></span></td><td class="num sres">${res}</td></tr>
-      ${open ? `<tr class="sbox"><td colspan="4">${gameBoxHTML(slug, g, T)}</td></tr>` : ""}`;
+      ${open ? `<tr class="sbox"><td colspan="4">${g.s === "final" ? `<a class="recaplink" href="/game/${esc(g.id)}">📝 Read the full recap →</a>` : ""}${gameBoxHTML(slug, g, T)}</td></tr>` : ""}`;
   }).join("");
   return `${T.partial ? `<p class="note">Some dates couldn't load. The full schedule will fill in shortly.</p>` : ""}<div class="tblwrap"><table class="rk-table sched"><thead><tr><th>Date</th><th></th><th>Opponent</th><th class="num">Result</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }

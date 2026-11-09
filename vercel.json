@@ -10,7 +10,11 @@
       "includeFiles": "{index.html,teams.js}"
     },
     "api/sitemap.js": {
-      "includeFiles": "teams.js"
+      "includeFiles": "{teams.js,season.json}"
+    },
+    "api/recap.js": {
+      "includeFiles": "season.json",
+      "maxDuration": 30
     }
   },
   "redirects": [
@@ -30,6 +34,14 @@
     {
       "source": "/team/:slug",
       "destination": "/api/team?slug=:slug"
+    },
+    {
+      "source": "/game/:id/:slug",
+      "destination": "/api/recap?id=:id"
+    },
+    {
+      "source": "/game/:id",
+      "destination": "/api/recap?id=:id"
     },
     {
       "source": "/sitemap.xml",
