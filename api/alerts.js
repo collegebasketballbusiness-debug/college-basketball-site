@@ -78,6 +78,7 @@ export function alertsFor(g, seenLive) {
 export default async function handler(req, res) {
   const pub = process.env.VAPID_PUBLIC_KEY || "";
   if (req.query.info) { res.setHeader("cache-control", "public, s-maxage=300"); return json(res, 200, { publicKey: pub }) }
+  if (req.query.test) return sendTest(req, res, pub);
   if (!process.env.ALERTS_KEY || req.query.key !== process.env.ALERTS_KEY) return json(res, 401, { error: "Not allowed" });
   const origin = `https://${req.headers["x-forwarded-host"] || req.headers.host}`;
   const secret = process.env.SUPABASE_SECRET_KEY || "";
@@ -166,4 +167,36 @@ export default async function handler(req, res) {
   }
   for (const ep of gone) await db(`push_subs?endpoint=eq.${encodeURIComponent(ep)}`, { method: "DELETE" }).catch(() => null);
   return json(res, 200, { games: games.length, alerts: toSend.length, sent, removed: gone.size, discord: posted });
+}
+
+// POST /api/alerts?test=1 with {"endpoint": "..."}: sends one test notification to that device, if it has alerts on.
+// Lets someone check that alerts actually reach them, and tells them which teams and alert types are saved.
+async function readBody(req) {
+  if (req.body && typeof req.body === "object") return req.body;
+  if (typeof req.body === "string") { try { return JSON.parse(req.body) } catch { return {} } }
+  const chunks = []; for await (const c of req) chunks.push(c);
+  try { return JSON.parse(Buffer.concat(chunks).toString() || "{}") } catch { return {} }
+}
+async function sendTest(req, res, pub) {
+  if (req.method !== "POST") return json(res, 405, { error: "Use POST" });
+  const { endpoint } = await readBody(req);
+  if (typeof endpoint !== "string" || !/^https:\/\//.test(endpoint) || endpoint.length > 1000) return json(res, 400, { error: "Bad device" });
+  const secret = process.env.SUPABASE_SECRET_KEY || "";
+  let base = process.env.SUPABASE_URL || "";
+  if (!base) { const cfg = await fetch(`${SITE}/chat-config.js`).then(r => r.text()).catch(() => ""); base = (/url:\s*"([^"]+)"/.exec(cfg) || [])[1] || "" }
+  if (!base || !secret || !pub || !process.env.VAPID_PRIVATE_KEY) return json(res, 500, { error: "Alerts aren't fully set up on the server" });
+  const H = { apikey: secret, ...(secret.startsWith("eyJ") ? { authorization: `Bearer ${secret}` } : {}) };
+  const r = await fetch(`${base}/rest/v1/push_subs?select=endpoint,p256dh,auth,teams,kinds&endpoint=eq.${encodeURIComponent(endpoint)}`, { headers: H }).catch(() => null);
+  const s = r && r.ok ? (await r.json())[0] : null;
+  if (!s) return json(res, 404, { error: "This device isn't signed up for alerts. Turn alerts on again." });
+  webpush.setVapidDetails(CONTACT, pub, process.env.VAPID_PRIVATE_KEY);
+  try {
+    await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+      JSON.stringify({ title: "🏀 Test alert: you're all set", body: "This is what game alerts look like. Tap to open College Basketball.", url: `${SITE}/#scores`, tag: "test" }),
+      { TTL: 300, urgency: "high" });
+  } catch (e) {
+    if (e.statusCode === 404 || e.statusCode === 410) await fetch(`${base}/rest/v1/push_subs?endpoint=eq.${encodeURIComponent(endpoint)}`, { method: "DELETE", headers: H }).catch(() => null);
+    return json(res, 502, { error: e.statusCode === 404 || e.statusCode === 410 ? "This device's alert sign-up expired. Turn alerts on again." : "The alert couldn't be delivered right now." });
+  }
+  return json(res, 200, { ok: true, teams: s.teams || [], kinds: s.kinds || [] });
 }
