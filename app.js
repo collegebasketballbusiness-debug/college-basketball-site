@@ -1135,7 +1135,7 @@ function drawGame() {
     const ts = tbFor(bsId)?.teamStats;
     html += `<div class="boxwrap"><div class="boxhead"><h4 style="margin:0">Box score</h4><div class="days" role="group" aria-label="Team">${["away", "home"].map(k => `<button data-box="${k}" aria-pressed="${k === boxSide}">${esc(fix(sg[k].names.short))}</button>`).join("")}</div></div>
       <div class="tblwrap"><table class="box"><thead><tr><th>Player</th><th class="num">Min</th><th class="num">Pts</th><th class="num">Reb</th><th class="num">Ast</th><th class="num">FG</th><th class="num">3PT</th><th class="num">FT</th><th class="num">Stl</th><th class="num">Blk</th><th class="num">TO</th></tr></thead><tbody>
-      ${[["Starters", ps.filter(p => p.starter)], ["Bench", ps.filter(p => !p.starter)]].filter(x => x[1].length).map(([lbl, list]) => `<tr class="grp"><td colspan="11">${lbl}</td></tr>${list.map(row).join("")}`).join("")}
+      ${(BX.rebuilt ? [["Players", ps]] : [["Starters", ps.filter(p => p.starter)], ["Bench", ps.filter(p => !p.starter)]]).filter(x => x[1].length).map(([lbl, list]) => `<tr class="grp"><td colspan="11">${lbl}</td></tr>${list.map(row).join("")}`).join("")}
       ${ts ? `<tr class="totals"><td>Team totals</td><td class="num"></td><td class="num">${esc(ts.points)}</td><td class="num">${esc(ts.totalRebounds)}</td><td class="num">${esc(ts.assists)}</td><td class="num">${esc(ts.fieldGoalsMade)}-${esc(ts.fieldGoalsAttempted)}</td><td class="num">${esc(ts.threePointsMade)}-${esc(ts.threePointsAttempted)}</td><td class="num">${esc(ts.freeThrowsMade)}-${esc(ts.freeThrowsAttempted)}</td><td class="num">${esc(ts.steals)}</td><td class="num">${esc(ts.blockedShots)}</td><td class="num">${esc(ts.turnovers)}</td></tr>` : ""}
       </tbody></table></div></div>`;
   } else {
@@ -1437,7 +1437,7 @@ function drawPhoneGame(sg) {
   const tabs = [["feed", "Feed"], ["game", "Game"], ["away", short(sg.away)], ["home", short(sg.home)]];
   $("#mgtabs").innerHTML = tabs.map(([k, l]) => `<button role="tab" aria-selected="${mgTab === k}" data-mgtab="${k}">${esc(l)}</button>`).join("");
   // body
-  const tb = d?.box?.teamBoxscore || [], idHome = String(tHome.teamId || ""), idAway = String(tAway.teamId || "");
+  const idHome = String(tHome.teamId || ""), idAway = String(tAway.teamId || ""), BX = checkedBox(d, idHome, idAway), tb = BX.tb;
   const tbFor = id => tb.find(x => String(x.teamId) === id);
   let body = "";
   if (!d) body = `<p class="mg-empty">Loading game…</p>`;
@@ -1564,8 +1564,8 @@ function drawPhoneGame(sg) {
     if (!ps.length) body = `<p class="mg-empty">${pre ? "The box score goes live at tip-off." : "No box score for this game."}</p>`;
     else {
       const row = p => `<tr class="${isPinned(sg.gameID, side, p) ? "pinned" : ""}"><td><button class="pinbtn ${isPinned(sg.gameID, side, p) ? "on" : ""}" data-pin="${esc(side)}|${esc(p.firstName || "")}|${esc(p.lastName || "")}" aria-label="${isPinned(sg.gameID, side, p) ? "Stop tracking" : "Track"} ${esc(fix(`${p.firstName || ""} ${p.lastName || ""}`))}" title="Track this player">★</button><span class="pn">${esc(p.number)}</span>${esc(fix((p.firstName || "").charAt(0) + ". " + p.lastName))} <span class="pp">${esc(p.position || "")}</span></td><td class="num"><b>${esc(p.points)}</b></td><td class="num">${esc(p.totalRebounds)}</td><td class="num">${esc(p.assists)}</td><td class="num">${esc(p.minutesPlayed ?? "")}</td><td class="num">${esc(p.fieldGoalsMade)}-${esc(p.fieldGoalsAttempted)}</td><td class="num">${esc(p.threePointsMade)}-${esc(p.threePointsAttempted)}</td><td class="num">${esc(p.freeThrowsMade)}-${esc(p.freeThrowsAttempted)}</td><td class="num">${esc(p.steals)}</td><td class="num">${esc(p.blockedShots)}</td><td class="num">${esc(p.turnovers)}</td><td class="num">${esc(p.personalFouls ?? "")}</td></tr>`;
-      body = `<div class="tblwrap mg-box"><table class="box"><thead><tr><th>${esc(fix(sg[side].names.short))}</th><th class="num">Pts</th><th class="num">Reb</th><th class="num">Ast</th><th class="num">Min</th><th class="num">FG</th><th class="num">3PT</th><th class="num">FT</th><th class="num">Stl</th><th class="num">Blk</th><th class="num">TO</th><th class="num">PF</th></tr></thead><tbody>
-        ${[["Starters", ps.filter(p => p.starter)], ["Bench", ps.filter(p => !p.starter)]].filter(x => x[1].length).map(([l, list]) => `<tr class="grp"><td colspan="12">${l}</td></tr>${list.map(row).join("")}`).join("")}
+      body = `${BX.rebuilt ? `<p class="mg-p mg-boxnote">⚠️ The official box score for this game is incomplete right now, so these stats are counted from the play-by-play (minutes aren't available).</p>` : ""}<div class="tblwrap mg-box"><table class="box"><thead><tr><th>${esc(fix(sg[side].names.short))}</th><th class="num">Pts</th><th class="num">Reb</th><th class="num">Ast</th><th class="num">Min</th><th class="num">FG</th><th class="num">3PT</th><th class="num">FT</th><th class="num">Stl</th><th class="num">Blk</th><th class="num">TO</th><th class="num">PF</th></tr></thead><tbody>
+        ${(BX.rebuilt ? [["Players", ps]] : [["Starters", ps.filter(p => p.starter)], ["Bench", ps.filter(p => !p.starter)]]).filter(x => x[1].length).map(([l, list]) => `<tr class="grp"><td colspan="12">${l}</td></tr>${list.map(row).join("")}`).join("")}
         ${ts ? `<tr class="totals"><td>Team</td><td class="num">${esc(ts.points)}</td><td class="num">${esc(ts.totalRebounds)}</td><td class="num">${esc(ts.assists)}</td><td class="num"></td><td class="num">${esc(ts.fieldGoalsMade)}-${esc(ts.fieldGoalsAttempted)}</td><td class="num">${esc(ts.threePointsMade)}-${esc(ts.threePointsAttempted)}</td><td class="num">${esc(ts.freeThrowsMade)}-${esc(ts.freeThrowsAttempted)}</td><td class="num">${esc(ts.steals)}</td><td class="num">${esc(ts.blockedShots)}</td><td class="num">${esc(ts.turnovers)}</td><td class="num"></td></tr>` : ""}</tbody></table></div><p class="mg-p mg-hint">Tap ★ to track a player at the top of every tab. Swipe the table sideways for more stats.</p>`;
     }
   }
@@ -2656,6 +2656,65 @@ $("#q").addEventListener("input", e => {
   drawGames();
 });
 
+
+
+// ---------- box score check ----------
+// The NCAA's live box score is sometimes incomplete (players missing) or even lists a player under the wrong team.
+// When the players' points don't add up to the team's score, or most of a team's listed players show up for the
+// other team in the play-by-play, the player lines are rebuilt from the play-by-play instead.
+const BOXCHECK = new WeakMap();
+function pbpPlayers(pbp, ids) {
+  const P = {}; let ph = 0, pv = 0;
+  for (const per of pbp?.periods || []) for (const x of per.playbyplayStats || []) {
+    const nh = x.homeScore === undefined || x.homeScore === "" ? ph : +x.homeScore, nv = x.visitorScore === undefined || x.visitorScore === "" ? pv : +x.visitorScore;
+    const gained = (nh - ph) + (nv - pv); ph = nh; pv = nv;
+    const tid = String(x.teamId || ""), desc = fix(x.eventDescription || x.homeText || x.visitorText || "");
+    if (!ids.includes(tid) || !x.lastName || /^Subbing/i.test(desc)) continue;
+    const key = tid + "|" + x.firstName + "|" + x.lastName;
+    const p = P[key] ||= { teamId: tid, firstName: fix(x.firstName || ""), lastName: fix(x.lastName || ""), number: "", position: "", minutesPlayed: "", starter: false,
+      points: 0, fieldGoalsMade: 0, fieldGoalsAttempted: 0, threePointsMade: 0, threePointsAttempted: 0, freeThrowsMade: 0, freeThrowsAttempted: 0,
+      offensiveRebounds: 0, totalRebounds: 0, assists: 0, steals: 0, blockedShots: 0, turnovers: 0, personalFouls: 0 };
+    const miss = /missed/i.test(desc);
+    if (!miss && gained === 0 && /free throw|pointer|jumper|layup|dunk|tip|hook|shot|three/i.test(desc) && !/rebound|block|foul|assist|turnover|violation/i.test(desc)) continue; // a made shot the score didn't move for is a repeat
+    if (/free throw/i.test(desc)) { p.freeThrowsAttempted++; if (!miss) { p.freeThrowsMade++; p.points += 1 } }
+    else if (/pointer|jumper|layup|dunk|tip|hook|shot|three/i.test(desc) && !/rebound|block|turnover|violation/i.test(desc)) {
+      const three = !miss && (gained === 2 || gained === 3) ? gained === 3 : /3[\s-]?pointer|3pt|three/i.test(desc); // the score change settles it for makes
+      p.fieldGoalsAttempted++; if (three) p.threePointsAttempted++;
+      if (!miss) { p.fieldGoalsMade++; if (three) p.threePointsMade++; p.points += three ? 3 : 2 }
+    }
+    else if (/offensive rebound/i.test(desc)) { p.offensiveRebounds++; p.totalRebounds++ }
+    else if (/rebound/i.test(desc)) p.totalRebounds++;
+    else if (/^assist/i.test(desc)) p.assists++;
+    else if (/^steal/i.test(desc)) p.steals++;
+    else if (/^block/i.test(desc)) p.blockedShots++;
+    else if (/turnover/i.test(desc)) p.turnovers++;
+    else if (/foul/i.test(desc)) p.personalFouls++;
+  }
+  for (const p of Object.values(P)) for (const k of Object.keys(p)) if (typeof p[k] === "number") p[k] = String(p[k]);
+  return Object.values(P);
+}
+function checkedBox(d, idHome, idAway) {
+  const tb = d?.box?.teamBoxscore || [];
+  if (!d || !tb.length || !d.pbp?.periods?.length) return { tb, rebuilt: false };
+  if (BOXCHECK.has(d)) return BOXCHECK.get(d);
+  const ids = [idHome, idAway], pl = pbpPlayers(d.pbp, ids), nk = p => fix(`${p.firstName || ""} ${p.lastName || ""}`).toLowerCase().replace(/[^a-z]/g, "");
+  const teamOf = {}; for (const p of pl) teamOf[nk(p)] = p.teamId;
+  let bad = false;
+  for (const t of tb) {
+    const ps = t.playerStats || [], sum = ps.reduce((n, p) => n + (+p.points || 0), 0), team = +t.teamStats?.points;
+    if (Number.isFinite(team) && team - sum > 3) bad = true;                            // players missing
+    const seen = ps.filter(p => teamOf[nk(p)]), wrong = seen.filter(p => teamOf[nk(p)] !== String(t.teamId));
+    if (seen.length >= 3 && wrong.length > seen.length / 2) bad = true;                 // players under the wrong team
+  }
+  let out = { tb, rebuilt: false };
+  if (bad && pl.length) {
+    const off = pl.reduce((n, p) => n + +p.points, 0), real = tb.reduce((n, t) => n + (+t.teamStats?.points || 0), 0);
+    if (!real || off >= real * .8) // only if the play-by-play itself accounts for (nearly) all the points
+      out = { rebuilt: true, tb: tb.map(t => ({ ...t, playerStats: pl.filter(p => p.teamId === String(t.teamId)).sort((a, b) => b.points - a.points || b.totalRebounds - a.totalRebounds) })) };
+  }
+  BOXCHECK.set(d, out);
+  return out;
+}
 
 // ---------- Loading placeholders ----------
 const SKEL_CARD = `<div class="game skel" aria-hidden="true"><i class="sk" style="width:38%;height:10px"></i><div class="skel-tm"><i class="sk sk-c"></i><i class="sk" style="width:55%"></i></div><div class="skel-tm"><i class="sk sk-c"></i><i class="sk" style="width:48%"></i></div></div>`;
