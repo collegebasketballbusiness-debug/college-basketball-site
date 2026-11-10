@@ -196,9 +196,26 @@ function alertsHTML(note = "") {
     <div class="al-list">${KINDS.map(([k, e, t, d]) => `<label class="al-row"><input type="checkbox" data-akind="${k}" ${kinds.includes(k) ? "checked" : ""}><span class="al-e">${e}</span><span><b>${t}</b><small>${d}</small>${k === "myteams" ? `<span class="al-teams">${f.length ? f.slice(0, 8).map(s => `<em>${esc(teamName(s))}</em>`).join("") + (f.length > 8 ? `<em>+${f.length - 8}</em>` : "") : "<em>No teams yet</em>"}<button type="button" class="chat-link" data-myteams>${f.length ? "Change" : "Pick teams"}</button></span>` : ""}</span></label>`).join("")}</div>
     ${blocked ? `<p class="al-msg bad">Notifications are blocked for this site. Allow them in your browser's site settings, then try again.</p>` : ""}
     <p class="al-msg" role="alert">${esc(note)}</p>
-    <div class="al-actions"><button class="chat-btn wide" data-alerts-save ${blocked ? "disabled" : ""}>${alertsOn ? "Save" : "Turn on alerts"}</button>${alertsOn ? `<button class="chat-link" data-alerts-off>Turn off alerts on this device</button>` : ""}</div>`;
+    <div class="al-actions"><button class="chat-btn wide" data-alerts-save ${blocked ? "disabled" : ""}>${alertsOn ? "Save" : "Turn on alerts"}</button>${alertsOn ? `<button class="chat-btn ghost wide" data-alerts-test>📲 Send me a test alert</button><button class="chat-link" data-alerts-off>Turn off alerts on this device</button>` : ""}</div>`;
 }
-async function openAlerts() { await refreshBell(); openModal(alertsHTML(), "al-card") }
+async function openAlerts() {
+  await refreshBell(); openModal(alertsHTML(), "al-card");
+  // make sure the server has this device's current teams (in case they changed while offline)
+  if (alertsOn) { const sub = await currentSub(); if (sub) saveSub(sub, store.get("cbb_alert_kinds", ["myteams", "upsets"])).catch(() => { }) }
+}
+async function testAlert(btn) {
+  const say = (t, bad) => { const m = modal.querySelector(".al-msg[role=alert]"); if (m) { m.textContent = t; m.classList.toggle("bad", !!bad) } };
+  const sub = await currentSub(); if (!sub) { say("Alerts aren't on for this device. Tap “Turn on alerts” first.", true); return }
+  btn.disabled = true; say("Sending…");
+  try {
+    const r = await fetch("/api/alerts?test=1", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ endpoint: sub.endpoint }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { say(j.error || "Couldn't send a test right now. Try again in a minute.", true); if (r.status === 404 || r.status === 502) { try { await sub.unsubscribe() } catch { } await refreshBell() } return }
+    const teams = (j.teams || []).map(t => teamName(t)), kinds = j.kinds || [];
+    say(`✅ Sent! It should pop up within a few seconds. Saved for this device: ${kinds.includes("myteams") ? (teams.length ? `your teams (${teams.join(", ")})` : "your teams (none picked yet)") : ""}${kinds.includes("upsets") ? `${kinds.includes("myteams") ? ", " : ""}upset alerts` : ""}${kinds.includes("close") ? ", close Top 25 finishes" : ""}. No pop-up? Notifications for your browser are probably turned off in your phone or computer settings.`);
+  } catch { say("Couldn't send a test right now. Try again in a minute.", true) }
+  finally { if (btn.isConnected) btn.disabled = false }
+}
 async function saveAlerts(btn) {
   const kinds = [...modal.querySelectorAll("[data-akind]:checked")].map(x => x.dataset.akind);
   const say = t => { const m = modal.querySelector(".al-msg[role=alert]"); if (m) m.textContent = t };
@@ -234,6 +251,7 @@ document.addEventListener("click", e => {
   if (e.target.closest("#alertsbtn")) { e.preventDefault(); openAlerts(); return }
   const s = e.target.closest("[data-alerts-save]"); if (s) { saveAlerts(s); return }
   if (e.target.closest("[data-alerts-off]")) { alertsOff(); return }
+  const tb = e.target.closest("[data-alerts-test]"); if (tb) { testAlert(tb); return }
 });
 // following a new team updates this device's alerts too
 let favTimer = null;
