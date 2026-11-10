@@ -116,12 +116,51 @@ document.addEventListener("click", e => {
   }
   if (e.target.closest("[data-myteams]")) { e.preventDefault(); openPicker(false) }
 });
-// first visit: ask once, after the scores have had a moment to load
+// first visit: ask once, after the scores have had a moment to load (not on the same visit as the sign-up invite)
 setTimeout(() => {
+  if (welcomeShown) return;
   if (store.get("cbb_onb", 0) || favs().length || (modal && !modal.hidden) || document.querySelector(".modal:not([hidden])") || /^#(unsubscribe|admin|game-)/.test(location.hash)) return;
   if (document.documentElement.classList.contains("mg-open")) return;
   openPicker(true);
 }, 6000);
+
+// ================= "Join free" invite =================
+// Visitors without an account get one invite shortly after the page opens, listing what an account unlocks.
+// If they close it, it comes back after 2 days, and after the third time only every 2 weeks. Never shown once logged in.
+let welcomeShown = false;
+const PERKS = [
+  ["💬", "Live game chat", "Talk with other fans during every game. Reply, @mention and react as it happens."],
+  ["🏆", "Pick'em", "Pick winners every day and climb the weekly and season leaderboards. Build a streak."],
+  ["🔥", "Comment on big plays", "Dunks, buzzer-beaters and bad calls: weigh in right on the play."],
+  ["📬", "Monday newsletter", "The week's biggest results, upsets and games to watch. Optional."],
+  ["🏷️", "Claim your username", "Grab it before someone else does."],
+];
+function openWelcome() {
+  welcomeShown = true;
+  const seen = store.get("cbb_join", { n: 0, t: 0 });
+  store.set("cbb_join", { n: (seen.n || 0) + 1, t: Date.now() });
+  openModal(`<button class="modal-x" data-mclose aria-label="Close">×</button>
+    <div class="jn-top"><img src="/logo.png" alt="" width="52" height="52"><div><p class="jn-kick">Free · takes 30 seconds</p><h2 id="jn-title">Join the College Basketball community</h2></div></div>
+    <ul class="jn-list">${PERKS.map(([i, t, d]) => `<li><span class="jn-i" aria-hidden="true">${i}</span><div><b>${t}</b><small>${d}</small></div></li>`).join("")}</ul>
+    <button class="chat-btn wide jn-go" data-join="signup">Create my free account</button>
+    <div class="jn-foot"><button type="button" class="jn-link" data-join="login">I already have an account</button><button type="button" class="jn-link" data-mclose>Maybe later</button></div>`, "jn-card");
+  modal.querySelector(".modal-card").setAttribute("aria-labelledby", "jn-title");
+  modal.querySelector(".jn-go").focus();
+}
+document.addEventListener("click", e => {
+  const j = e.target.closest("[data-join]"); if (!j) return;
+  closeModal();
+  window.CBBChat?.auth(j.dataset.join, j.dataset.join === "signup" ? "Pick a username and you're in: chat, Pick'em and comments on every game." : "");
+});
+setTimeout(() => {
+  const C = window.CBBChat;
+  if (!C || !C.on || C.hasSession()) return;
+  if (/^#(unsubscribe|admin)/.test(location.hash)) return;
+  if (document.querySelector(".modal:not([hidden])") || document.documentElement.classList.contains("mg-open")) return;
+  const seen = store.get("cbb_join", { n: 0, t: 0 }), wait = (seen.n >= 3 ? 14 : 2) * 864e5;
+  if (seen.t && Date.now() - seen.t < wait) return;
+  openWelcome();
+}, 1500);
 
 // ================= game alerts =================
 let alertsOn = false;
