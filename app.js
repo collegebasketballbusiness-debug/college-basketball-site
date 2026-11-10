@@ -221,10 +221,14 @@ function status(g) {
   }
   if (/postponed|canceled|cancelled/i.test(g.finalMessage || "")) return { cls: "", txt: g.finalMessage };
   const ep = +g.startTimeEpoch;
+  if (noFeed(g)) return { cls: "nofeed", txt: "Underway · no live stats" };
   if (ep) return { cls: "", txt: new Date(ep * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) };
   return { cls: "", txt: g.startTime || "TBA" };
 }
 const isLive = g => g.gameState === "live";
+// The NCAA doesn't keep live stats for every game (often smaller streaming-only games). Those stay "not started"
+// in its feed until the final is posted, so once tip-off is 20+ minutes past we say so instead of showing a tip time.
+const noFeed = g => g.gameState === "pre" && +g.startTimeEpoch > 0 && Date.now() > (+g.startTimeEpoch + 20 * 60) * 1000 && !/postponed|canceled|cancelled|delayed/i.test(g.finalMessage || "");
 const clockSecs = c => { const m = /^(\d+):(\d+)/.exec(String(c || "")); return m ? +m[1] * 60 + +m[2] : 9999 };
 const rk = t => +(t.rank || apRank(t.names.short) || 0);
 const BUZZ = {}; const buzzAsked = new Set();
@@ -833,7 +837,7 @@ function liveDrama(g) {
 }
 function heroTier(g) { return matchupScore(g) + liveDrama(g) }
 function heroScore(g) {
-  let s = (g.gameState === "final" ? 0 : 10000) + matchupScore(g) + liveDrama(g);
+  let s = (g.gameState === "final" || noFeed(g) ? 0 : 10000) + matchupScore(g) + liveDrama(g); // a game with no live feed can't be followed here, so it isn't featured
   if (g.gameState === "pre") { const hrs = Math.max(0, ((+g.startTimeEpoch || 0) * 1000 - Date.now()) / 36e5); s += Math.max(0, 20 - hrs * 2) } // sooner tip-off breaks near-ties
   return s;
 }
@@ -884,7 +888,7 @@ function drawHero() {
   const live = list.find(g => g.gameID === heroId);
   // keep the same game while it's on, unless a game from a higher tier is live or still to come
   const best = [...list].sort((a, b) => heroScore(b) - heroScore(a))[0];
-  let g = live && live.gameState !== "final" && heroTier(live) + 60 >= heroTier(best) ? live : best;
+  let g = live && live.gameState !== "final" && !noFeed(live) && heroTier(live) + 60 >= heroTier(best) ? live : best;
   heroId = g.gameID;
   const st = status(g), pre = g.gameState === "pre", a = +g.away.score || 0, h = +g.home.score || 0;
   const side = (t, sd, r) => { const slug = logoSlug(t.names.short, t.names.seo); return `<div class="tm2 ${r ? "r" : ""}">${mono(t.names.short, t.names.seo, null, "")}<div><div class="tn">${rankBadge(rk(t))}${esc(fix(t.names.short))}</div><div class="tr">${esc([recordOf(t.names.short, g, sd), CONF[confOf(t)]].filter(Boolean).join(" · "))}</div></div></div>` };
