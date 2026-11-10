@@ -762,8 +762,8 @@ const clockTxt = c => String(c || "").replace(/^0(\d)/, "$1");
 function catchUpHTML(sg, CM, P, nPlays) {
   if (nPlays < 12 || sg.gameState === "pre") return "";
   const rows = catchUpRows(sg, CM, P);
-  const closed = !!cmuClosed[sg.gameID];
-  return `<div class="cmu ${closed ? "closed" : ""}"><button class="cmu-h" data-cmu="${sg.gameID}" aria-expanded="${!closed}"><span>⚡ ${sg.gameState === "final" ? "Game recap" : "Catch me up"}</span><i>${closed ? "Show" : "Hide"}</i></button>${closed ? "" : `<ul>${rows.map(([e, t]) => `<li><span>${e}</span>${esc(t)}</li>`).join("")}</ul>`}</div>`;
+  const closed = cmuClosed[sg.gameID] !== false; // folded to one line unless opened, so the plays stay on screen
+  return `<div class="cmu ${closed ? "closed" : ""}"><button class="cmu-h" data-cmu="${sg.gameID}" aria-expanded="${!closed}"><span><b>⚡ ${sg.gameState === "final" ? "Game recap" : "Catch me up"}</b>${closed && rows[0] ? `<small>${esc(rows[0][1])}</small>` : ""}</span><i>${closed ? "Show" : "Hide"}</i></button>${closed ? "" : `<ul>${rows.map(([e, t]) => `<li><span>${e}</span>${esc(t)}</li>`).join("")}</ul>`}</div>`;
 }
 function catchUpRows(sg, CM, P) {
   const a = +sg.away.score || 0, h = +sg.home.score || 0, A = fix(sg.away.names.short), Hn = fix(sg.home.names.short);
@@ -1261,11 +1261,11 @@ function playBar(gid, key, compact) {
   if (!playsOn || !window.CBBChat?.on) return "";
   const ct = PLAYCT[gid]?.[key] || { c: 0, r: {} }, mine = MYREACT[gid]?.[key] || new Set();
   const tops = Object.entries(ct.r).sort((a, b) => b[1] - a[1]), total = tops.reduce((n, x) => n + x[1], 0);
-  const sum = total ? `${tops.slice(0, 3).map(x => `<i>${x[0]}</i>`).join("")}<b>${total}</b>` : `<i class="pr-add">${MOOD_ICON[playMood(PLAYINFO[gid]?.[key]?.desc)]}</i><b>React</b>`;
+  const sum = total ? `${tops.slice(0, 3).map(x => `<i>${x[0]}</i>`).join("")}<b>${total}</b>` : `<i class="pr-add">${MOOD_ICON[playMood(PLAYINFO[gid]?.[key]?.desc)]}</i>${compact ? "<b>React</b>" : ""}`;
   const set = [...new Set([...emojisFor(gid, key), ...Object.keys(ct.r)])];
   const picker = pickerFor === key ? `<div class="pr-pick${compact ? " wide" : ""}">${set.map(e => `<button class="${mine.has(e) ? "on" : ""}" data-react="${e}" data-rkey="${key}" aria-label="React ${e}">${e}${ct.r[e] ? `<b>${ct.r[e]}</b>` : ""}</button>`).join("")}</div>` : "";
   if (compact) return `<span class="pact"><button class="pr-sum ${mine.size ? "on" : ""}" data-picker="${key}" title="React">${sum}</button><button class="pr-com" data-thread="${key}" title="Comments">💬${ct.c ? ` <b>${ct.c}</b>` : ""}</button></span>${picker}`;
-  return `<div class="pr"><button class="pr-sum ${mine.size ? "on" : ""}" data-picker="${key}">${sum}</button><button class="pr-com" data-thread="${key}">💬${ct.c ? ` <b>${ct.c}</b>` : ""}</button></div>${picker}`;
+  return `<div class="pr"><button class="pr-sum ${mine.size ? "on" : ""}" data-picker="${key}" aria-label="React to this play" title="React">${sum}</button><button class="pr-com" data-thread="${key}" aria-label="Comments" title="Comments">💬${ct.c ? ` <b>${ct.c}</b>` : ""}</button></div>${picker}`;
 }
 // ---- the thread for one play ----
 let THREAD = null; // { gid, key, msgs, channel, loading }
@@ -1517,6 +1517,12 @@ function drawPhoneGame(sg) {
       if (pts > 0 && runPts >= 6 && (!CM.run || runPts >= CM.run.pts)) CM.run = { side: runSide, pts: runPts, per: x.per, clock: x.clock || "" };
       ph = nh; pv = nv;
     }
+    // how much each play moved the win probability (same model as the bar at the top)
+    { const str = t => { const r = rk(t); return r ? 8 - r * .2 : 0 }, edge = 2.5 + str(sg.home) - str(sg.away);
+      const wpAt = (h, v, per, clock) => { const c = clockSecs(clock), clk = c === 9999 ? 0 : c, left = /1st/i.test(per) ? 1200 + clk : clk, f = left / 2400;
+        if (left <= 0) return h > v ? 1 : h < v ? 0 : .5; return normCdf((h - v + edge * f) / (11 * Math.sqrt(f) + 1.5)) };
+      let prev = normCdf(edge / 11 * .4);
+      for (const i of items) { if (i.divider) continue; const w = wpAt(i.h, i.v, i.per, i.clock); i.wp = w - prev; prev = w } }
     const cmu = catchUpHTML(sg, CM, P, items.filter(i => !i.divider).length);
     GAMESTORY[sg.gameID] = { CM, P, series: items.filter(i => !i.divider).map(i => ({ lead: i.h - i.v, per: i.per })) }; // for "Share game"
     const shown = (mgFeed === "scoring" ? items.filter(i => i.pts > 0 || i.divider) : items).reverse().slice(0, 250);
@@ -1534,8 +1540,8 @@ function drawPhoneGame(sg) {
         const sc = (n, sd) => `<b class="${i.pts > 0 && i.side === sd ? "lit" : ""}">${n}</b>`;
         return `<div class="fp ${big} k-${ty.k} ${i.tags.length ? "key" : ""}" style="--tc:${tc}">
           <div class="fp-av">${t ? mono(t.names.short, t.names.seo) : `<span class="fp-dot">${ty.e}</span>`}${i.pts > 0 ? `<span class="fp-pts">+${i.pts}</span>` : ""}</div>
-          <div class="fp-main"><div class="fp-meta">${mono(sg.away.names.short, sg.away.names.seo)}${sc(i.v, "away")}<i>–</i>${sc(i.h, "home")}${mono(sg.home.names.short, sg.home.names.seo)}<span>${esc(perLbl(i.per))} ${esc(i.clock)}</span></div>
-          ${head ? `<div class="fp-head"><span class="fp-emo">${ty.e}</span>${esc(head)}</div><div class="fp-sub">${esc(i.desc)}</div>` : `<div class="fp-desc">${esc(i.desc)}</div>`}
+          <div class="fp-main"><div class="fp-meta">${mono(sg.away.names.short, sg.away.names.seo)}${sc(i.v, "away")}<i>–</i>${sc(i.h, "home")}${mono(sg.home.names.short, sg.home.names.seo)}<span>${esc(perLbl(i.per))} ${esc(i.clock)}</span>${Math.abs(i.wp || 0) >= .01 ? (sd => `<em class="fp-wp" style="--wc:${teamColorFor(logoSlug(sg[sd].names.short, sg[sd].names.seo)) || "#888"}" title="Win probability swing toward ${esc(fix(sg[sd].names.short))}">▲${(Math.abs(i.wp) * 100).toFixed(1)}% <small>${esc(short(sg[sd]))}</small></em>`)(i.wp > 0 ? "home" : "away") : ""}</div>
+          ${head ? `<div class="fp-head"><span class="fp-emo">${ty.e}</span>${esc(head)}</div>${i.line ? "" : `<div class="fp-sub">${esc(i.desc)}</div>`}` : `<div class="fp-desc">${esc(i.desc)}</div>`}
           <button class="fp-share" data-shareplay="${i.key}" aria-label="Share this play" title="Share this play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>${i.line ? `<div class="fp-line">${esc(i.line)}</div>` : ""}${(tg => tg.length ? `<div class="fp-tags">${tg.map(([k, l]) => `<span class="fpt-${k}">${esc(l)}</span>`).join("")}</div>` : "")(i.tags.filter(x => !(/^(Go-ahead|Game-tying)/.test(head) && (x[0] === "lead" || x[0] === "tie"))))}${playBar(sg.gameID, i.key)}</div></div>`;
       }).join("") : `<p class="mg-empty">${pre ? "The feed starts at tip-off. Check the Game tab to make your pick." : "No play-by-play for this game."}</p>`);
   } else if (mgTab === "game") {
@@ -2584,7 +2590,7 @@ document.addEventListener("click", e => {
   const sp = e.target.closest && e.target.closest("[data-shareplay]");
   if (sp) { e.preventDefault(); e.stopPropagation(); sharePlay(sp.dataset.shareplay); return }
   const cm = e.target.closest && e.target.closest("[data-cmu]");
-  if (cm) { e.preventDefault(); cmuClosed[cm.dataset.cmu] = !cmuClosed[cm.dataset.cmu]; mgBodyKey = ""; drawGame(); return }
+  if (cm) { e.preventDefault(); cmuClosed[cm.dataset.cmu] = cmuClosed[cm.dataset.cmu] === false; mgBodyKey = ""; drawGame(); return }
 });
 window.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.classList?.contains("uw")) { e.preventDefault(); e.target.click() } });
 // stars, "today" tags and the conference bar on the Teams tab
