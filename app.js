@@ -372,6 +372,7 @@ function drawGames() {
   const hot = list.filter(crunch);
   list = [...hot, ...list.filter(g => !crunch(g))];
   drawCrunchHead(hot); drawUpsetStrip(); drawMyBar();
+  { const pool = (cache.t || []).filter(g => g.gameState !== "final" && !noFeed(g)); GOTN_ID = pool.length ? pool.reduce((b, g) => heroScore(g) > heroScore(b) ? g : b).gameID : null }
   setCards(list.length ? list.map(g => {
     const st = status(g), sa = logoSlug(g.away.names.short, g.away.names.seo), sh = logoSlug(g.home.names.short, g.home.names.seo);
     const cls = ["game", openGame === g.gameID ? "sel" : "", favGame(g) ? "fav" : "", crunch(g) ? "crunch" : "", upsetWatch(g) ? "upsetw" : ""].filter(Boolean).join(" ");
@@ -2724,6 +2725,7 @@ function checkedBox(d, idHome, idAway) {
 
 
 // ---------- game cards (Real-style) ----------
+let GOTN_ID = null;
 // Two team rows on the left (logo, big score — or record before tip-off — and the name with its rank),
 // the clock, TV and activity stacked on the right.
 const CONF_SHORT = { "big-ten": "B10", "big-12": "B12", "big-east": "Big East", "acc": "ACC", "sec": "SEC", "pac-12": "Pac-12", "mountain-west": "MWC", "wcc": "WCC", "atlantic-10": "A10", "american": "AAC", "metro": "MAAC", "uac": "UAC", "mvc": "MVC", "mac": "MAC", "america-east": "AmEast", "asun": "ASUN", "big-sky": "Big Sky", "big-south": "Big South", "big-west": "Big West", "caa": "CAA", "cusa": "CUSA", "horizon": "Horizon", "ivy-league": "Ivy", "maac": "MAAC", "meac": "MEAC", "nec": "NEC", "ovc": "OVC", "patriot": "Patriot", "socon": "SoCon", "southland": "Southland", "summit-league": "Summit", "sun-belt": "Sun Belt", "swac": "SWAC", "wac": "WAC" };
@@ -2733,16 +2735,20 @@ function realCard(g, st, cls, sa, sh) {
     const t = g[side], slug = side === "home" ? sh : sa, r = t.rank || apRank(t.names.short), rec = recordOf(t.names.short, g, side);
     const lose = fin && (side === "home" ? h < a : a < h), lead = !pre && !fin && (side === "home" ? h > a : a > h);
     const big = pre || noFeed(g) ? (rec || "–") : esc(t.score || 0);
-    return `<div class="rc-t${lose ? " lose" : ""}${lead ? " ahead" : ""}">${mono(t.names.short, t.names.seo)}<div class="rc-x"><b class="rc-sc${pre ? " rec" : ""}">${big}</b><span class="rc-nm">${esc(fix(t.names.short))}${r ? ` <i>(${esc(r)})</i>` : ""}${!pre && rec ? ` <em>${esc(rec)}</em>` : ""}</span></div></div>`;
+    return `<div class="rc-t${lose ? " lose" : ""}${lead ? " ahead" : ""}" style="--tc:${teamColorFor(slug) || "#3A3A40"}">${mono(t.names.short, t.names.seo)}<div class="rc-x"><b class="rc-sc${pre ? " rec" : ""}" data-sc="${g.gameID}-${side}">${big}</b><span class="rc-nm">${esc(fix(t.names.short))}${r ? ` <i>(${esc(r)})</i>` : ""}${!pre && rec ? ` <em>${esc(rec)}</em>` : ""}</span></div></div>`;
   };
   const ca = CHATACT[g.gameID], pc = PICKCT[g.gameID], n = pc ? pc.home + pc.away : 0, bd = badges(g);
   const extra = [];
-  if (n) { const sd = pc.home >= pc.away ? "home" : "away"; extra.push(`<span class="rc-ex" title="Pick'em">🗳️ ${Math.round(pc[sd] / n * 100)}% ${esc(fix(g[sd].names.char6 || g[sd].names.short))}</span>`) }
+  if (n >= 3) { const sd = pc.home >= pc.away ? "home" : "away"; extra.push(`<span class="rc-ex" title="Pick'em">🗳️ ${Math.round(pc[sd] / n * 100)}% ${esc(fix(g[sd].names.char6 || g[sd].names.short))}</span>`) }
   if (ca && ca.people) extra.push(`<span class="rc-ex" title="People in the game chat">💬 ${ca.people}</span>`);
   const net = g.network ? String(g.network).split(/\s*\/\s*/)[0].replace(/ Network$/i, "") : "";
-  const tag = upsetWatch(g) ? `<span class="rc-tag up">Upset alert</span>` : crunch(g) ? `<span class="rc-tag cr">Crunch time</span>` : bd.length ? `<span class="rc-tag ${esc(bd[0][0])}">${esc(bd[0][1])}</span>` : "";
-  return `<button class="${cls} rc ${g.gameState}" data-game="${g.gameID}" style="--ca:${teamColorFor(sa) || "#2A2A2E"};--ch:${teamColorFor(sh) || "#2A2A2E"}">
-    <div class="rc-teams">${row("away")}${row("home")}</div>${cardPick(g)}
+  const tag = upsetWatch(g) ? `<span class="rc-tag up">Upset alert</span>` : crunch(g) ? `<span class="rc-tag cr">Crunch time</span>` : g.gameID === GOTN_ID ? `<span class="rc-tag gn">🔥 Game of the night</span>` : bd.length ? `<span class="rc-tag ${esc(bd[0][0])}">${esc(bd[0][1])}</span>` : "";
+  const mins = pre && +g.startTimeEpoch ? Math.round((+g.startTimeEpoch * 1000 - Date.now()) / 60000) : -1;
+  if (mins >= 0 && mins <= 120) extra.unshift(`<span class="rc-cd">Tips in ${mins < 60 ? mins + "m" : Math.floor(mins / 60) + "h " + (mins % 60) + "m"}</span>`);
+  let wp = "";
+  if (g.gameState === "live" && !noFeed(g)) { const p = winProb(g), pa = Math.round((1 - p) * 100); wp = `<div class="rc-wp" title="Win probability: ${esc(fix(g.away.names.short))} ${pa}%, ${esc(fix(g.home.names.short))} ${100 - pa}%"><span style="width:${pa}%;background:var(--ca)"></span><span style="width:${100 - pa}%;background:var(--ch)"></span></div>` }
+  return `<button class="${cls} rc ${g.gameState}${g.gameID === GOTN_ID ? " gotn-c" : ""}" data-game="${g.gameID}" style="--ca:${teamColorFor(sa) || "#2A2A2E"};--ch:${teamColorFor(sh) || "#2A2A2E"}">
+    <div class="rc-teams">${row("away")}${row("home")}</div>${cardPick(g)}${wp}
     <div class="rc-side"><span class="rc-st ${st.cls}">${g.gameState === "live" ? '<i class="dot"></i>' : ""}${esc(st.txt)}</span>${net ? `<span class="rc-tv">${esc(net)}</span>` : ""}${tag}${extra.join("")}${favGame(g) ? `<span class="rc-fav" title="One of your teams">${STAR(true)}</span>` : ""}</div></button>`;
 }
 
