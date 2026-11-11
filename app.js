@@ -2747,7 +2747,8 @@ function realCard(g, st, cls, sa, sh) {
   if (mins >= 0 && mins <= 120) extra.unshift(`<span class="rc-cd">Tips in ${mins < 60 ? mins + "m" : Math.floor(mins / 60) + "h " + (mins % 60) + "m"}</span>`);
   let wp = "";
   if (g.gameState === "live" && !noFeed(g)) { const p = winProb(g), pa = Math.round((1 - p) * 100); const ab = sd => esc(fix(g[sd].names.char6 || g[sd].names.short));
-    wp = `<div class="rc-wp" title="Chance to win, based on the score, time left and rankings"><span class="rc-wpl">Win %</span><b class="${pa >= 50 ? "fav" : ""}">${ab("away")} ${pa}%</b><span class="rc-wpb"><i style="width:${pa}%;background:var(--ca)"></i><i style="width:${100 - pa}%;background:var(--ch)"></i></span><b class="${pa < 50 ? "fav" : ""}">${100 - pa}% ${ab("home")}</b></div>` }
+    const fs = pa >= 50 ? "away" : "home", fp = Math.max(pa, 100 - pa);
+    wp = `<div class="rc-wp" title="${esc(fix(g.away.names.short))} ${pa}% · ${esc(fix(g.home.names.short))} ${100 - pa}%. Chance to win, from the score, time left and rankings."><span class="rc-wpb"><i style="width:${pa}%;background:var(--ca)"></i><i style="width:${100 - pa}%;background:var(--ch)"></i></span><span class="rc-wpt"><b style="--fc:var(--${fs === "away" ? "ca" : "ch"})">${ab(fs)} ${fp}%</b> to win</span></div>` }
   return `<button class="${cls} rc ${g.gameState}${g.gameID === GOTN_ID ? " gotn-c" : ""}" data-game="${g.gameID}" style="--ca:${teamColorFor(sa) || "#2A2A2E"};--ch:${teamColorFor(sh) || "#2A2A2E"}">
     <div class="rc-teams">${row("away")}${row("home")}</div>${cardPick(g)}${wp}
     <div class="rc-side"><span class="rc-st ${st.cls}">${g.gameState === "live" ? '<i class="dot"></i>' : ""}${esc(st.txt)}</span>${net ? `<span class="rc-tv">${esc(net)}</span>` : ""}${tag}${extra.join("")}${favGame(g) ? `<span class="rc-fav" title="One of your teams">${STAR(true)}</span>` : ""}</div></button>`;
