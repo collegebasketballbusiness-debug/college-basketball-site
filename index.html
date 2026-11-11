@@ -1285,7 +1285,7 @@ html.srch-open{overflow:hidden}
 .rhead-sp{flex:1}
 .rlink{background:none;border:0;color:var(--ball);font:700 14px var(--body);text-decoration:none;cursor:pointer;padding:4px 2px}.rlink:hover{text-decoration:underline}
 .mybar{margin:12px 0 2px}
-.games{grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--line)}
+.games{grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#0F0F11}
 .games>.empty{background:var(--bg);padding:24px}
 .game.rc{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:8px 12px 8px 12px;border:0;border-radius:0;background:#0F0F11;box-shadow:inset -1px -1px 0 var(--line);min-height:0;overflow:visible}
 .game.rc:hover{background:#151518;border:0}
@@ -1337,6 +1337,27 @@ html.srch-open{overflow:hidden}
 .rc-pkb small{font-weight:600;opacity:.75}
 .rc-pkb:focus-visible{outline:2px solid var(--ball);outline-offset:2px}
 .rc-pk.res{justify-content:flex-end;font-weight:700;color:#C8C8C4}.rc-pk.won{color:var(--good)}.rc-pk.lost{color:var(--bad)}
+
+/* ===== livelier score cards ===== */
+.game.rc{transition:background .15s,transform .15s}
+.game.rc:hover{transform:translateY(-1px)}
+.rc-t{position:relative}
+.rc-t .mono.has-logo img{filter:drop-shadow(0 0 6px color-mix(in srgb,var(--tc) 70%,transparent))}
+.game.rc.live{background:linear-gradient(100deg,color-mix(in srgb,var(--ca) 14%,#0F0F11) 0%,#0F0F11 45%,#0F0F11 55%,color-mix(in srgb,var(--ch) 14%,#0F0F11) 100%)}
+.game.rc.live .rc-st{color:#FF6B6B}
+.rc-st .dot{animation:rcpulse 1.4s ease-in-out infinite}
+@keyframes rcpulse{0%,100%{box-shadow:0 0 0 0 rgba(255,77,77,.6)}50%{box-shadow:0 0 0 5px rgba(255,77,77,0)}}
+.rc-sc.flash{animation:scflash 1.6s ease-out}
+@keyframes scflash{0%{color:var(--ball);transform:scale(1.25)}30%{color:var(--ball);transform:scale(1)}100%{color:inherit}}
+.rc-sc{display:inline-block;transform-origin:left center}
+.rc-wp{grid-row:3;grid-column:1/-1;display:flex;height:4px;border-radius:999px;overflow:hidden;margin-top:6px;background:#222}
+.rc-wp span{transition:width .6s ease;filter:saturate(1.2) brightness(1.15)}
+.rc-cd{font:800 11px var(--body);color:var(--ball);white-space:nowrap}
+.rc-tag.gn{background:linear-gradient(90deg,var(--ball),#FF3D00);color:#111}
+.game.rc.gotn-c{background:linear-gradient(135deg,rgba(255,106,19,.16),#0F0F11 55%)}
+.game.rc.gotn-c:not(.live):not(.upsetw):not(.crunch){box-shadow:inset 0 0 0 1.5px rgba(255,106,19,.7)}
+.game.rc.final .rc-st{color:#9C9C98;font-weight:700}
+@media (prefers-reduced-motion:reduce){.rc-st .dot,.rc-sc.flash{animation:none}.game.rc:hover{transform:none}}
 </style>
 </head>
 <body>
