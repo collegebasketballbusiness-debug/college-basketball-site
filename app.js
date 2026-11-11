@@ -2588,7 +2588,7 @@ function openWatch(e) {
 window.addEventListener("click", openWatch, true);
 document.addEventListener("click", e => {
   const pb = e.target.closest && e.target.closest("[data-pick]");
-  if (pb) { e.preventDefault(); makePick(pb.dataset.pickgame, pb.dataset.pick); return }
+  if (pb) { e.preventDefault(); if (pb.closest(".rc")) e.stopImmediatePropagation(); makePick(pb.dataset.pickgame, pb.dataset.pick); return } // a pick on a card shouldn't open the game
   const sh = e.target.closest && e.target.closest("[data-share]");
   if (sh) { e.preventDefault(); shareFinal(sh.dataset.share); return }
   const sgb = e.target.closest && e.target.closest("[data-sharegame]");
@@ -2742,9 +2742,29 @@ function realCard(g, st, cls, sa, sh) {
   const net = g.network ? String(g.network).split(/\s*\/\s*/)[0].replace(/ Network$/i, "") : "";
   const tag = upsetWatch(g) ? `<span class="rc-tag up">Upset alert</span>` : crunch(g) ? `<span class="rc-tag cr">Crunch time</span>` : bd.length ? `<span class="rc-tag ${esc(bd[0][0])}">${esc(bd[0][1])}</span>` : "";
   return `<button class="${cls} rc ${g.gameState}" data-game="${g.gameID}" style="--ca:${teamColorFor(sa) || "#2A2A2E"};--ch:${teamColorFor(sh) || "#2A2A2E"}">
-    <div class="rc-teams">${row("away")}${row("home")}</div>
+    <div class="rc-teams">${row("away")}${row("home")}</div>${cardPick(g)}
     <div class="rc-side"><span class="rc-st ${st.cls}">${g.gameState === "live" ? '<i class="dot"></i>' : ""}${esc(st.txt)}</span>${net ? `<span class="rc-tv">${esc(net)}</span>` : ""}${tag}${extra.join("")}${favGame(g) ? `<span class="rc-fav" title="One of your teams">${STAR(true)}</span>` : ""}</div></button>`;
 }
+
+// Pick'em right on the card: tap a team before tip-off, no need to open the game
+function cardPick(g) {
+  if (!socialOn || !window.CBBChat?.on || !+g.startTimeEpoch) return "";
+  const id = g.gameID, mine = MYPICK[id], locked = pickLocked(g), ct = PICKCT[id] || { home: 0, away: 0 }, n = ct.home + ct.away;
+  const ab = sd => esc(fix(g[sd].names.char6 || g[sd].names.short));
+  if (locked) {
+    if (!mine) return "";
+    if (g.gameState === "final") { const won = (+g.home.score > +g.away.score ? "home" : "away") === mine; return `<div class="rc-pk res ${won ? "won" : "lost"}">${won ? "✅" : "❌"} Your pick: ${ab(mine)}</div>` }
+    return `<div class="rc-pk res">🔒 Your pick: ${ab(mine)}</div>`;
+  }
+  const pct = sd => n ? Math.round(ct[sd] / n * 100) : 0;
+  const chip = sd => `<span role="button" tabindex="0" class="rc-pkb${mine === sd ? " on" : ""}" data-pick="${sd}" data-pickgame="${id}" aria-pressed="${mine === sd}" aria-label="Pick ${esc(fix(g[sd].names.short))} to win">${mine === sd ? "✓ " : ""}${ab(sd)}${mine && n ? ` <small>${pct(sd)}%</small>` : ""}</span>`;
+  return `<div class="rc-pk"><span class="rc-pk-l">${mine ? "Your pick" : "Who wins?"}</span>${chip("away")}${chip("home")}</div>`;
+}
+
+document.addEventListener("keydown", e => {
+  const pb = e.target.closest && e.target.closest(".rc-pkb"); if (!pb || (e.key !== "Enter" && e.key !== " ")) return;
+  e.preventDefault(); e.stopImmediatePropagation(); makePick(pb.dataset.pickgame, pb.dataset.pick);
+}, true);
 
 // ---------- Loading placeholders ----------
 const SKEL_CARD = `<div class="game rc skel" aria-hidden="true"><div class="rc-teams"><div class="skel-tm"><i class="sk sk-c"></i><i class="sk" style="width:60%"></i></div><div class="skel-tm"><i class="sk sk-c"></i><i class="sk" style="width:52%"></i></div></div><div class="rc-side"><i class="sk" style="width:60px"></i><i class="sk" style="width:40px;height:10px"></i></div></div>`;
