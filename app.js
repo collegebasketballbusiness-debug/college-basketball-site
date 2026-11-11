@@ -115,10 +115,10 @@ function etDate(offsetDays) {
   const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit", weekday: "short" }).formatToParts(d).map(x => [x.type, x.value]));
   return { path: `${p.year}/${p.month}/${p.day}`, label: `${p.weekday}, ${new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" })}` };
 }
-const DAYS = [{ k: "y", label: "Yesterday", off: -1 }, { k: "t", label: "Today", off: 0 }, { k: "m", label: "Tomorrow", off: 1 }];
+const DAYS = Array.from({ length: 11 }, (_, i) => { const off = i - 4; return { k: off === -1 ? "y" : off === 0 ? "t" : off === 1 ? "m" : "d" + off, label: off === 0 ? "Today" : off === -1 ? "Yesterday" : off === 1 ? "Tomorrow" : "", off } });
 
 // ---------- state ----------
-let gday = "t", gfilt = "All", gconf = "", query = "", openGame = null, boxSide = "away";
+let gday = "t", gfilt = (() => { try { return localStorage.getItem("cbb_gfilt") || "AP Top 25" } catch { return "AP Top 25" } })(), gconf = "", query = "", openGame = null, boxSide = "away";
 const cache = {};          // day key -> games[]
 let lastScores = {};       // gameID -> "a-h" for flash
 let gameDetail = null;     // {id, game, box, pbp}
@@ -310,14 +310,20 @@ function trow(g, side) {
   return `<div class="trow ${lose ? "lose" : ""}" data-slug="${esc(slug)}"${tc ? ` style="--tc:${tc}"` : ""}>${mono(t.names.short, t.names.seo)}<span class="nm">${rankBadge(t.rank || apRank(t.names.short))}${esc(fix(t.names.short))}${recTag(recordOf(t.names.short, g, side))}</span><span class="sc" data-sc="${g.gameID}-${side}">${g.gameState === "pre" ? "" : esc(t.score)}</span></div>`;
 }
 function drawDays() {
-  $("#days").innerHTML = DAYS.map(d => `<button aria-pressed="${d.k === gday}" data-day="${d.k}">${d.label}<small>${etDate(d.off).label}</small></button>`).join("");
+  const el = $("#days");
+  el.innerHTML = DAYS.map(d => { const dt = new Date(Date.now() + d.off * 864e5), z = "America/New_York";
+    const md = dt.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: z }), wd = d.off === 0 ? "Today" : dt.toLocaleDateString("en-US", { weekday: "short", timeZone: z });
+    return `<button aria-pressed="${d.k === gday}" data-day="${d.k}" class="${d.off === 0 ? "today" : ""}" aria-label="${esc(d.label || wd)} ${esc(md)}"><small>${esc(md)}</small>${esc(wd)}</button>` }).join("");
+  const on = el.querySelector('[aria-pressed="true"]'); if (on) el.scrollLeft = on.offsetLeft - el.clientWidth / 2 + on.offsetWidth / 2;
 }
 function drawFilters() {
   const list = cache[gday] || [];
   const present = new Set(list.flatMap(g => [confOf(g.home), confOf(g.away)]).filter(c => CONF[c]));
   const confs = Object.keys(CONF).filter(c => present.has(c) || c === gconf).sort((a, b) => (P6.includes(b) - P6.includes(a)) || (P6.includes(a) ? P6.indexOf(a) - P6.indexOf(b) : CONF[a].localeCompare(CONF[b])));
-  $("#gfilters").innerHTML = ["All", "AP Top 25", "Power 6"].map(o => `<button aria-pressed="${o === gfilt && !gconf}" data-gf="${o}">${o === "All" ? "All games" : o}</button>`).join("")
-    + `<span class="sep" aria-hidden="true"></span>` + confs.map(c => `<button aria-pressed="${c === gconf}" data-conf-f="${c}">${CONF[c]}</button>`).join("");
+  const lbl = { "AP Top 25": "T25", "Power 6": "P6", All: "All" };
+  $("#gfilters").innerHTML = ["AP Top 25", "Power 6", "All"].map(o => `<button aria-pressed="${o === gfilt && !gconf}" data-gf="${o}" title="${o}">${lbl[o]}</button>`).join("")
+    + confs.map(c => `<button aria-pressed="${c === gconf}" data-conf-f="${c}">${esc(CONF_SHORT[c] || CONF[c])}</button>`).join("");
+  const head = $("#sbhead"); if (head) head.textContent = gconf ? (CONF[gconf] || "Games") : gfilt === "AP Top 25" ? "Top 25" : gfilt === "Power 6" ? "Power 6" : "All games";
 }
 // The game panel opens inside the grid, directly under the row of the game that was tapped.
 const DETAIL = document.getElementById("gdetail");
@@ -369,8 +375,8 @@ function drawGames() {
   setCards(list.length ? list.map(g => {
     const st = status(g), sa = logoSlug(g.away.names.short, g.away.names.seo), sh = logoSlug(g.home.names.short, g.home.names.seo);
     const cls = ["game", openGame === g.gameID ? "sel" : "", favGame(g) ? "fav" : "", crunch(g) ? "crunch" : "", upsetWatch(g) ? "upsetw" : ""].filter(Boolean).join(" ");
-    return `<button class="${cls}" data-game="${g.gameID}" style="--ca:${teamColorFor(sa) || "#2A2A2E"};--ch:${teamColorFor(sh) || "#2A2A2E"}">${favGame(g) ? `<span class="favmark" title="One of your teams">${STAR(true)}</span>` : ""}${crunch(g) ? `<span class="crunchtag">Crunch time</span>` : ""}<div class="gstat ${st.cls}"><span class="l">${st.cls ? '<span class="dot"></span>' : ""}${esc(st.txt)}</span>${tvHTML(g.network)}</div>${trow(g, "away")}${trow(g, "home")}${badgeHTML(badges(g))}${socialHTML(g)}</button>`;
-  }) : [`<div class="empty">${all.length ? "No games match this filter." : "No Division I games scheduled for this day."}</div>`]);
+    return realCard(g, st, cls, sa, sh);
+  }) : [`<div class="empty">${all.length ? `No ${gconf ? esc(CONF[gconf] || "") : gfilt === "AP Top 25" ? "Top 25" : gfilt === "Power 6" ? "Power 6" : ""} games on this day. <button class="rlink" type="button" data-gf="All">Show all ${all.length} games →</button>` : "No Division I games scheduled for this day."}</div>`]);
 }
 function drawCrunchHead(hot) {
   const el = $("#crunchhead"); if (!el) return;
@@ -883,7 +889,7 @@ async function loadHeroExtra(id) {
   drawHero();
 }
 function drawHero() {
-  const el = $("#gotn"); const list = cache.t || [];
+  const el = $("#gotn"); if (!el) return; const list = cache.t || [];
   if (!list.length) { el.hidden = true; return }
   const live = list.find(g => g.gameID === heroId);
   // keep the same game while it's on, unless a game from a higher tier is live or still to come
@@ -2620,7 +2626,7 @@ document.addEventListener("click", async e => {
     if (!cache[gday] || gday !== "t") { $("#games").innerHTML = `<div class="empty">Loading games…</div>`; try { await loadDay(gday) } catch { $("#games").innerHTML = `<div class="empty">Games couldn't load. Try again.</div>`; return } }
     drawFilters(); drawGames(); loadSocial(true); return;
   }
-  const f = t.closest("[data-gf]"); if (f) { gfilt = f.dataset.gf; gconf = ""; closeGame(); drawFilters(); drawGames(); return }
+  const f = t.closest("[data-gf]"); if (f) { gfilt = f.dataset.gf; gconf = ""; try { localStorage.setItem("cbb_gfilt", gfilt) } catch { } closeGame(); drawFilters(); drawGames(); return }
   const cf = t.closest("[data-conf-f]"); if (cf) { gconf = cf.dataset.confF; gfilt = "All"; closeGame(); drawFilters(); drawGames(); return }
   const bx = t.closest("[data-box]"); if (bx) { boxSide = bx.dataset.box; drawGame(); return }
   if (t.closest("[data-closegame]")) { openGame = null; gameDetail = null; drawGames(); drawGame(); return }
@@ -2716,8 +2722,32 @@ function checkedBox(d, idHome, idAway) {
   return out;
 }
 
+
+// ---------- game cards (Real-style) ----------
+// Two team rows on the left (logo, big score — or record before tip-off — and the name with its rank),
+// the clock, TV and activity stacked on the right.
+const CONF_SHORT = { "big-ten": "B10", "big-12": "B12", "big-east": "Big East", "acc": "ACC", "sec": "SEC", "pac-12": "Pac-12", "mountain-west": "MWC", "wcc": "WCC", "atlantic-10": "A10", "american": "AAC", "metro": "MAAC", "uac": "UAC", "mvc": "MVC", "mac": "MAC", "america-east": "AmEast", "asun": "ASUN", "big-sky": "Big Sky", "big-south": "Big South", "big-west": "Big West", "caa": "CAA", "cusa": "CUSA", "horizon": "Horizon", "ivy-league": "Ivy", "maac": "MAAC", "meac": "MEAC", "nec": "NEC", "ovc": "OVC", "patriot": "Patriot", "socon": "SoCon", "southland": "Southland", "summit-league": "Summit", "sun-belt": "Sun Belt", "swac": "SWAC", "wac": "WAC" };
+function realCard(g, st, cls, sa, sh) {
+  const pre = g.gameState === "pre", fin = g.gameState === "final", a = +g.away.score || 0, h = +g.home.score || 0;
+  const row = side => {
+    const t = g[side], slug = side === "home" ? sh : sa, r = t.rank || apRank(t.names.short), rec = recordOf(t.names.short, g, side);
+    const lose = fin && (side === "home" ? h < a : a < h), lead = !pre && !fin && (side === "home" ? h > a : a > h);
+    const big = pre || noFeed(g) ? (rec || "–") : esc(t.score || 0);
+    return `<div class="rc-t${lose ? " lose" : ""}${lead ? " ahead" : ""}">${mono(t.names.short, t.names.seo)}<div class="rc-x"><b class="rc-sc${pre ? " rec" : ""}">${big}</b><span class="rc-nm">${esc(fix(t.names.short))}${r ? ` <i>(${esc(r)})</i>` : ""}${!pre && rec ? ` <em>${esc(rec)}</em>` : ""}</span></div></div>`;
+  };
+  const ca = CHATACT[g.gameID], pc = PICKCT[g.gameID], n = pc ? pc.home + pc.away : 0, bd = badges(g);
+  const extra = [];
+  if (n) { const sd = pc.home >= pc.away ? "home" : "away"; extra.push(`<span class="rc-ex" title="Pick'em">🗳️ ${Math.round(pc[sd] / n * 100)}% ${esc(fix(g[sd].names.char6 || g[sd].names.short))}</span>`) }
+  if (ca && ca.people) extra.push(`<span class="rc-ex" title="People in the game chat">💬 ${ca.people}</span>`);
+  const net = g.network ? String(g.network).split(/\s*\/\s*/)[0].replace(/ Network$/i, "") : "";
+  const tag = upsetWatch(g) ? `<span class="rc-tag up">Upset alert</span>` : crunch(g) ? `<span class="rc-tag cr">Crunch time</span>` : bd.length ? `<span class="rc-tag ${esc(bd[0][0])}">${esc(bd[0][1])}</span>` : "";
+  return `<button class="${cls} rc ${g.gameState}" data-game="${g.gameID}" style="--ca:${teamColorFor(sa) || "#2A2A2E"};--ch:${teamColorFor(sh) || "#2A2A2E"}">
+    <div class="rc-teams">${row("away")}${row("home")}</div>
+    <div class="rc-side"><span class="rc-st ${st.cls}">${g.gameState === "live" ? '<i class="dot"></i>' : ""}${esc(st.txt)}</span>${net ? `<span class="rc-tv">${esc(net)}</span>` : ""}${tag}${extra.join("")}${favGame(g) ? `<span class="rc-fav" title="One of your teams">${STAR(true)}</span>` : ""}</div></button>`;
+}
+
 // ---------- Loading placeholders ----------
-const SKEL_CARD = `<div class="game skel" aria-hidden="true"><i class="sk" style="width:38%;height:10px"></i><div class="skel-tm"><i class="sk sk-c"></i><i class="sk" style="width:55%"></i></div><div class="skel-tm"><i class="sk sk-c"></i><i class="sk" style="width:48%"></i></div></div>`;
+const SKEL_CARD = `<div class="game rc skel" aria-hidden="true"><div class="rc-teams"><div class="skel-tm"><i class="sk sk-c"></i><i class="sk" style="width:60%"></i></div><div class="skel-tm"><i class="sk sk-c"></i><i class="sk" style="width:52%"></i></div></div><div class="rc-side"><i class="sk" style="width:60px"></i><i class="sk" style="width:40px;height:10px"></i></div></div>`;
 
 // ---------- My Teams bar ----------
 // The teams you follow, pinned above the scores: the live score, today's tip time, or the next game with a countdown.
