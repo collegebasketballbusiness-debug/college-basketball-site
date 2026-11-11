@@ -1326,6 +1326,17 @@ html.srch-open{overflow:hidden}
   .rdays button{flex-basis:56px;font-size:15px}
   .rhead h2{font-size:20px}
 }
+
+/* pick'em on the score cards */
+.game.rc .rc-teams{grid-row:1;grid-column:1}.game.rc .rc-side{grid-row:1;grid-column:2}
+.rc-pk{grid-row:2;grid-column:1/-1;display:flex;align-items:center;gap:6px;margin-top:2px;padding-top:6px;border-top:1px solid #1F1F23;font-size:12px;color:#9C9C98}
+.rc-pk-l{margin-right:auto;font-weight:600}
+.rc-pkb{display:inline-flex;align-items:center;gap:4px;min-width:64px;justify-content:center;padding:4px 10px;border-radius:999px;border:1px solid #34343A;background:#18181B;color:#E8E8E4;font:800 12px var(--body);cursor:pointer;white-space:nowrap}
+.rc-pkb:hover{border-color:#E8E8E4}
+.rc-pkb.on{background:var(--ball);border-color:var(--ball);color:#111}
+.rc-pkb small{font-weight:600;opacity:.75}
+.rc-pkb:focus-visible{outline:2px solid var(--ball);outline-offset:2px}
+.rc-pk.res{justify-content:flex-end;font-weight:700;color:#C8C8C4}.rc-pk.won{color:var(--good)}.rc-pk.lost{color:var(--bad)}
 </style>
 </head>
 <body>
