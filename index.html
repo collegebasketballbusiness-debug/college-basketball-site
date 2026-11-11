@@ -1331,7 +1331,7 @@ html.srch-open{overflow:hidden}
 .game.rc .rc-teams{grid-row:1;grid-column:1}.game.rc .rc-side{grid-row:1;grid-column:2}
 .rc-pk{grid-row:2;grid-column:1/-1;display:flex;align-items:center;gap:6px;margin-top:2px;padding-top:6px;border-top:1px solid #1F1F23;font-size:12px;color:#9C9C98}
 .rc-pk-l{margin-right:auto;font-weight:600}
-.rc-pkb{display:inline-flex;align-items:center;gap:4px;min-width:64px;justify-content:center;padding:4px 10px;border-radius:999px;border:1px solid #34343A;background:#18181B;color:#E8E8E4;font:800 12px var(--body);cursor:pointer;white-space:nowrap}
+.rc-pkb{max-width:130px;overflow:hidden;text-overflow:ellipsis;display:inline-flex;align-items:center;gap:4px;min-width:64px;justify-content:center;padding:4px 10px;border-radius:999px;border:1px solid #34343A;background:#18181B;color:#E8E8E4;font:800 12px var(--body);cursor:pointer;white-space:nowrap}
 .rc-pkb:hover{border-color:#E8E8E4}
 .rc-pkb.on{background:var(--ball);border-color:var(--ball);color:#111}
 .rc-pkb small{font-weight:600;opacity:.75}
@@ -1350,8 +1350,11 @@ html.srch-open{overflow:hidden}
 .rc-sc.flash{animation:scflash 1.6s ease-out}
 @keyframes scflash{0%{color:var(--ball);transform:scale(1.25)}30%{color:var(--ball);transform:scale(1)}100%{color:inherit}}
 .rc-sc{display:inline-block;transform-origin:left center}
-.rc-wp{grid-row:3;grid-column:1/-1;display:flex;height:4px;border-radius:999px;overflow:hidden;margin-top:6px;background:#222}
-.rc-wp span{transition:width .6s ease;filter:saturate(1.2) brightness(1.15)}
+.rc-wp{grid-row:3;grid-column:1/-1;display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:#9C9C98;white-space:nowrap}
+.rc-wpl{font:600 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:#6E6E6A}
+.rc-wp b{font-weight:700;color:#9C9C98;max-width:90px;overflow:hidden;text-overflow:ellipsis}.rc-wp b.fav{color:#F5F5F2}
+.rc-wpb{flex:1;display:flex;height:5px;border-radius:999px;overflow:hidden;background:#222;min-width:40px}
+.rc-wpb i{transition:width .6s ease;filter:saturate(1.2) brightness(1.15)}
 .rc-cd{font:800 11px var(--body);color:var(--ball);white-space:nowrap}
 .rc-tag.gn{background:linear-gradient(90deg,var(--ball),#FF3D00);color:#111}
 .game.rc.gotn-c{background:linear-gradient(135deg,rgba(255,106,19,.16),#0F0F11 55%)}
