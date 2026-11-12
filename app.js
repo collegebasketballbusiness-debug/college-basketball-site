@@ -2117,7 +2117,7 @@ async function unsubscribe(tok) {
 
 // ---------- admin: the email list ----------
 // Only admin accounts can read it (the database enforces this). Copy or download the list for your email tool.
-let ADMIN = { rows: null, names: {}, q: "", err: "" };
+let ADMIN = { rows: null, names: {}, q: "", err: "", tab: "accounts", acc: null, aq: "" };
 async function drawAdmin(reload) {
   const box = $("#adminbox"), chat = window.CBBChat;
   if (!chat?.on) { box.innerHTML = `<p class="adm-note">The admin page needs the chat to be connected (chat-config.js).</p>`; return }
@@ -2125,6 +2125,8 @@ async function drawAdmin(reload) {
   const me = chat.me();
   if (!me) { box.innerHTML = `<p class="adm-note">Log in with your admin account to see the email list.</p><div class="adm-tools"><button class="chat-btn" data-admlogin>Log in</button></div>`; return }
   if (!me.is_admin) { box.innerHTML = `<p class="adm-note">This page is for admins only.</p>`; return }
+  const tabs = `<div class="adm-tabs" role="tablist"><button role="tab" aria-selected="${ADMIN.tab === "accounts"}" data-admtab="accounts">👤 Accounts</button><button role="tab" aria-selected="${ADMIN.tab === "emails"}" data-admtab="emails">📬 Email list</button></div>`;
+  if (ADMIN.tab === "accounts") { await drawAccounts(box, tabs, reload); return }
   if (!ADMIN.rows || reload) {
     box.innerHTML = `<p class="empty">Loading the email list…</p>`;
     try {
@@ -2143,7 +2145,7 @@ async function drawAdmin(reload) {
   const q = ADMIN.q.trim().toLowerCase();
   const shown = rows.filter(r => !q || r.email.includes(q) || (ADMIN.names[r.user_id] || "").toLowerCase().includes(q));
   const src = { signup: "Account sign-up", site: "Footer box", account: "Signed-in fan" };
-  box.innerHTML = `<div class="adm-stats">
+  box.innerHTML = `${tabs}<div class="adm-stats">
       <div><b>${on.length}</b><span>Subscribed</span></div>
       <div><b>${on.filter(r => new Date(r.created_at) > week).length}</b><span>New this week</span></div>
       <div><b>${on.filter(r => r.source === "signup").length}</b><span>From account sign-ups</span></div>
@@ -2157,11 +2159,52 @@ async function drawAdmin(reload) {
     <p class="adm-note" style="margin-top:16px">To send an email, click <b>Download CSV</b> and import it into an email tool like Mailchimp, Beehiiv or ConvertKit. Those tools add the unsubscribe link every email needs. If someone unsubscribes there, mark them unsubscribed here too.</p>`;
   const qi = $("#admq"); qi.oninput = () => { ADMIN.q = qi.value; const pos = qi.selectionStart; drawAdmin(); const n = $("#admq"); n.focus(); n.setSelectionRange(pos, pos) };
 }
+// Every account (not just the email list), from the admin_accounts database function (accounts-setup.sql)
+async function drawAccounts(box, tabs, reload) {
+  if (!ADMIN.acc || reload) {
+    box.innerHTML = `${tabs}<p class="empty">Loading accounts…</p>`;
+    try {
+      const sb = await window.CBBChat.client();
+      const { data, error } = await sb.rpc("admin_accounts");
+      if (error) throw error;
+      ADMIN.acc = data || [];
+    } catch (e) {
+      box.innerHTML = `${tabs}` + (/admin_accounts|function|schema cache/i.test(e.message || "") ? `<p class="adm-note">The accounts list isn't set up yet. Run <b>accounts-setup.sql</b> in Supabase (SQL Editor → New snippet → paste → Run), then click Refresh.</p><div class="adm-tools"><button class="chat-btn ghost" data-admreload>Refresh</button></div>` : `<p class="adm-note">The accounts couldn't load: ${esc(e.message || "unknown error")}</p>`);
+      return;
+    }
+  }
+  const rows = ADMIN.acc, week = Date.now() - 7 * 864e5, q = ADMIN.aq.trim().toLowerCase();
+  const shown = rows.filter(r => !q || (r.email || "").toLowerCase().includes(q) || (r.username || "").toLowerCase().includes(q));
+  const d = v => v ? new Date(v).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "–";
+  const ago = v => { if (!v) return "Never"; const m = (Date.now() - new Date(v)) / 6e4; return m < 60 ? `${Math.max(1, Math.round(m))}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : m < 43200 ? `${Math.round(m / 1440)}d ago` : d(v) };
+  const status = r => r.banned ? `<span class="adm-src bad">Banned</span>` : r.is_admin ? `<span class="adm-src">Admin</span>` : !r.confirmed ? `<span class="adm-src warn" title="Hasn't clicked the link in their sign-up email">Unconfirmed</span>` : !r.username ? `<span class="adm-src warn" title="Made an account but never picked a username">No username</span>` : `<span class="adm-src ok">Active</span>`;
+  box.innerHTML = `${tabs}<div class="adm-stats">
+      <div><b>${rows.length}</b><span>Total accounts</span></div>
+      <div><b>${rows.filter(r => new Date(r.joined) > week).length}</b><span>New this week</span></div>
+      <div><b>${rows.filter(r => r.last_seen && new Date(r.last_seen) > week).length}</b><span>Logged in this week</span></div>
+      <div><b>${rows.filter(r => r.messages > 0).length}</b><span>Have chatted</span></div></div>
+    <div class="adm-tools"><div class="search"><input id="admaq" type="search" placeholder="Search usernames or emails" value="${esc(ADMIN.aq)}" aria-label="Search accounts"></div>
+      <button class="chat-btn ghost" data-acccsv>Download CSV</button><button class="chat-btn ghost" data-admreload>Refresh</button></div>
+    <p class="adm-msg" id="admmsg"></p>
+    <div class="tblwrap"><table class="box adm-table"><thead><tr><th>Username</th><th>Email</th><th>Joined</th><th>Last login</th><th>Chat msgs</th><th>Picks</th><th>Newsletter</th><th>Status</th></tr></thead><tbody>
+      ${shown.length ? shown.map(r => `<tr class="${r.banned ? "off" : ""}"><td><b>${esc(r.username || "–")}</b></td><td>${esc(r.email || "")}</td><td>${d(r.joined)}</td><td>${ago(r.last_seen)}</td><td>${r.messages || 0}</td><td>${r.picks || 0}</td><td>${r.newsletter ? "✅" : "–"}</td><td>${status(r)}</td></tr>`).join("")
+        : `<tr><td colspan="8">${rows.length ? "No one matches that search." : "No accounts yet."}</td></tr>`}</tbody></table></div>
+    <p class="adm-note" style="margin-top:16px">Everyone who has made an account, newest first. “Unconfirmed” means they never clicked the link in their sign-up email, so they can't chat or pick yet.</p>`;
+  const qi = $("#admaq"); qi.oninput = () => { ADMIN.aq = qi.value; const pos = qi.selectionStart; drawAccounts(box, tabs); const n = $("#admaq"); n.focus(); n.setSelectionRange(pos, pos) };
+}
 document.addEventListener("click", async e => {
   const t = e.target; if (!t.closest || !t.closest("#adminbox")) return;
   const say = m => { const el = $("#admmsg"); if (el) el.textContent = m };
+  const tb = t.closest("[data-admtab]"); if (tb) { ADMIN.tab = tb.dataset.admtab; drawAdmin(); return }
+  if (t.closest("[data-acccsv]")) {
+    const rows = [["username", "email", "joined", "last_login", "chat_messages", "picks", "newsletter", "confirmed", "banned"], ...(ADMIN.acc || []).map(r => [r.username || "", r.email || "", (r.joined || "").slice(0, 10), (r.last_seen || "").slice(0, 10), String(r.messages || 0), String(r.picks || 0), r.newsletter ? "yes" : "no", r.confirmed ? "yes" : "no", r.banned ? "yes" : "no"])];
+    const csv = rows.map(r => r.map(v => /[",\n]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : v).join(",")).join("\n");
+    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })), download: `college-basketball-accounts-${new Date().toISOString().slice(0, 10)}.csv` });
+    document.body.appendChild(a); a.click(); a.remove(); say("Downloaded the CSV.");
+    return;
+  }
   if (t.closest("[data-admlogin]")) { window.CBBChat.auth("login", "Log in with your admin account."); return }
-  if (t.closest("[data-admreload]")) { drawAdmin(true); return }
+  if (t.closest("[data-admreload]")) { if (ADMIN.tab === "accounts") ADMIN.acc = null; drawAdmin(true); return }
   if (t.closest("[data-admcopy]")) {
     const list = (ADMIN.rows || []).filter(r => r.subscribed).map(r => r.email).join(", ");
     try { await navigator.clipboard.writeText(list); say(`Copied ${list ? list.split(", ").length : 0} emails.`) } catch { say("Couldn't copy. Use Download CSV instead.") }
@@ -2183,7 +2226,7 @@ document.addEventListener("click", async e => {
     r.subscribed = on; await drawAdmin(); say(on ? `${r.email} is subscribed again.` : `${r.email} is unsubscribed.`);
   }
 });
-window.addEventListener("cbb-auth", () => { if (!$("[data-view=admin]").hidden) { ADMIN.rows = null; drawAdmin() } });
+window.addEventListener("cbb-auth", () => { if (!$("[data-view=admin]").hidden) { ADMIN.rows = null; ADMIN.acc = null; drawAdmin() } });
 
 // ---------- favorites (saved on this device) ----------
 let FAVS = [];
