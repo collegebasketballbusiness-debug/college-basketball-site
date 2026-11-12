@@ -645,13 +645,13 @@ async function makePlayCard(g, p) {
 }
 // ---------- story footer: a call to action + room for Instagram's link sticker ----------
 const SITE_URL = "https://collegebasketball.news";
-function drawStoryCTA(x, W, brand, live, top = 1490) {
+function drawStoryCTA(x, W, brand, live, top = 1490, bigTxt, subTxt) {
   const font = (w, sz, f = '"Big Shoulders Display", Impact, sans-serif') => { x.font = `${w} ${sz}px ${f}` };
   x.fillStyle = "#FF6A13"; roundRect(x, 90, top, W - 180, 160, 30); x.fill();
   x.textAlign = "center"; x.fillStyle = "#0B0B0C";
-  let sz = 76; const big = live ? "TAP THE LINK FOR LIVE CHAT" : "TAP THE LINK FOR MORE"; do { font(900, sz); sz -= 2 } while (x.measureText(big).width > W - 260 && sz > 30);
+  let sz = 76; const big = bigTxt || (live ? "TAP THE LINK FOR LIVE CHAT" : "TAP THE LINK FOR MORE"); do { font(900, sz); sz -= 2 } while (x.measureText(big).width > W - 260 && sz > 30);
   x.fillText(big, W / 2, top + 80);
-  const sub = `${live ? "Play-by-play · win odds · Pick'em" : "Scores · play-by-play · Pick'em"} · ${SITE_URL.replace("https://", "")}`;
+  const sub = subTxt || `${live ? "Play-by-play · win odds · Pick'em" : "Scores · play-by-play · Pick'em"} · ${SITE_URL.replace("https://", "")}`;
   let s2 = 32; do { font(700, s2, "Barlow, sans-serif"); s2 -= 1 } while (x.measureText(sub).width > W - 240 && s2 > 18);
   x.fillText(sub, W / 2, top + 130);
   // arrow pointing at the empty space below, where the link sticker goes
@@ -2125,8 +2125,9 @@ async function drawAdmin(reload) {
   const me = chat.me();
   if (!me) { box.innerHTML = `<p class="adm-note">Log in with your admin account to see the email list.</p><div class="adm-tools"><button class="chat-btn" data-admlogin>Log in</button></div>`; return }
   if (!me.is_admin) { box.innerHTML = `<p class="adm-note">This page is for admins only.</p>`; return }
-  const tabs = `<div class="adm-tabs" role="tablist"><button role="tab" aria-selected="${ADMIN.tab === "accounts"}" data-admtab="accounts">👤 Accounts</button><button role="tab" aria-selected="${ADMIN.tab === "emails"}" data-admtab="emails">📬 Email list</button></div>`;
+  const tabs = `<div class="adm-tabs" role="tablist"><button role="tab" aria-selected="${ADMIN.tab === "accounts"}" data-admtab="accounts">👤 Accounts</button><button role="tab" aria-selected="${ADMIN.tab === "emails"}" data-admtab="emails">📬 Email list</button><button role="tab" aria-selected="${ADMIN.tab === "studio"}" data-admtab="studio">📸 Story Studio</button></div>`;
   if (ADMIN.tab === "accounts") { await drawAccounts(box, tabs, reload); return }
+  if (ADMIN.tab === "studio") { await drawStudio(box, tabs); return }
   if (!ADMIN.rows || reload) {
     box.innerHTML = `<p class="empty">Loading the email list…</p>`;
     try {
@@ -2816,6 +2817,179 @@ document.addEventListener("keydown", e => {
   const pb = e.target.closest && e.target.closest(".rc-pkb"); if (!pb || (e.key !== "Enter" && e.key !== " ")) return;
   e.preventDefault(); e.stopImmediatePropagation(); makePick(pb.dataset.pickgame, pb.dataset.pick);
 }, true);
+
+
+// ---------- Story Studio (admin) ----------
+// One-tap Instagram story images (1080×1920) built to get people onto the site: upset alerts while they're
+// happening, tonight's Pick'em challenge, and the weekly Pick'em leaders shoutout.
+const STUDIO = { picks: null };
+const storyFonts = () => Promise.all(['900 120px "Big Shoulders Display"', '800 60px "Big Shoulders Display"', '600 40px Barlow', '700 40px Barlow', '800 40px Barlow', '500 30px "IBM Plex Mono"'].map(f => document.fonts.load(f))).catch(() => { });
+function storyCanvas() { const c = document.createElement("canvas"); c.width = 1080; c.height = 1920; return [c, c.getContext("2d")] }
+const sFont = (x, w, sz, f = '"Big Shoulders Display", Impact, sans-serif') => { x.font = `${w} ${sz}px ${f}` };
+const sFit = (x, t, w, sz, max, f) => { do { sFont(x, w, sz, f); sz -= 2 } while (x.measureText(t).width > max && sz > 14) };
+const rn = t => (rk(t) ? `No. ${rk(t)} ` : "") + fix(t.names.short);
+function drawLogo(x, img, cx, cy, size) { if (!img) return; const k = Math.min(size / img.width, size / img.height) || 1, w = img.width * k, h = img.height * k; x.drawImage(img, cx - w / 2, cy - h / 2, w, h) }
+function storyBrand(x, W, brand, y = 70) {
+  sFont(x, 900, 40); const tw = x.measureText("COLLEGE BASKETBALL").width, tot = (brand ? 66 : 0) + tw, x0 = (W - tot) / 2;
+  if (brand) x.drawImage(brand, x0, y, 52, 52);
+  x.fillStyle = "#F5F5F2"; x.textAlign = "left"; x.fillText("COLLEGE BASKETBALL", x0 + (brand ? 66 : 0), y + 41);
+}
+// games where a ranked team is in trouble (or just lost)
+function upsetCandidates() {
+  const all = Object.values(cache).filter(Array.isArray).flat(), seen = new Set();
+  return all.filter(g => { if (seen.has(g.gameID)) return false; seen.add(g.gameID);
+    const ra = rk(g.away), rh = rk(g.home); if (!ra && !rh) return false;
+    if (g.gameState === "final") return underdogLeads(g);
+    if (g.gameState !== "live" || noFeed(g)) return false;
+    if (underdogLeads(g)) return true;
+    const fav = ra && (!rh || ra < rh) ? "away" : "home", dog = fav === "away" ? "home" : "away";
+    return /2nd|OT/i.test(String(g.currentPeriod || "")) && (+g[fav].score - +g[dog].score) <= 5 && (!rk(g[dog]) || rk(g[dog]) - rk(g[fav]) >= 10);
+  }).sort((a, b) => (a.gameState === "live" ? 0 : 1) - (b.gameState === "live" ? 0 : 1) || Math.min(rk(a.away) || 99, rk(a.home) || 99) - Math.min(rk(b.away) || 99, rk(b.home) || 99));
+}
+async function makeUpsetCard(g) {
+  await storyFonts();
+  const [c, x] = storyCanvas(), W = 1080, H = 1920;
+  const sa = logoSlug(g.away.names.short, g.away.names.seo), sh = logoSlug(g.home.names.short, g.home.names.seo);
+  const [la, lh, brand] = await Promise.all([loadImg(logoURL(sa)), loadImg(logoURL(sh)), loadImg("logo.png")]);
+  const a = +g.away.score || 0, h = +g.home.score || 0, fin = g.gameState === "final", live = !fin;
+  const ra = rk(g.away), rh = rk(g.home), fav = ra && (!rh || ra < rh) ? "away" : "home", dog = fav === "away" ? "home" : "away";
+  // background: alarm red glow
+  x.fillStyle = "#0B0B0C"; x.fillRect(0, 0, W, H);
+  let gr = x.createRadialGradient(W / 2, 520, 60, W / 2, 520, 1000); gr.addColorStop(0, "rgba(225,29,46,.55)"); gr.addColorStop(1, "rgba(225,29,46,0)"); x.fillStyle = gr; x.fillRect(0, 0, W, H);
+  x.strokeStyle = "rgba(255,210,63,.9)"; x.lineWidth = 14; x.strokeRect(7, 7, W - 14, H - 14);
+  storyBrand(x, W, brand);
+  // headline
+  x.textAlign = "center"; x.fillStyle = "#FFD23F"; sFont(x, 900, 190); x.fillText(fin ? "UPSET!" : "UPSET ALERT", W / 2, 330, W - 120);
+  const favName = rn(g[fav]).toUpperCase(), diff = Math.abs(+g[fav].score - +g[dog].score), favBehind = +g[fav].score < +g[dog].score;
+  const line = fin ? `${fix(g[dog].names.short).toUpperCase()} TAKES DOWN ${favName}` : favBehind ? `${favName} IS DOWN ${diff}` : diff === 0 ? `${favName} IS TIED` : `${favName} ONLY UP ${diff}`;
+  x.fillStyle = "#fff"; sFit(x, line, 800, 72, W - 140); x.fillText(line, W / 2, 430);
+  if (live) { x.fillStyle = "#FF8A8A"; sFont(x, 500, 40, '"IBM Plex Mono", monospace'); x.fillText(`● LIVE · ${String(g.currentPeriod || "").toUpperCase()}${/half/i.test(g.currentPeriod || "") ? "" : " · " + clockTxt(g.contestClock)}`, W / 2, 500) }
+  else { x.fillStyle = "#C8C8C4"; sFont(x, 500, 40, '"IBM Plex Mono", monospace'); x.fillText(String(g.finalMessage || "FINAL").toUpperCase(), W / 2, 500) }
+  // teams
+  const team = (img, t, score, X, lit) => {
+    drawLogo(x, img, X, 680, 220);
+    const nm = fix(t.names.short).toUpperCase(); x.fillStyle = "#F5F5F2"; sFit(x, nm, 800, 60, 440); x.fillText(nm, X, 860);
+    if (rk(t)) { x.fillStyle = "#FF6A13"; sFont(x, 800, 40, "Barlow, sans-serif"); x.fillText(`No. ${rk(t)}`, X, 910) }
+    x.fillStyle = lit ? "#fff" : "#8E8E8A"; sFont(x, 900, 230); x.fillText(String(score), X, 1120);
+  };
+  team(la, g.away, a, 280, a >= h); team(lh, g.home, h, 800, h >= a);
+  x.fillStyle = "#5A5A57"; sFont(x, 900, 110); x.fillText("–", W / 2, 1080);
+  // the underdog's chance
+  if (live) {
+    const p = dog === "home" ? winProb(g) : 1 - winProb(g), pct = Math.round(p * 100);
+    x.fillStyle = "#F5F5F2"; sFont(x, 800, 52, "Barlow, sans-serif"); x.fillText(`${fix(g[dog].names.short)} has a ${pct}% chance to pull it off`, W / 2, 1250, W - 140);
+    const bx = 120, bw = W - 240, by = 1285; x.fillStyle = "#2a2a2a"; roundRect(x, bx, by, bw, 26, 13); x.fill();
+    x.fillStyle = "#FFD23F"; roundRect(x, bx, by, Math.max(26, bw * p), 26, 13); x.fill();
+  } else { x.fillStyle = "#F5F5F2"; sFont(x, 800, 52, "Barlow, sans-serif"); x.fillText("Full recap, box score & reactions on the site", W / 2, 1270, W - 140) }
+  drawStoryCTA(x, W, brand, live, 1450, live ? "WATCH THE FINISH LIVE" : "TAP THE LINK FOR THE RECAP", live ? `Live play-by-play · fan chat · ${SITE_URL.replace("https://", "")}` : `Box score · game flow · ${SITE_URL.replace("https://", "")}`);
+  return c;
+}
+// tonight's Pick'em challenge: the biggest games still to tip
+function pickCandidates() {
+  const ok = g => g.gameState === "pre" && !noFeed(g), today = (cache.t || []).filter(ok);
+  const list = today.length >= 3 ? today : [...today, ...(cache.m || []).filter(ok)]; // late at night, tomorrow's games
+  const seen = new Set();
+  return list.filter(g => !seen.has(g.gameID) && seen.add(g.gameID)).sort((a, b) => matchupScore(b) - matchupScore(a));
+}
+async function makePickemCard(games) {
+  await storyFonts();
+  const [c, x] = storyCanvas(), W = 1080, H = 1920, n = games.length;
+  const logos = await Promise.all(games.flatMap(g => [loadImg(logoURL(logoSlug(g.away.names.short, g.away.names.seo))), loadImg(logoURL(logoSlug(g.home.names.short, g.home.names.seo)))]));
+  const brand = await loadImg("logo.png");
+  x.fillStyle = "#0B0B0C"; x.fillRect(0, 0, W, H);
+  let gr = x.createRadialGradient(W / 2, 200, 40, W / 2, 200, 900); gr.addColorStop(0, "rgba(255,106,19,.45)"); gr.addColorStop(1, "rgba(255,106,19,0)"); x.fillStyle = gr; x.fillRect(0, 0, W, H);
+  storyBrand(x, W, brand);
+  const today = games.every(g => (cache.t || []).includes(g)), tmr = games.every(g => (cache.m || []).includes(g));
+  x.textAlign = "center"; x.fillStyle = "#FF6A13"; sFont(x, 900, 150); x.fillText(today ? "TONIGHT'S PICK'EM" : tmr ? "TOMORROW'S PICK'EM" : "PICK'EM CHALLENGE", W / 2, 285, W - 100);
+  x.fillStyle = "#fff"; sFont(x, 900, 96); x.fillText(`CAN YOU GO ${n}–0?`, W / 2, 390);
+  // the games
+  const rowH = Math.min(185, (1215 - 450) / n), gap = 14, top = 450 + Math.max(0, (1215 - 450 - rowH * n) / 2);
+  games.forEach((g, i) => {
+    const y = top + i * rowH, h = rowH - gap;
+    x.fillStyle = "rgba(255,255,255,.06)"; roundRect(x, 70, y, W - 140, h, 26); x.fill();
+    x.strokeStyle = "rgba(255,255,255,.12)"; x.lineWidth = 2; roundRect(x, 70, y, W - 140, h, 26); x.stroke();
+    const lsz = Math.min(110, h - 40), mid = y + h / 2;
+    drawLogo(x, logos[i * 2], 160, mid - 8, lsz); drawLogo(x, logos[i * 2 + 1], W - 160, mid - 8, lsz);
+    const nmA = rn(g.away).toUpperCase(), nmH = rn(g.home).toUpperCase();
+    x.fillStyle = "#F5F5F2"; x.textAlign = "left"; sFit(x, nmA, 800, 46, W / 2 - 300); x.fillText(nmA, 240, mid - 2);
+    x.textAlign = "right"; sFit(x, nmH, 800, 46, W / 2 - 300); x.fillText(nmH, W - 240, mid - 2);
+    x.textAlign = "center"; x.fillStyle = "#FF6A13"; sFont(x, 900, 40); x.fillText("VS", W / 2, mid - 4);
+    const tm = +g.startTimeEpoch ? new Date(g.startTimeEpoch * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "";
+    const ra = recordOf(g.away.names.short, g, "away"), rh = recordOf(g.home.names.short, g, "home");
+    x.fillStyle = "#9C9C98"; sFont(x, 500, 26, '"IBM Plex Mono", monospace');
+    x.textAlign = "left"; if (ra) x.fillText(ra, 240, mid + 36);
+    x.textAlign = "right"; if (rh) x.fillText(rh, W - 240, mid + 36);
+    x.textAlign = "center"; x.fillText([tm, g.network ? String(g.network).split(" / ")[0] : ""].filter(Boolean).join(" · "), W / 2, mid + 36);
+  });
+  // prize
+  x.textAlign = "center"; x.fillStyle = "#FFD23F"; sFont(x, 900, 58); x.fillText("🏆 WEEKLY WINNER GETS A SHOUTOUT", W / 2, 1300, W - 100);
+  x.fillStyle = "#C8C8C4"; sFont(x, 600, 36, "Barlow, sans-serif"); x.fillText("Free to play · picks lock at tip-off · leaderboard on the site", W / 2, 1360, W - 120);
+  drawStoryCTA(x, W, brand, false, 1450, "TAP THE LINK TO MAKE YOUR PICKS", `Free account · 30 seconds · ${SITE_URL.replace("https://", "")}`);
+  return c;
+}
+async function makeLeadersCard(rows) {
+  await storyFonts();
+  const [c, x] = storyCanvas(), W = 1080, H = 1920, brand = await loadImg("logo.png");
+  x.fillStyle = "#0B0B0C"; x.fillRect(0, 0, W, H);
+  let gr = x.createRadialGradient(W / 2, 300, 40, W / 2, 300, 900); gr.addColorStop(0, "rgba(255,210,63,.4)"); gr.addColorStop(1, "rgba(255,210,63,0)"); x.fillStyle = gr; x.fillRect(0, 0, W, H);
+  storyBrand(x, W, brand);
+  const mon = new Date(); mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
+  x.textAlign = "center"; x.fillStyle = "#FFD23F"; sFont(x, 900, 150); x.fillText("PICK'EM LEADERS", W / 2, 290, W - 100);
+  x.fillStyle = "#C8C8C4"; sFont(x, 500, 36, '"IBM Plex Mono", monospace'); x.fillText(`WEEK OF ${mon.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase()}`, W / 2, 350);
+  const top = rows.slice(0, 5), medal = ["🥇", "🥈", "🥉", "4", "5"];
+  top.forEach((r, i) => {
+    const y = 410 + i * 160, h = 140;
+    x.fillStyle = i === 0 ? "rgba(255,210,63,.16)" : "rgba(255,255,255,.06)"; roundRect(x, 70, y, W - 140, h, 26); x.fill();
+    if (i === 0) { x.strokeStyle = "rgba(255,210,63,.8)"; x.lineWidth = 3; roundRect(x, 70, y, W - 140, h, 26); x.stroke() }
+    x.textAlign = "center"; x.fillStyle = "#fff"; sFont(x, 900, i < 3 ? 80 : 64); x.fillText(medal[i], 150, y + h / 2 + 26);
+    x.textAlign = "left"; x.fillStyle = "#F5F5F2"; sFit(x, "@" + r.username, 800, 64, 520); x.fillText("@" + r.username, 230, y + h / 2 + 4);
+    x.fillStyle = "#9C9C98"; sFont(x, 600, 32, "Barlow, sans-serif"); x.fillText(r.streak >= 3 ? `🔥 ${r.streak} straight right` : `${Math.round(r.wins / Math.max(1, r.wins + r.losses) * 100)}% right`, 230, y + h / 2 + 48);
+    x.textAlign = "right"; x.fillStyle = "#fff"; sFont(x, 900, 84); x.fillText(`${r.wins}–${r.losses}`, W - 110, y + h / 2 + 30);
+  });
+  x.textAlign = "center"; x.fillStyle = "#FFD23F"; sFont(x, 900, 64); x.fillText(top[0] ? `CONGRATS @${top[0].username.toUpperCase()} 👑` : "", W / 2, 1300, W - 100);
+  x.fillStyle = "#C8C8C4"; sFont(x, 600, 38, "Barlow, sans-serif"); x.fillText("Think you can beat them? A new week starts now.", W / 2, 1365, W - 120);
+  drawStoryCTA(x, W, brand, false, 1450, "TAP THE LINK TO PLAY", `Free · daily picks · ${SITE_URL.replace("https://", "")}`);
+  return c;
+}
+async function drawStudio(box, tabs) {
+  if (!cache.m) { box.innerHTML = `${tabs}<p class="empty">Loading games…</p>`; try { await loadDay("m") } catch { } }
+  const ups = upsetCandidates(), picks = pickCandidates();
+  if (!STUDIO.picks || !STUDIO.picks.every(id => picks.some(g => g.gameID === id))) STUDIO.picks = picks.slice(0, 5).map(g => g.gameID);
+  const gl = g => `${esc(rn(g.away))} ${g.gameState === "pre" ? "at" : `${esc(g.away.score)}–${esc(g.home.score)}`} ${esc(rn(g.home))}`;
+  box.innerHTML = `${tabs}<p class="adm-note" style="margin-top:16px">Ready-to-post Instagram stories. Make one, save it, post it to your story, then add a <b>Link</b> sticker under the arrow (the game link is copied for you).</p>
+  <section class="st-sec"><h3>🚨 Upset alerts</h3><p class="st-help">Ranked teams that are behind, barely ahead late, or just lost. Post these the moment they happen: urgency gets taps.</p>
+    ${ups.length ? `<div class="st-list">${ups.map(g => `<div class="st-row"><span><b>${gl(g)}</b><small>${g.gameState === "final" ? "Final · upset" : esc(status(g).txt)}</small></span><button class="chat-btn" data-st-upset="${g.gameID}">Make story</button></div>`).join("")}</div>` : `<p class="st-empty">No ranked team is in trouble right now. Check back during tonight's games.</p>`}</section>
+  <section class="st-sec"><h3>🏆 Pick'em challenge</h3><p class="st-help">The biggest games still to tip. Pick up to 6 (the top 5 are chosen for you). Post it a few hours before tip-off and add a <b>Poll</b> sticker on the top game.</p>
+    ${picks.length ? `<div class="st-list">${picks.slice(0, 12).map(g => `<label class="st-row st-chk"><input type="checkbox" data-st-pick="${g.gameID}" ${STUDIO.picks.includes(g.gameID) ? "checked" : ""}><span><b>${gl(g)}</b><small>${esc(status(g).txt)}${g.network ? " · " + esc(String(g.network).split(" / ")[0]) : ""}</small></span></label>`).join("")}</div>
+      <button class="chat-btn wide" data-st-pickem ${STUDIO.picks.length ? "" : "disabled"}>Make Pick'em story (${STUDIO.picks.length} game${STUDIO.picks.length === 1 ? "" : "s"})</button>` : `<p class="st-empty">No upcoming games today or tomorrow yet.</p>`}</section>
+  <section class="st-sec"><h3>👑 Weekly leaders shoutout</h3><p class="st-help">This week's top 5 in Pick'em. Post it Sunday night or Monday morning. The shoutout is the prize that makes people play.</p>
+    <button class="chat-btn ghost wide" data-st-leaders>Make leaders story</button></section>
+  <p class="adm-msg" id="admmsg"></p>`;
+}
+document.addEventListener("change", e => {
+  const cb = e.target.closest && e.target.closest("[data-st-pick]"); if (!cb) return;
+  const id = cb.dataset.stPick; STUDIO.picks = STUDIO.picks.filter(x => x !== id);
+  if (cb.checked) { if (STUDIO.picks.length >= 6) { cb.checked = false; const m = $("#admmsg"); if (m) m.textContent = "Up to 6 games fit on one story."; return } STUDIO.picks.push(id) }
+  const b = $("[data-st-pickem]"); if (b) { b.disabled = !STUDIO.picks.length; b.textContent = `Make Pick'em story (${STUDIO.picks.length} game${STUDIO.picks.length === 1 ? "" : "s"})` }
+});
+document.addEventListener("click", async e => {
+  const t = e.target; if (!t.closest || !t.closest("#adminbox")) return;
+  const all = Object.values(cache).filter(Array.isArray).flat();
+  const u = t.closest("[data-st-upset]");
+  if (u) { const g = all.find(x => x.gameID === u.dataset.stUpset); if (g) openShare("Upset alert story", () => makeUpsetCard(g), `upset-alert-${g.gameID}.png`, "Upset alert story", "Upset alert", `${SITE_URL}/#game-${g.gameID}`); return }
+  if (t.closest("[data-st-pickem]")) {
+    const order = pickCandidates().map(g => g.gameID), games = STUDIO.picks.slice().sort((a, b) => order.indexOf(a) - order.indexOf(b)).map(id => all.find(x => x.gameID === id)).filter(Boolean);
+    if (games.length) openShare("Pick'em challenge story", () => makePickemCard(games), `pickem-challenge.png`, "Pick'em challenge story", "Pick'em challenge", `${SITE_URL}/#scores`);
+    return;
+  }
+  if (t.closest("[data-st-leaders]")) {
+    const m = $("#admmsg"); if (m) m.textContent = "Loading this week's leaders…";
+    let rows = []; try { rows = await rpc("pick_leaderboard", { scope: "week" }) } catch { }
+    if (!rows.length) { if (m) m.textContent = "No graded picks this week yet, so there's no leaderboard to post."; return }
+    if (m) m.textContent = "";
+    openShare("Weekly leaders story", () => makeLeadersCard(rows), `pickem-leaders.png`, "Pick'em leaders story", "Pick'em leaders", `${SITE_URL}/#pickem`);
+  }
+});
 
 // ---------- Loading placeholders ----------
 const SKEL_CARD = `<div class="game rc skel" aria-hidden="true"><div class="rc-teams"><div class="skel-tm"><i class="sk sk-c"></i><i class="sk" style="width:60%"></i></div><div class="skel-tm"><i class="sk sk-c"></i><i class="sk" style="width:52%"></i></div></div><div class="rc-side"><i class="sk" style="width:60px"></i><i class="sk" style="width:40px;height:10px"></i></div></div>`;
