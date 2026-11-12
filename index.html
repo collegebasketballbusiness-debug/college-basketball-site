@@ -728,6 +728,9 @@ html.mg-open,html.mg-open body{overflow:hidden}
 @media (max-width:700px){.ft-news{grid-template-columns:1fr}}
 /* ---- admin: email list ---- */
 .adm-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0}
+.adm-tabs{display:flex;gap:6px;margin-top:18px}.adm-tabs button{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 16px;font:700 14px var(--body);color:var(--ink);cursor:pointer}
+.adm-tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.adm-src.ok{color:var(--good)}.adm-src.warn{color:var(--upset)}.adm-src.bad{color:var(--bad)}
 .adm-stats div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
 .adm-stats b{display:block;font-family:var(--display);font-weight:900;font-size:40px;line-height:1}
 .adm-stats span{font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
