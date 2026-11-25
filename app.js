@@ -2823,7 +2823,7 @@ document.addEventListener("keydown", e => {
 // One-tap Instagram story images (1080×1920) built to get people onto the site: upset alerts while they're
 // happening, tonight's Pick'em challenge, and the weekly Pick'em leaders shoutout.
 const STUDIO = { picks: null };
-const storyFonts = () => Promise.all(['900 120px "Big Shoulders Display"', '800 60px "Big Shoulders Display"', '600 40px Barlow', '700 40px Barlow', '800 40px Barlow', '500 30px "IBM Plex Mono"'].map(f => document.fonts.load(f))).catch(() => { });
+const storyFonts = () => Promise.all(['400 100px "Russo One"', '900 120px "Big Shoulders Display"', '800 60px "Big Shoulders Display"', '600 40px Barlow', '700 40px Barlow', '800 40px Barlow', '500 30px "IBM Plex Mono"'].map(f => document.fonts.load(f))).catch(() => { });
 function storyCanvas() { const c = document.createElement("canvas"); c.width = 1080; c.height = 1920; return [c, c.getContext("2d")] }
 const sFont = (x, w, sz, f = '"Big Shoulders Display", Impact, sans-serif') => { x.font = `${w} ${sz}px ${f}` };
 const sFit = (x, t, w, sz, max, f) => { do { sFont(x, w, sz, f); sz -= 2 } while (x.measureText(t).width > max && sz > 14) };
@@ -2846,42 +2846,104 @@ function upsetCandidates() {
     return /2nd|OT/i.test(String(g.currentPeriod || "")) && (+g[fav].score - +g[dog].score) <= 5 && (!rk(g[dog]) || rk(g[dog]) - rk(g[fav]) >= 10);
   }).sort((a, b) => (a.gameState === "live" ? 0 : 1) - (b.gameState === "live" ? 0 : 1) || Math.min(rk(a.away) || 99, rk(a.home) || 99) - Math.min(rk(b.away) || 99, rk(b.home) || 99));
 }
+// --- shared look for the studio stories: the page's brand (angled tabs, team-color panels, Russo One, white rank boxes) ---
+const RUSSO = '"Russo One", "Big Shoulders Display", Impact, sans-serif';
+const rFont = (x, sz) => { x.font = `400 ${sz}px ${RUSSO}` };
+const rFit = (x, t, sz, max) => { do { rFont(x, sz); sz -= 2 } while (x.measureText(t).width > max && sz > 14); return sz };
+function shade(hex, k) { const [r, g, b] = hexRGB(hex); const f = v => Math.round(k < 0 ? v * (1 + k) : v + (255 - v) * k); return `rgb(${f(r)},${f(g)},${f(b)})` }
+function para(x, X, Y, w, h, sk) { x.beginPath(); x.moveTo(X + sk, Y); x.lineTo(X + w, Y); x.lineTo(X + w - sk, Y + h); x.lineTo(X, Y + h); x.closePath() }
+// letter-spaced text (centered, left or right)
+function spaced(x, t, X, Y, sp, align = "center") {
+  const chars = [...t], ws = chars.map(ch => x.measureText(ch).width), tot = ws.reduce((a, b) => a + b, 0) + sp * (chars.length - 1);
+  let cx = align === "center" ? X - tot / 2 : align === "right" ? X - tot : X;
+  const keep = x.textAlign; x.textAlign = "left";
+  chars.forEach((ch, i) => { x.fillText(ch, cx, Y); cx += ws[i] + sp });
+  x.textAlign = keep; return tot;
+}
+// yellow/black caution tape
+function tape(x, Y, h, W, a = "#FFD23F", b = "#111") {
+  x.save(); x.fillStyle = a; x.fillRect(0, Y, W, h); x.beginPath(); x.rect(0, Y, W, h); x.clip(); x.fillStyle = b;
+  for (let i = -h; i < W + h; i += h * 1.4) { x.beginPath(); x.moveTo(i, Y + h); x.lineTo(i + h * .7, Y + h); x.lineTo(i + h * 1.4, Y); x.lineTo(i + h * .7, Y); x.closePath(); x.fill() }
+  x.restore();
+}
+function stripesBG(x, W, H, alpha = .04) { x.save(); x.strokeStyle = `rgba(255,255,255,${alpha})`; x.lineWidth = 3; for (let i = -H; i < W; i += 26) { x.beginPath(); x.moveTo(i, H); x.lineTo(i + H, 0); x.stroke() } x.restore() }
+function grain(x, W, H) { x.save(); x.globalAlpha = .06; for (let i = 0; i < 9000; i++) { x.fillStyle = Math.random() < .5 ? "#fff" : "#000"; x.fillRect(Math.random() * W, Math.random() * H, 2, 2) } x.restore() }
+function topBar(x, W, brand, right) {
+  if (brand) x.drawImage(brand, 60, 56, 74, 74);
+  x.fillStyle = "#fff"; x.textAlign = "left"; rFont(x, 30); x.fillText("COLLEGE", 150, 88); x.fillText("BASKETBALL", 150, 124);
+  if (right) { x.font = '500 30px "IBM Plex Mono", monospace'; const w = x.measureText(right[0]).width + 56; x.fillStyle = right[1]; roundRect(x, W - 60 - w, 66, w, 58, 29); x.fill(); x.fillStyle = right[2]; x.textAlign = "center"; x.fillText(right[0], W - 60 - w / 2, 105) }
+}
+function rankBox(x, n, X, Y, s = 74, align = "left") { if (!n) return; const t = "#" + n; rFont(x, 40); const w = Math.max(s, x.measureText(t).width + 26); const bx = align === "right" ? X - w : X; x.fillStyle = "#fff"; x.fillRect(bx, Y, w, s); x.fillStyle = "#111"; x.textAlign = "center"; x.fillText(t, bx + w / 2, Y + s / 2 + 15) }
+// logo with a soft light behind it so dark logos still read on dark team colors
+function glowLogo(x, img, cx, cy, size, alpha = 1) { if (!img) return; x.save(); x.globalAlpha = alpha; x.shadowColor = "rgba(255,255,255,.35)"; x.shadowBlur = 40; drawLogo(x, img, cx, cy, size); x.restore() }
+function ctaBlock(x, W, Y, big, sub, color = "#FF6A13") {
+  x.save(); x.shadowColor = "rgba(0,0,0,.45)"; x.shadowBlur = 30; x.fillStyle = color; para(x, 70, Y, W - 140, 170, 40); x.fill(); x.restore();
+  x.fillStyle = "#111"; x.textAlign = "center"; rFit(x, big, 74, W - 260); x.fillText(big, W / 2, Y + 98);
+  x.font = '600 28px Barlow, sans-serif'; spaced(x, sub.toUpperCase(), W / 2, Y + 142, 3);
+  const ay = Y + 200; x.fillStyle = color; x.beginPath(); x.moveTo(W / 2 - 40, ay); x.lineTo(W / 2 + 40, ay); x.lineTo(W / 2, ay + 46); x.closePath(); x.fill();
+}
+function footer(x, W, H) { const d = new Date(); x.fillStyle = "rgba(255,255,255,.55)"; x.font = '500 24px "IBM Plex Mono", monospace'; spaced(x, `${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")} // COLLEGEBASKETBALL.NEWS // @COLLEGEBASKETBALL`, W / 2, H - 48, 2) }
+// one team panel: team color, big logo, score box, name bar, rank box in the outer top corner
+function teamPanel(x, img, t, score, X, Y, w, h, color, side, opts = {}) {
+  const gr = x.createLinearGradient(0, Y, 0, Y + h); gr.addColorStop(0, shade(color, .08)); gr.addColorStop(1, shade(color, -.55));
+  x.fillStyle = gr; x.fillRect(X, Y, w, h);
+  x.save(); x.beginPath(); x.rect(X, Y, w, h); x.clip(); stripesBG(x, X + w, Y + h, .05); x.restore();
+  glowLogo(x, img, X + w / 2, Y + (opts.scoreBox === false ? h * .42 : h * .34), Math.min(w * .72, h * .5));
+  rankBox(x, rk(t), side === "left" ? X : X + w, Y, 74, side === "left" ? "left" : "right");
+  if (opts.scoreBox !== false) {
+    const bw = w * .72, bh = 190, bx = X + (w - bw) / 2, by = Y + h - bh - 96;
+    x.fillStyle = opts.hot ? "#FFD23F" : "#0B0B0C"; x.fillRect(bx, by, bw, bh);
+    x.fillStyle = opts.hot ? "#111" : opts.dim ? "#8A8A86" : "#fff"; x.textAlign = "center"; rFont(x, 150); x.fillText(String(score), X + w / 2, by + 152);
+  }
+  x.fillStyle = "#0B0B0C"; x.fillRect(X, Y + h - 80, w, 80);
+  const nm = fix(t.names.short).toUpperCase(); x.fillStyle = "#fff"; x.textAlign = "center"; rFit(x, nm, 44, w - 36); x.fillText(nm, X + w / 2, Y + h - 25);
+}
 async function makeUpsetCard(g) {
   await storyFonts();
   const [c, x] = storyCanvas(), W = 1080, H = 1920;
   const sa = logoSlug(g.away.names.short, g.away.names.seo), sh = logoSlug(g.home.names.short, g.home.names.seo);
+  const ca = teamColorFor(sa) || "#3A3A40", ch = teamColorFor(sh) || "#55555B";
   const [la, lh, brand] = await Promise.all([loadImg(logoURL(sa)), loadImg(logoURL(sh)), loadImg("logo.png")]);
   const a = +g.away.score || 0, h = +g.home.score || 0, fin = g.gameState === "final", live = !fin;
   const ra = rk(g.away), rh = rk(g.home), fav = ra && (!rh || ra < rh) ? "away" : "home", dog = fav === "away" ? "home" : "away";
-  // background: alarm red glow
+  // background: the two team colors split on a diagonal, darkened, with red alarm light up top
   x.fillStyle = "#0B0B0C"; x.fillRect(0, 0, W, H);
-  let gr = x.createRadialGradient(W / 2, 520, 60, W / 2, 520, 1000); gr.addColorStop(0, "rgba(225,29,46,.55)"); gr.addColorStop(1, "rgba(225,29,46,0)"); x.fillStyle = gr; x.fillRect(0, 0, W, H);
-  x.strokeStyle = "rgba(255,210,63,.9)"; x.lineWidth = 14; x.strokeRect(7, 7, W - 14, H - 14);
-  storyBrand(x, W, brand);
-  // headline
-  x.textAlign = "center"; x.fillStyle = "#FFD23F"; sFont(x, 900, 190); x.fillText(fin ? "UPSET!" : "UPSET ALERT", W / 2, 330, W - 120);
-  const favName = rn(g[fav]).toUpperCase(), diff = Math.abs(+g[fav].score - +g[dog].score), favBehind = +g[fav].score < +g[dog].score;
-  const line = fin ? `${fix(g[dog].names.short).toUpperCase()} TAKES DOWN ${favName}` : favBehind ? `${favName} IS DOWN ${diff}` : diff === 0 ? `${favName} IS TIED` : `${favName} ONLY UP ${diff}`;
-  x.fillStyle = "#fff"; sFit(x, line, 800, 72, W - 140); x.fillText(line, W / 2, 430);
-  if (live) { x.fillStyle = "#FF8A8A"; sFont(x, 500, 40, '"IBM Plex Mono", monospace'); x.fillText(`● LIVE · ${String(g.currentPeriod || "").toUpperCase()}${/half/i.test(g.currentPeriod || "") ? "" : " · " + clockTxt(g.contestClock)}`, W / 2, 500) }
-  else { x.fillStyle = "#C8C8C4"; sFont(x, 500, 40, '"IBM Plex Mono", monospace'); x.fillText(String(g.finalMessage || "FINAL").toUpperCase(), W / 2, 500) }
-  // teams
-  const team = (img, t, score, X, lit) => {
-    drawLogo(x, img, X, 680, 220);
-    const nm = fix(t.names.short).toUpperCase(); x.fillStyle = "#F5F5F2"; sFit(x, nm, 800, 60, 440); x.fillText(nm, X, 860);
-    if (rk(t)) { x.fillStyle = "#FF6A13"; sFont(x, 800, 40, "Barlow, sans-serif"); x.fillText(`No. ${rk(t)}`, X, 910) }
-    x.fillStyle = lit ? "#fff" : "#8E8E8A"; sFont(x, 900, 230); x.fillText(String(score), X, 1120);
-  };
-  team(la, g.away, a, 280, a >= h); team(lh, g.home, h, 800, h >= a);
-  x.fillStyle = "#5A5A57"; sFont(x, 900, 110); x.fillText("–", W / 2, 1080);
-  // the underdog's chance
+  x.save(); x.globalAlpha = .55; x.fillStyle = shade(ca, -.35); x.beginPath(); x.moveTo(0, 0); x.lineTo(640, 0); x.lineTo(440, H); x.lineTo(0, H); x.closePath(); x.fill();
+  x.fillStyle = shade(ch, -.35); x.beginPath(); x.moveTo(640, 0); x.lineTo(W, 0); x.lineTo(W, H); x.lineTo(440, H); x.closePath(); x.fill(); x.restore();
+  let gr = x.createRadialGradient(W / 2, 330, 40, W / 2, 330, 760); gr.addColorStop(0, "rgba(255,40,40,.55)"); gr.addColorStop(1, "rgba(255,40,40,0)"); x.fillStyle = gr; x.fillRect(0, 0, W, H);
+  gr = x.createLinearGradient(0, 1150, 0, H); gr.addColorStop(0, "rgba(11,11,12,0)"); gr.addColorStop(.35, "rgba(11,11,12,.92)"); gr.addColorStop(1, "#0B0B0C"); x.fillStyle = gr; x.fillRect(0, 1150, W, H - 1150);
+  stripesBG(x, W, H, .035); grain(x, W, H);
+  topBar(x, W, brand, live ? [`● LIVE  ${String(g.currentPeriod || "").toUpperCase()}${/half/i.test(g.currentPeriod || "") ? "" : " " + clockTxt(g.contestClock)}`, "#E11D2E", "#fff"] : [String(g.finalMessage || "FINAL").toUpperCase(), "#fff", "#111"]);
+  // caution tape + the angled UPSET ALERT tab
+  tape(x, 172, 40, W);
+  x.save(); x.shadowColor = "rgba(0,0,0,.5)"; x.shadowBlur = 40; x.fillStyle = "#FFD23F"; para(x, 70, 250, W - 140, 200, 50); x.fill(); x.restore();
+  x.fillStyle = "#111"; x.textAlign = "center"; rFit(x, fin ? "UPSET FINAL" : "UPSET ALERT", 150, W - 260); x.fillText(fin ? "UPSET FINAL" : "UPSET ALERT", W / 2, 405);
+  // what's happening, on a black strip
+  const favName = rn(g[fav]).toUpperCase(), diff = Math.abs(+g[fav].score - +g[dog].score), behind = +g[fav].score < +g[dog].score;
+  const [l1, l2] = fin ? [`${fix(g[dog].names.short).toUpperCase()} TAKES DOWN`, favName] : [favName, behind ? `IS DOWN ${diff}` : diff === 0 ? "IS TIED" : `ONLY UP ${diff}`];
+  x.fillStyle = "#0B0B0C"; para(x, 110, 478, W - 220, 92, 30); x.fill();
+  rFont(x, 50); let sz = rFit(x, `${l1} ${l2}`, 52, W - 300); const w1 = x.measureText(l1 + " ").width, w2 = x.measureText(l2).width, sx = W / 2 - (w1 + w2) / 2;
+  x.textAlign = "left"; x.fillStyle = "#fff"; x.fillText(l1, sx, 541); x.fillStyle = "#FFD23F"; x.fillText(l2, sx + w1, 541);
+  // the two teams
+  const PY = 620, PH = 560, PW = 450;
+  teamPanel(x, la, g.away, a, 70, PY, PW, PH, ca, "left", { hot: dog === "away" && a >= h, dim: fin && a < h });
+  teamPanel(x, lh, g.home, h, W - 70 - PW, PY, PW, PH, ch, "right", { hot: dog === "home" && h >= a, dim: fin && h < a });
+  x.fillStyle = "#0B0B0C"; x.beginPath(); x.moveTo(W / 2, PY + 200); x.lineTo(W / 2 + 46, PY + 250); x.lineTo(W / 2, PY + 300); x.lineTo(W / 2 - 46, PY + 250); x.closePath(); x.fill();
+  x.fillStyle = "#FFD23F"; rFont(x, 34); x.textAlign = "center"; x.fillText("VS", W / 2, PY + 262);
+  // the underdog's chance, or the final word
   if (live) {
     const p = dog === "home" ? winProb(g) : 1 - winProb(g), pct = Math.round(p * 100);
-    x.fillStyle = "#F5F5F2"; sFont(x, 800, 52, "Barlow, sans-serif"); x.fillText(`${fix(g[dog].names.short)} has a ${pct}% chance to pull it off`, W / 2, 1250, W - 140);
-    const bx = 120, bw = W - 240, by = 1285; x.fillStyle = "#2a2a2a"; roundRect(x, bx, by, bw, 26, 13); x.fill();
-    x.fillStyle = "#FFD23F"; roundRect(x, bx, by, Math.max(26, bw * p), 26, 13); x.fill();
-  } else { x.fillStyle = "#F5F5F2"; sFont(x, 800, 52, "Barlow, sans-serif"); x.fillText("Full recap, box score & reactions on the site", W / 2, 1270, W - 140) }
-  drawStoryCTA(x, W, brand, live, 1450, live ? "WATCH THE FINISH LIVE" : "TAP THE LINK FOR THE RECAP", live ? `Live play-by-play · fan chat · ${SITE_URL.replace("https://", "")}` : `Box score · game flow · ${SITE_URL.replace("https://", "")}`);
+    x.fillStyle = "#FFD23F"; rFont(x, 170); x.textAlign = "center"; x.fillText(pct + "%", W / 2, 1390);
+    x.fillStyle = "#fff"; x.font = '700 34px Barlow, sans-serif'; spaced(x, `${fix(g[dog].names.short).toUpperCase()}'S CHANCE TO PULL IT OFF`, W / 2, 1446, 4);
+    const segs = 20, gx = 120, gw = W - 240, sw = gw / segs;
+    for (let i = 0; i < segs; i++) { x.fillStyle = i < Math.round(p * segs) ? "#FFD23F" : "rgba(255,255,255,.14)"; para(x, gx + i * sw, 1474, sw - 8, 30, 8); x.fill() }
+    ctaBlock(x, W, 1560, "WATCH THE FINISH LIVE", "Live play-by-play · fan chat · Pick'em");
+  } else {
+    x.fillStyle = "#fff"; rFit(x, "SEE HOW IT HAPPENED", 84, W - 200); x.textAlign = "center"; x.fillText("SEE HOW IT HAPPENED", W / 2, 1400);
+    x.fillStyle = "rgba(255,255,255,.7)"; x.font = '600 32px Barlow, sans-serif'; spaced(x, "RECAP · BOX SCORE · GAME FLOW", W / 2, 1452, 4);
+    ctaBlock(x, W, 1560, "TAP THE LINK FOR THE RECAP", "Box score · reactions · every play");
+  }
+  footer(x, W, H);
   return c;
 }
 // tonight's Pick'em challenge: the biggest games still to tip
@@ -2894,61 +2956,83 @@ function pickCandidates() {
 async function makePickemCard(games) {
   await storyFonts();
   const [c, x] = storyCanvas(), W = 1080, H = 1920, n = games.length;
-  const logos = await Promise.all(games.flatMap(g => [loadImg(logoURL(logoSlug(g.away.names.short, g.away.names.seo))), loadImg(logoURL(logoSlug(g.home.names.short, g.home.names.seo)))]));
-  const brand = await loadImg("logo.png");
+  const slugs = games.flatMap(g => [logoSlug(g.away.names.short, g.away.names.seo), logoSlug(g.home.names.short, g.home.names.seo)]);
+  const [brand, ...logos] = await Promise.all([loadImg("logo.png"), ...slugs.map(s => loadImg(logoURL(s)))]);
   x.fillStyle = "#0B0B0C"; x.fillRect(0, 0, W, H);
-  let gr = x.createRadialGradient(W / 2, 200, 40, W / 2, 200, 900); gr.addColorStop(0, "rgba(255,106,19,.45)"); gr.addColorStop(1, "rgba(255,106,19,0)"); x.fillStyle = gr; x.fillRect(0, 0, W, H);
-  storyBrand(x, W, brand);
+  let gr = x.createRadialGradient(W * .8, 160, 40, W * .8, 160, 900); gr.addColorStop(0, "rgba(255,106,19,.5)"); gr.addColorStop(1, "rgba(255,106,19,0)"); x.fillStyle = gr; x.fillRect(0, 0, W, H);
+  gr = x.createRadialGradient(W * .1, H * .75, 40, W * .1, H * .75, 800); gr.addColorStop(0, "rgba(255,210,63,.18)"); gr.addColorStop(1, "rgba(255,210,63,0)"); x.fillStyle = gr; x.fillRect(0, 0, W, H);
+  stripesBG(x, W, H, .035); grain(x, W, H);
   const today = games.every(g => (cache.t || []).includes(g)), tmr = games.every(g => (cache.m || []).includes(g));
-  x.textAlign = "center"; x.fillStyle = "#FF6A13"; sFont(x, 900, 150); x.fillText(today ? "TONIGHT'S PICK'EM" : tmr ? "TOMORROW'S PICK'EM" : "PICK'EM CHALLENGE", W / 2, 285, W - 100);
-  x.fillStyle = "#fff"; sFont(x, 900, 96); x.fillText(`CAN YOU GO ${n}–0?`, W / 2, 390);
-  // the games
-  const rowH = Math.min(185, (1215 - 450) / n), gap = 14, top = 450 + Math.max(0, (1215 - 450 - rowH * n) / 2);
+  topBar(x, W, brand, [today ? "TONIGHT" : tmr ? "TOMORROW" : "PICK'EM", "#FF6A13", "#111"]);
+  // title tab
+  x.save(); x.shadowColor = "rgba(0,0,0,.5)"; x.shadowBlur = 40; x.fillStyle = "#FF6A13"; para(x, 70, 190, W - 140, 200, 50); x.fill(); x.restore();
+  x.fillStyle = "#111"; x.textAlign = "center"; rFit(x, "PICK'EM", 170, W - 260); x.fillText("PICK'EM", W / 2, 352);
+  rFont(x, 92); const q1 = "CAN YOU GO ", q2 = `${n}–0?`, wq1 = x.measureText(q1).width, wq2 = x.measureText(q2).width;
+  x.textAlign = "left"; x.fillStyle = "#fff"; x.fillText(q1, W / 2 - (wq1 + wq2) / 2, 510); x.fillStyle = "#FFD23F"; x.fillText(q2, W / 2 - (wq1 + wq2) / 2 + wq1, 510);
+  // one split bar per game: away color | VS | home color
+  const top = 570, avail = 1270 - top, rowH = Math.min(150, avail / n), gap = 22, bh = rowH - gap, y0 = top + Math.max(0, (avail - rowH * n) / 2);
   games.forEach((g, i) => {
-    const y = top + i * rowH, h = rowH - gap;
-    x.fillStyle = "rgba(255,255,255,.06)"; roundRect(x, 70, y, W - 140, h, 26); x.fill();
-    x.strokeStyle = "rgba(255,255,255,.12)"; x.lineWidth = 2; roundRect(x, 70, y, W - 140, h, 26); x.stroke();
-    const lsz = Math.min(110, h - 40), mid = y + h / 2;
-    drawLogo(x, logos[i * 2], 160, mid - 8, lsz); drawLogo(x, logos[i * 2 + 1], W - 160, mid - 8, lsz);
-    const nmA = rn(g.away).toUpperCase(), nmH = rn(g.home).toUpperCase();
-    x.fillStyle = "#F5F5F2"; x.textAlign = "left"; sFit(x, nmA, 800, 46, W / 2 - 300); x.fillText(nmA, 240, mid - 2);
-    x.textAlign = "right"; sFit(x, nmH, 800, 46, W / 2 - 300); x.fillText(nmH, W - 240, mid - 2);
-    x.textAlign = "center"; x.fillStyle = "#FF6A13"; sFont(x, 900, 40); x.fillText("VS", W / 2, mid - 4);
-    const tm = +g.startTimeEpoch ? new Date(g.startTimeEpoch * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " ET" : "";
-    const ra = recordOf(g.away.names.short, g, "away"), rh = recordOf(g.home.names.short, g, "home");
-    x.fillStyle = "#9C9C98"; sFont(x, 500, 26, '"IBM Plex Mono", monospace');
-    x.textAlign = "left"; if (ra) x.fillText(ra, 240, mid + 36);
-    x.textAlign = "right"; if (rh) x.fillText(rh, W - 240, mid + 36);
-    x.textAlign = "center"; x.fillText([tm, g.network ? String(g.network).split(" / ")[0] : ""].filter(Boolean).join(" · "), W / 2, mid + 36);
+    const y = y0 + i * rowH, sa = slugs[i * 2], sh = slugs[i * 2 + 1], ca = teamColorFor(sa) || "#3A3A40", ch = teamColorFor(sh) || "#55555B";
+    x.save(); para(x, 60, y, W - 120, bh, 28); x.clip();
+    let g1 = x.createLinearGradient(60, 0, W / 2, 0); g1.addColorStop(0, shade(ca, -.15)); g1.addColorStop(1, shade(ca, -.6)); x.fillStyle = g1; x.fillRect(60, y, W / 2 - 60, bh);
+    let g2 = x.createLinearGradient(W / 2, 0, W - 60, 0); g2.addColorStop(0, shade(ch, -.6)); g2.addColorStop(1, shade(ch, -.15)); x.fillStyle = g2; x.fillRect(W / 2, y, W / 2 - 60, bh);
+    stripesBG(x, W, y + bh, .05);
+    const ls = Math.min(96, bh - 22);
+    glowLogo(x, logos[i * 2], 150, y + bh / 2, ls, .95); glowLogo(x, logos[i * 2 + 1], W - 150, y + bh / 2, ls, .95);
+    x.restore();
+    const nmA = fix(g.away.names.short).toUpperCase(), nmH = fix(g.home.names.short).toUpperCase(), max = W / 2 - 300;
+    x.fillStyle = "#fff"; x.textAlign = "left"; rFit(x, nmA, 40, max); x.fillText(nmA, 220, y + bh / 2 + (rk(g.away) ? 2 : 14));
+    x.textAlign = "right"; rFit(x, nmH, 40, max); x.fillText(nmH, W - 220, y + bh / 2 + (rk(g.home) ? 2 : 14));
+    x.font = '500 22px "IBM Plex Mono", monospace'; x.fillStyle = "rgba(255,255,255,.75)";
+    if (rk(g.away)) { x.textAlign = "left"; x.fillText(`#${rk(g.away)} AP`, 220, y + bh / 2 + 34) }
+    if (rk(g.home)) { x.textAlign = "right"; x.fillText(`#${rk(g.home)} AP`, W - 220, y + bh / 2 + 34) }
+    // center chip: VS + tip time
+    const tm = +g.startTimeEpoch ? new Date(g.startTimeEpoch * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }).replace(" ", "") + " ET" : "TBA";
+    x.fillStyle = "#0B0B0C"; para(x, W / 2 - 78, y + 10, 156, bh - 20, 16); x.fill();
+    x.fillStyle = "#FFD23F"; x.textAlign = "center"; rFont(x, 36); x.fillText("VS", W / 2, y + bh / 2 + 2);
+    x.fillStyle = "#fff"; x.font = '500 19px "IBM Plex Mono", monospace'; x.fillText(tm, W / 2, y + bh / 2 + 32);
   });
-  // prize
-  x.textAlign = "center"; x.fillStyle = "#FFD23F"; sFont(x, 900, 58); x.fillText("🏆 WEEKLY WINNER GETS A SHOUTOUT", W / 2, 1300, W - 100);
-  x.fillStyle = "#C8C8C4"; sFont(x, 600, 36, "Barlow, sans-serif"); x.fillText("Free to play · picks lock at tip-off · leaderboard on the site", W / 2, 1360, W - 120);
-  drawStoryCTA(x, W, brand, false, 1450, "TAP THE LINK TO MAKE YOUR PICKS", `Free account · 30 seconds · ${SITE_URL.replace("https://", "")}`);
+  // the prize
+  tape(x, 1300, 26, W);
+  x.fillStyle = "#FFD23F"; x.textAlign = "center"; rFit(x, "WEEKLY WINNER GETS A SHOUTOUT", 58, W - 140); x.fillText("WEEKLY WINNER GETS A SHOUTOUT", W / 2, 1400);
+  x.fillStyle = "rgba(255,255,255,.75)"; x.font = '600 28px Barlow, sans-serif'; spaced(x, "FREE TO PLAY · PICKS LOCK AT TIP-OFF", W / 2, 1452, 4);
+  ctaBlock(x, W, 1540, "TAP THE LINK TO PICK", "Free account · takes 30 seconds");
+  footer(x, W, H);
   return c;
 }
 async function makeLeadersCard(rows) {
   await storyFonts();
   const [c, x] = storyCanvas(), W = 1080, H = 1920, brand = await loadImg("logo.png");
   x.fillStyle = "#0B0B0C"; x.fillRect(0, 0, W, H);
-  let gr = x.createRadialGradient(W / 2, 300, 40, W / 2, 300, 900); gr.addColorStop(0, "rgba(255,210,63,.4)"); gr.addColorStop(1, "rgba(255,210,63,0)"); x.fillStyle = gr; x.fillRect(0, 0, W, H);
-  storyBrand(x, W, brand);
+  let gr = x.createRadialGradient(W / 2, 640, 40, W / 2, 640, 900); gr.addColorStop(0, "rgba(255,210,63,.42)"); gr.addColorStop(1, "rgba(255,210,63,0)"); x.fillStyle = gr; x.fillRect(0, 0, W, H);
+  stripesBG(x, W, H, .035); grain(x, W, H);
   const mon = new Date(); mon.setDate(mon.getDate() - ((mon.getDay() + 6) % 7));
-  x.textAlign = "center"; x.fillStyle = "#FFD23F"; sFont(x, 900, 150); x.fillText("PICK'EM LEADERS", W / 2, 290, W - 100);
-  x.fillStyle = "#C8C8C4"; sFont(x, 500, 36, '"IBM Plex Mono", monospace'); x.fillText(`WEEK OF ${mon.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase()}`, W / 2, 350);
-  const top = rows.slice(0, 5), medal = ["🥇", "🥈", "🥉", "4", "5"];
-  top.forEach((r, i) => {
-    const y = 410 + i * 160, h = 140;
-    x.fillStyle = i === 0 ? "rgba(255,210,63,.16)" : "rgba(255,255,255,.06)"; roundRect(x, 70, y, W - 140, h, 26); x.fill();
-    if (i === 0) { x.strokeStyle = "rgba(255,210,63,.8)"; x.lineWidth = 3; roundRect(x, 70, y, W - 140, h, 26); x.stroke() }
-    x.textAlign = "center"; x.fillStyle = "#fff"; sFont(x, 900, i < 3 ? 80 : 64); x.fillText(medal[i], 150, y + h / 2 + 26);
-    x.textAlign = "left"; x.fillStyle = "#F5F5F2"; sFit(x, "@" + r.username, 800, 64, 520); x.fillText("@" + r.username, 230, y + h / 2 + 4);
-    x.fillStyle = "#9C9C98"; sFont(x, 600, 32, "Barlow, sans-serif"); x.fillText(r.streak >= 3 ? `🔥 ${r.streak} straight right` : `${Math.round(r.wins / Math.max(1, r.wins + r.losses) * 100)}% right`, 230, y + h / 2 + 48);
-    x.textAlign = "right"; x.fillStyle = "#fff"; sFont(x, 900, 84); x.fillText(`${r.wins}–${r.losses}`, W - 110, y + h / 2 + 30);
+  topBar(x, W, brand, [`WEEK OF ${mon.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase()}`, "#FFD23F", "#111"]);
+  x.save(); x.shadowColor = "rgba(0,0,0,.5)"; x.shadowBlur = 40; x.fillStyle = "#FFD23F"; para(x, 70, 190, W - 140, 190, 50); x.fill(); x.restore();
+  x.fillStyle = "#111"; x.textAlign = "center"; rFit(x, "PICK'EM LEADERS", 124, W - 260); x.fillText("PICK'EM LEADERS", W / 2, 330);
+  const top = rows.slice(0, 5), w1 = top[0];
+  // the champion
+  if (w1) {
+    const Y = 440, Hh = 400;
+    x.save(); x.shadowColor = "rgba(255,210,63,.45)"; x.shadowBlur = 60; x.fillStyle = "#16130A"; para(x, 70, Y, W - 140, Hh, 40); x.fill(); x.restore();
+    x.strokeStyle = "#FFD23F"; x.lineWidth = 6; para(x, 70, Y, W - 140, Hh, 40); x.stroke();
+    // crown
+    const cx = W / 2, cy = Y + 70; x.fillStyle = "#FFD23F"; x.beginPath(); x.moveTo(cx - 80, cy + 40); x.lineTo(cx - 90, cy - 30); x.lineTo(cx - 40, cy + 5); x.lineTo(cx, cy - 50); x.lineTo(cx + 40, cy + 5); x.lineTo(cx + 90, cy - 30); x.lineTo(cx + 80, cy + 40); x.closePath(); x.fill();
+    x.fillStyle = "#fff"; x.textAlign = "center"; rFit(x, "@" + w1.username, 96, W - 260); x.fillText("@" + w1.username, W / 2, Y + 230);
+    x.fillStyle = "#FFD23F"; rFont(x, 92); x.fillText(`${w1.wins}–${w1.losses}`, W / 2, Y + 335);
+    x.fillStyle = "rgba(255,255,255,.75)"; x.font = '600 26px Barlow, sans-serif'; spaced(x, w1.streak >= 3 ? `${w1.streak} STRAIGHT RIGHT` : "THIS WEEK'S CHAMP", W / 2, Y + 378, 4);
+  }
+  top.slice(1).forEach((r, i) => {
+    const Y = 880 + i * 112, h = 92;
+    x.fillStyle = "rgba(255,255,255,.07)"; para(x, 90, Y, W - 180, h, 26); x.fill();
+    rankBox(x, i + 2, 120, Y + 9, 74);
+    x.fillStyle = "#fff"; x.textAlign = "left"; rFit(x, "@" + r.username, 44, 520); x.fillText("@" + r.username, 230, Y + 62);
+    x.textAlign = "right"; rFont(x, 48); x.fillText(`${r.wins}–${r.losses}`, W - 130, Y + 64);
   });
-  x.textAlign = "center"; x.fillStyle = "#FFD23F"; sFont(x, 900, 64); x.fillText(top[0] ? `CONGRATS @${top[0].username.toUpperCase()} 👑` : "", W / 2, 1300, W - 100);
-  x.fillStyle = "#C8C8C4"; sFont(x, 600, 38, "Barlow, sans-serif"); x.fillText("Think you can beat them? A new week starts now.", W / 2, 1365, W - 120);
-  drawStoryCTA(x, W, brand, false, 1450, "TAP THE LINK TO PLAY", `Free · daily picks · ${SITE_URL.replace("https://", "")}`);
+  tape(x, 1340, 26, W);
+  x.fillStyle = "#fff"; x.textAlign = "center"; rFit(x, "THINK YOU CAN BEAT THEM?", 70, W - 160); x.fillText("THINK YOU CAN BEAT THEM?", W / 2, 1448);
+  ctaBlock(x, W, 1540, "TAP THE LINK TO PLAY", "A new week starts now · it's free", "#FFD23F");
+  footer(x, W, H);
   return c;
 }
 async function drawStudio(box, tabs) {
